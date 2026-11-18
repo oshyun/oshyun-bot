@@ -66,11 +66,13 @@ def _format_schedule_view(entry: dict[str, Any]) -> dict[str, Any]:
         "prompt": entry.get("prompt", ""),
         "description": entry.get("description") or entry.get("prompt", ""),
         "model": entry.get("model") or "",
+        "effort": entry.get("effort") or "",
         "kind": str(entry.get("kind") or "prompt"),
         "kindLabel": "스케줄",
         "enabled": enabled,
         "statusLabel": "활성" if enabled else "일시중지",
         "created": entry.get("created", ""),
+        "updated": entry.get("updated", ""),
     }
 
 
@@ -116,6 +118,17 @@ async def handle_schedules_list(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "items": items})
 
 
+def _validate_cron_or_error(cron_expr: str) -> str | None:
+    """cron 식이 유효하면 None, 아니면 한국어 오류 메시지를 반환한다."""
+    if not cron_expr:
+        return "실행 주기(cron)는 비워둘 수 없습니다."
+    try:
+        cron_mod.Cron(cron_expr)
+        return None
+    except ValueError as exc:
+        return f"올바르지 않은 cron 형식입니다: {exc}"
+
+
 async def handle_schedules_create(request: web.Request) -> web.Response:
     """POST /api/schedules — 자연어 또는 직접 입력으로 정기 작업을 등록한다."""
     body = await _read_json_body(request)
@@ -124,6 +137,7 @@ async def handle_schedules_create(request: web.Request) -> web.Response:
     prompt_text = str(body.get("prompt") or "").strip()
     description = str(body.get("description") or "").strip()
     model = str(body.get("model") or "").strip() or None
+    effort = str(body.get("effort") or "").strip() or None
 
     if natural_text:
         extra_args = [x for x in (os.getenv("AGENT_EXTRA_ARGS", "")).split() if x]
@@ -150,13 +164,8 @@ async def handle_schedules_create(request: web.Request) -> web.Response:
             status=400,
         )
 
-    try:
-        cron_mod.Cron(cron_expr)
-    except ValueError as exc:
-        return web.json_response(
-            {"status": "error", "error": f"올바르지 않은 cron 형식입니다: {exc}"},
-            status=400,
-        )
+    if cron_err := _validate_cron_or_error(cron_expr):
+        return web.json_response({"status": "error", "error": cron_err}, status=400)
 
     entry = schedules.add(
         chat_id=0,
@@ -164,21 +173,55 @@ async def handle_schedules_create(request: web.Request) -> web.Response:
         prompt=prompt_text,
         description=description or prompt_text[:50],
         model=model,
+        effort=effort,
     )
     await _broadcast_automation_update("schedules")
     return web.json_response({"status": "ok", "item": _format_schedule_view(entry)})
 
 
+_SCHEDULE_PATCH_FIELDS = ("cron", "prompt", "description", "model", "effort", "enabled")
+
+
 async def handle_schedules_update(request: web.Request) -> web.Response:
-    """PATCH /api/schedules/{id} — 정기 작업 활성화/비활성화 토글."""
+    """PATCH/PUT /api/schedules/{id} — 정기 작업 속성 및 활성화 상태를 수정한다."""
     sched_id = request.match_info.get("id", "").strip()
     body = await _read_json_body(request)
-    if "enabled" not in body:
+
+    if not any(k in body for k in _SCHEDULE_PATCH_FIELDS):
         return web.json_response(
-            {"status": "error", "error": "enabled 필드가 필요합니다."},
+            {"status": "error", "error": "수정할 필드(cron, prompt, description, model, effort, enabled)가 필요합니다."},
             status=400,
         )
-    updated = schedules.set_enabled(sched_id, bool(body["enabled"]))
+
+    updates: dict[str, Any] = {}
+    if "cron" in body:
+        cron_val = str(body.get("cron") or "").strip()
+        if cron_err := _validate_cron_or_error(cron_val):
+            return web.json_response({"status": "error", "error": cron_err}, status=400)
+        updates["cron"] = cron_val
+
+    if "prompt" in body:
+        prompt_val = str(body.get("prompt") or "").strip()
+        if not prompt_val:
+            return web.json_response(
+                {"status": "error", "error": "작업 프롬프트는 비워둘 수 없습니다."},
+                status=400,
+            )
+        updates["prompt"] = prompt_val
+
+    if "description" in body:
+        updates["description"] = str(body.get("description") or "").strip()
+
+    if "model" in body:
+        updates["model"] = str(body.get("model") or "").strip()
+
+    if "effort" in body:
+        updates["effort"] = str(body.get("effort") or "").strip()
+
+    if "enabled" in body:
+        updates["enabled"] = bool(body["enabled"])
+
+    updated = schedules.update_schedule(sched_id, **updates)
     if not updated:
         return web.json_response(
             {"status": "error", "error": "해당 스케줄을 찾을 수 없습니다."},

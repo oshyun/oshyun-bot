@@ -101,6 +101,84 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         resp = await self.client.get("/api/schedules")
         self.assertEqual((await resp.json())["items"], [])
 
+    async def test_schedule_full_update_patch_put_and_validation(self):
+        # 직접 등록 (model, effort 포함)
+        resp = await self.client.post(
+            "/api/schedules",
+            json={
+                "cron": "0 8 * * *",
+                "prompt": "초기 프롬프트",
+                "description": "초기 설명",
+                "model": "gemini-3.8-flash",
+                "effort": "medium",
+            },
+        )
+        self.assertEqual(resp.status, 200)
+        created = (await resp.json())["item"]
+        sched_id = created["id"]
+        self.assertEqual(created["model"], "gemini-3.8-flash")
+        self.assertEqual(created["effort"], "medium")
+
+        # PATCH로 cron, prompt, description, model, effort, enabled 수정
+        resp = await self.client.patch(
+            f"/api/schedules/{sched_id}",
+            json={
+                "cron": "30 9 * * 1-5",
+                "prompt": "수정된 프롬프트",
+                "description": "평일 오전 9시 30분 요약",
+                "model": "claude-sonnet-4-6",
+                "effort": "high",
+                "enabled": False,
+            },
+        )
+        self.assertEqual(resp.status, 200)
+        updated = (await resp.json())["item"]
+        self.assertEqual(updated["cron"], "30 9 * * 1-5")
+        self.assertEqual(updated["prompt"], "수정된 프롬프트")
+        self.assertEqual(updated["description"], "평일 오전 9시 30분 요약")
+        self.assertEqual(updated["model"], "claude-sonnet-4-6")
+        self.assertEqual(updated["effort"], "high")
+        self.assertFalse(updated["enabled"])
+        self.assertTrue(updated["updated"])
+
+        # PUT으로 model/effort 초기화 및 재활성화
+        resp = await self.client.put(
+            f"/api/schedules/{sched_id}",
+            json={
+                "cron": "0 * * * *",
+                "prompt": "매시 정각 점검",
+                "description": "매시 점검",
+                "model": "",
+                "effort": "",
+                "enabled": True,
+            },
+        )
+        self.assertEqual(resp.status, 200)
+        put_item = (await resp.json())["item"]
+        self.assertEqual(put_item["cron"], "0 * * * *")
+        self.assertEqual(put_item["model"], "")
+        self.assertEqual(put_item["effort"], "")
+        self.assertTrue(put_item["enabled"])
+
+        # 영속화 확인 (GET)
+        resp = await self.client.get("/api/schedules")
+        items = (await resp.json())["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["prompt"], "매시 정각 점검")
+
+        # 유효성 검사 실패 케이스
+        bad_cron = await self.client.patch(f"/api/schedules/{sched_id}", json={"cron": "invalid cron"})
+        self.assertEqual(bad_cron.status, 400)
+
+        empty_prompt = await self.client.patch(f"/api/schedules/{sched_id}", json={"prompt": "   "})
+        self.assertEqual(empty_prompt.status, 400)
+
+        no_fields = await self.client.patch(f"/api/schedules/{sched_id}", json={})
+        self.assertEqual(no_fields.status, 400)
+
+        not_found = await self.client.patch("/api/schedules/nonexistent", json={"cron": "0 8 * * *"})
+        self.assertEqual(not_found.status, 404)
+
     async def test_burn_status_and_todo_crud(self):
         fake_usage = {"groups": [{"name": "Test Group", "buckets": []}]}
         with patch(
