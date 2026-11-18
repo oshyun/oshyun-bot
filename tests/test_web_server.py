@@ -2504,6 +2504,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn('id="expert-coding-subtask-tree"', html)
         self.assertIn('id="master-subtask-tree"', html)
         self.assertIn("ORCHESTRATOR_ROOM_IDS.includes(rid)", html)
+        self.assertIn("parentAgentId: sRoom.parentAgentId", html)
+        self.assertIn("isOrchRoom", html)
 
     async def test_notify_master_agent_preserves_summary_up_to_1500_chars(self):
         """_notify_master_agent 가 400자를 넘는 간결한 응답(최대 1500자)을 잘리지 않게 마스터에 전달하는지 검증."""
@@ -4017,6 +4019,9 @@ function extractFn(name) {
 const code = `
 const CORE_ROOM_ID = '__core__';
 const CORE_ROOM_TITLE = '마스터 에이전트';
+const EXPERT_VAULT_ROOM_ID = '__expert_vault__';
+const EXPERT_CODING_ROOM_ID = '__expert_coding__';
+const ORCHESTRATOR_ROOM_IDS = [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID];
 let chatRooms = [];
 let currentRoomId = 'room-other';
 let lastRequestedRoomId = 'room-other';
