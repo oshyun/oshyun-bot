@@ -81,6 +81,39 @@ class TestExpertAgentsHierarchy(unittest.TestCase):
         warm_items = m_snap_after["tiers"]["warm"]["items"]
         self.assertTrue(any("[세컨브레인]" in it["text"] for it in warm_items))
 
+    def test_bubble_sender_labels_in_frontend(self):
+        """웹 프론트엔드(index.html)에서 각 전문가 및 하위 에이전트의 실제 역할/이름 라벨 매핑 검증."""
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        html_path = os.path.join(repo_root, "src", "bot", "static", "index.html")
+        self.assertTrue(os.path.isfile(html_path))
+
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+
+        # 1. getAssistantDisplayInfo 함수 존재 및 전문가 이름 매핑 검증
+        self.assertIn("function getAssistantDisplayInfo(", html)
+        self.assertIn("name: '마스터 에이전트'", html)
+        self.assertIn("name: '세컨브레인 전문가'", html)
+        self.assertIn("name: '봇개발 전문가'", html)
+
+        # 2. 하위 에이전트 직속 뱃지 및 실제 역할/제목 매핑 검증
+        self.assertIn("parentBadge = '세컨브레인 직속'", html)
+        self.assertIn("parentBadge = '봇개발 직속'", html)
+        self.assertIn("parentBadge = '마스터 직속'", html)
+        self.assertIn("sub-agent-badge", html)
+
+        # 3. buildMessageRowDom 및 liveRow 에서 getAssistantDisplayInfo 연동 확인
+        self.assertIn("const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);", html)
+        self.assertIn("const liveAgentInfo = getAssistantDisplayInfo(room, null);", html)
+        self.assertIn("liveAgentInfo.name", html)
+
+        # 4. 전문가별 CSS 아바타 및 이름 생략 방지 스타일 검증
+        self.assertIn(".assistant-avatar.is-master", html)
+        self.assertIn(".assistant-avatar.is-vault", html)
+        self.assertIn(".assistant-avatar.is-coding", html)
+        self.assertIn(".assistant-avatar.is-subtask", html)
+        self.assertIn(".assistant-head .assistant-name", html)
+
 
 if __name__ == "__main__":
     unittest.main()
