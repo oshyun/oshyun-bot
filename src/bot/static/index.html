@@ -8682,7 +8682,8 @@
 
     let _nextSendOptions = null;
 
-    async function sendUserMessage(textOverride, isVoiceTurn = false) {
+    async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) {
+      const skipFocus = Boolean(isVoiceTurn || (options && options.skipFocus));
       maybeRequestNotificationPermission();
       const text = (textOverride !== undefined ? textOverride : getChatInputText()).trim();
       const hasAttachments = Boolean(pendingAttachments && pendingAttachments.length > 0);
@@ -8741,8 +8742,8 @@
       setChatInputText('');
       isImeComposing = false;
       onChatInput();
-      if (input && !isVoiceTurn) {
-        try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+      if (skipFocus && input && document.activeElement === input) {
+        input.blur();
       }
       clearComposerAttachments();
 
@@ -8829,7 +8830,7 @@
       } catch (err) {
         showToast('메시지 전송 실패: ' + (err.message || String(err)));
       }
-      if (!isVoiceTurn) {
+      if (!skipFocus) {
         focusChatInput();
       }
     }
@@ -11025,7 +11026,7 @@
           }
         }
       }
-      if (targetPrompt) sendUserMessage(targetPrompt, false);
+      if (targetPrompt) sendUserMessage(targetPrompt, false, { skipFocus: true });
     }
 
     // ─── 모바일 메시지 길게 누르기 액션 바텀시트 ───
