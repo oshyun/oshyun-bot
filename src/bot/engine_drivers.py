@@ -116,11 +116,20 @@ WEB_SYSTEM_PROMPT = os.getenv(
 
 
 def _resolve_system_prompt(
-    *, orchestrator: bool = False, coding: bool = False, web: bool = False
+    *,
+    orchestrator: bool = False,
+    expert_vault: bool = False,
+    expert_coding: bool = False,
+    coding: bool = False,
+    web: bool = False,
 ) -> str:
     """실행 모드에 맞는 시스템 프롬프트를 반환한다."""
     if orchestrator:
         return ORCHESTRATOR_SYSTEM_PROMPT
+    if expert_vault:
+        return EXPERT_VAULT_SYSTEM_PROMPT
+    if expert_coding:
+        return EXPERT_CODING_SYSTEM_PROMPT
     if coding:
         return CODING_SYSTEM_PROMPT
     if web:
@@ -142,6 +151,52 @@ _FALLBACK_CODING_PROMPT = """\
 _DEFAULT_CODING_SYSTEM_PROMPT = _combine_instructions("coding", _FALLBACK_CODING_PROMPT)
 CODING_SYSTEM_PROMPT = os.getenv(
     "OSHYUN_BOT_CODING_SYSTEM_PROMPT", _DEFAULT_CODING_SYSTEM_PROMPT
+)
+
+# 세컨브레인 전문가 에이전트 시스템 프롬프트
+_FALLBACK_EXPERT_VAULT_PROMPT = f"""\
+너는 oshyun-bot의 **세컨브레인 전담 전문가 에이전트(Expert Vault Agent, `__expert_vault__`)**다.
+마스터 에이전트(`__core__`)의 직속 지휘를 받으며, 사용자의 Obsidian 볼트(개인 지식 저장소)를 전문적으로 관리·동기화·탐색·정돈한다.
+
+[핵심 역할 및 행동 지침]
+1. 볼트 지식 허브 총괄: 마크다운 노트 작성, 수정, 위키링크(`[[노트명]]`) 연결, 태그/프론트매터 보존.
+2. 5대 도메인 동기화 (오정보 방지): 건강/실손보험, 할일, 식재료/살림, 금융/자산/카드, 자동차/유지비 상태 변경 시 연관 문서 세트와 `_bot/컨텍스트.md`(L1/L2)를 함께 일괄 동기화(Write-Through).
+3. 다계층 캐시 및 드리밍: `_bot/컨텍스트.md`(L1 Hot State, L2 Rolling Buffer, L3 Warm Index) 유지보수, 미분류 메모 정리.
+4. 하위 채팅 세션 운용: 복잡하거나 장시간 소요되는 볼트 분석·정리 과업은 하위 채팅(`session-ctl spawn "<방제목>" "<지시>" --parent __expert_vault__`)을 생성해 위임하고 결과를 취합하라.
+
+{_VAULT_FIRST_DIRECTIVE}
+
+[출력 형식]
+- 웹 UI에 맞춰 마크다운(표, 굵게, 인용구, 위키링크)으로 가독성 높게 작성한다.
+- 참고하거나 수정한 볼트 노트는 `[link:원래파일명.md](https://obsid.net/?vault={_VAULT_NAME}&file=<URL인코딩경로>)` 형식의 공유 링크를 제공한다."""
+
+_DEFAULT_EXPERT_VAULT_SYSTEM_PROMPT = _combine_instructions("expert_vault", _FALLBACK_EXPERT_VAULT_PROMPT)
+EXPERT_VAULT_SYSTEM_PROMPT = os.getenv(
+    "OSHYUN_BOT_EXPERT_VAULT_SYSTEM_PROMPT", _DEFAULT_EXPERT_VAULT_SYSTEM_PROMPT
+)
+
+# 봇개발 전문가 에이전트 시스템 프롬프트
+_FALLBACK_EXPERT_CODING_PROMPT = """\
+너는 oshyun-bot의 **봇개발 전담 전문가 에이전트(Expert Coding Agent, `__expert_coding__`)**다.
+마스터 에이전트(`__core__`)의 직속 지휘를 받으며, oshyun-bot 소스코드 개발, 버그 수정, 웹 UI 개선, 단위 테스트, 리팩토링을 전문으로 수행한다.
+
+[핵심 역할 및 행동 지침]
+1. ⛔ 절대 원칙 1순위 — 워크트리 격리 작업 (예외 없음):
+   - `main` 브랜치 직접 수정 절대 금지.
+   - 모든 코드 수정은 새 브랜치를 만들어 `git worktree add -b <브랜치명> <워크트리경로> HEAD` 에서 수행한다.
+2. 단위 테스트 전수 검증:
+   - 수정 후 반드시 `PYTHONPATH=src/bot /Users/user/repos/oshyun-bot/.venv/bin/python3 -m unittest discover -s tests` 실행하여 100% 통과 확인.
+3. 안전한 병합 및 재시작:
+   - 테스트 통과 후 `main`에 merge -> 워크트리 정리 -> `./scripts/restart.sh` 재시작 -> `git push origin main`.
+4. 하위 채팅 세션 운용:
+   - 대규모 리팩토링, 신규 모듈 설계 등 분할이 필요한 작업은 하위 채팅(`session-ctl spawn "<방제목>" "<지시>" --parent __expert_coding__`)을 생성하여 하위 에이전트를 조율하라.
+
+[출력 형식]
+- 웹 마크다운 형식으로 변경 내역, 테스트 결과, 재시작 상태를 명확하게 보고한다."""
+
+_DEFAULT_EXPERT_CODING_SYSTEM_PROMPT = _combine_instructions("expert_coding", _FALLBACK_EXPERT_CODING_PROMPT)
+EXPERT_CODING_SYSTEM_PROMPT = os.getenv(
+    "OSHYUN_BOT_EXPERT_CODING_SYSTEM_PROMPT", _DEFAULT_EXPERT_CODING_SYSTEM_PROMPT
 )
 
 _SESSION_CTL_BIN = os.path.join(_ROOT_DIR, "scripts", "session-ctl")
@@ -359,6 +414,8 @@ class BaseEngine(ABC):
         sandbox: bool | None,
         coding: bool,
         orchestrator: bool = False,
+        expert_vault: bool = False,
+        expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
     ) -> dict:
@@ -411,12 +468,14 @@ class ClaudeEngine(BaseEngine):
         sandbox: bool | None,
         coding: bool,
         orchestrator: bool = False,
+        expert_vault: bool = False,
+        expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
     ) -> dict:
         use_sandbox = (
             False
-            if orchestrator
+            if (orchestrator or expert_coding)
             else (SANDBOX_ENABLED if sandbox is None else sandbox)
         )
         claude_cmd = _resolve_claude_bin()
@@ -433,7 +492,11 @@ class ClaudeEngine(BaseEngine):
         if not slash_commands:
             cmd += ["--disable-slash-commands"]
         system_prompt = _resolve_system_prompt(
-            orchestrator=orchestrator, coding=coding, web=web
+            orchestrator=orchestrator,
+            expert_vault=expert_vault,
+            expert_coding=expert_coding,
+            coding=coding,
+            web=web,
         )
         if system_prompt:
             cmd += ["--append-system-prompt", system_prompt]
@@ -456,7 +519,7 @@ class ClaudeEngine(BaseEngine):
         os.makedirs(_AGENT_TMP_DIR, exist_ok=True)
         env["AGENT_CODE_TMPDIR"] = _AGENT_TMP_DIR
         env["AGENT_CONFIG_DIR"] = _AGENT_HOME_DIR
-        if orchestrator:
+        if orchestrator or expert_vault or expert_coding:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             env["PATH"] = f"{scripts_dir}:{env.get('PATH', '')}"
         if extra_env:
@@ -534,6 +597,8 @@ class AGYEngine(BaseEngine):
         sandbox: bool | None,
         coding: bool,
         orchestrator: bool = False,
+        expert_vault: bool = False,
+        expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
     ) -> dict:
@@ -555,7 +620,15 @@ class AGYEngine(BaseEngine):
         mode_name = (
             "orchestrator"
             if orchestrator
-            else ("coding" if coding else ("web" if web else "telegram"))
+            else (
+                "expert_vault"
+                if expert_vault
+                else (
+                    "expert_coding"
+                    if expert_coding
+                    else ("coding" if coding else ("web" if web else "telegram"))
+                )
+            )
         )
         mode_dir = get_instruction_dir(mode_name)
 
@@ -566,7 +639,7 @@ class AGYEngine(BaseEngine):
 
         if workdir:
             cmd += ["--add-dir", workdir]
-        if orchestrator:
+        if orchestrator or expert_vault or expert_coding:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             if os.path.isdir(scripts_dir):
                 cmd += ["--add-dir", scripts_dir]
@@ -582,7 +655,7 @@ class AGYEngine(BaseEngine):
             cmd += ["--effort", valid_effort]
 
         use_sandbox = True if sandbox is None else sandbox
-        if use_sandbox and not coding and not orchestrator:
+        if use_sandbox and not coding and not orchestrator and not expert_coding:
             cmd += ["--sandbox"]
         if extra_args:
             cmd += extra_args
@@ -598,7 +671,7 @@ class AGYEngine(BaseEngine):
         ):
             env.pop(k, None)
 
-        if orchestrator:
+        if orchestrator or expert_vault or expert_coding:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             env["PATH"] = f"{scripts_dir}:{env.get('PATH', '')}"
         if extra_env:

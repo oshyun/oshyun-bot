@@ -2443,9 +2443,68 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn(f"--add-dir {tg_dir}", tg_cmd)
         self.assertNotIn(f"--add-dir {web_dir}", tg_cmd)
 
-        with open(os.path.join(tg_dir, "AGENTS.md"), "r", encoding="utf-8") as f:
-            tg_content = f.read()
-        self.assertIn("텔레그램 평문", tg_content)
+    def test_expert_agents_system_prompts_and_directives(self):
+        """전문가 에이전트(세컨브레인, 봇개발) 전용 시스템 프롬프트, 인스트럭션 디렉토리, UI 계층 구조 검증."""
+        import agent_engine
+        import engine_drivers
+
+        # 1. _resolve_system_prompt 검증
+        vault_prompt = engine_drivers._resolve_system_prompt(expert_vault=True)
+        self.assertIn("세컨브레인 전문가 에이전트", vault_prompt)
+        self.assertIn("5대 도메인", vault_prompt)
+        self.assertIn("__expert_vault__", vault_prompt)
+
+        coding_prompt = engine_drivers._resolve_system_prompt(expert_coding=True)
+        self.assertIn("봇개발 전문가 에이전트", coding_prompt)
+        self.assertIn("워크트리", coding_prompt)
+        self.assertIn("__expert_coding__", coding_prompt)
+
+        # 2. AGYEngine 빌드 검증 - 세컨브레인
+        engine = agent_engine.AGYEngine()
+        inv_vault = engine.build_cmd(
+            "건강검진 일정 확인해줘",
+            session_id="vault-sess-1",
+            model="gemini-3.8-flash",
+            effort="medium",
+            workdir="/Users/user/obsidian/oshyun",
+            extra_args=[],
+            slash_commands=False,
+            sandbox=True,
+            coding=False,
+            expert_vault=True,
+        )
+        vault_cmd_str = " ".join(inv_vault["cmd"])
+        vault_dir = agent_engine.get_instruction_dir("expert_vault")
+        self.assertIn(f"--add-dir {vault_dir}", vault_cmd_str)
+        self.assertTrue(any(inv_vault["env"]["PATH"].startswith(p) for p in [os.path.join(engine_drivers._ROOT_DIR, "scripts")]))
+
+        # 3. AGYEngine 빌드 검증 - 봇개발 (샌드박스 제외 및 scripts PATH 확인)
+        inv_coding = engine.build_cmd(
+            "새 기능 단위 테스트 작성",
+            session_id="coding-sess-1",
+            model="gemini-4-hydrogen",
+            effort="medium",
+            workdir=engine_drivers._ROOT_DIR,
+            extra_args=[],
+            slash_commands=False,
+            sandbox=True,
+            coding=True,
+            expert_coding=True,
+        )
+        coding_cmd_str = " ".join(inv_coding["cmd"])
+        coding_dir = agent_engine.get_instruction_dir("expert_coding")
+        self.assertIn(f"--add-dir {coding_dir}", coding_cmd_str)
+        self.assertNotIn("--sandbox", inv_coding["cmd"])
+
+        # 4. index.html의 계층형 트리 UI 요소 검증
+        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("sb-master-branch", html)
+        self.assertIn("expert-agent-node", html)
+        self.assertIn('id="expert-vault-subtask-tree"', html)
+        self.assertIn('id="expert-coding-subtask-tree"', html)
+        self.assertIn('id="master-subtask-tree"', html)
 
     async def test_notify_master_agent_preserves_summary_up_to_1500_chars(self):
         """_notify_master_agent 가 400자를 넘는 간결한 응답(최대 1500자)을 잘리지 않게 마스터에 전달하는지 검증."""

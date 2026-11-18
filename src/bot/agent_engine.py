@@ -107,6 +107,8 @@ def _build_invocation(
     sandbox: bool | None = None,
     coding: bool = False,
     orchestrator: bool = False,
+    expert_vault: bool = False,
+    expert_coding: bool = False,
     web: bool = False,
     extra_env: dict[str, str] | None = None,
 ) -> dict:
@@ -126,6 +128,8 @@ def _build_invocation(
         sandbox=sandbox,
         coding=coding,
         orchestrator=orchestrator,
+        expert_vault=expert_vault,
+        expert_coding=expert_coding,
         web=web,
         extra_env=extra_env,
     )
@@ -200,6 +204,8 @@ def spawn_agent(
     sandbox: bool | None = None,
     coding: bool = False,
     orchestrator: bool = False,
+    expert_vault: bool = False,
+    expert_coding: bool = False,
     web: bool = False,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.Popen:
@@ -215,6 +221,8 @@ def spawn_agent(
         sandbox=sandbox,
         coding=coding,
         orchestrator=orchestrator,
+        expert_vault=expert_vault,
+        expert_coding=expert_coding,
         web=web,
         extra_env=extra_env,
     )
@@ -392,6 +400,8 @@ async def run_agent(
     sandbox: bool | None = None,
     coding: bool = False,
     orchestrator: bool = False,
+    expert_vault: bool = False,
+    expert_coding: bool = False,
     web: bool = False,
 ) -> dict:
     """엔진 1회 동기식 실행(PIPE 기반)."""
@@ -406,6 +416,8 @@ async def run_agent(
         sandbox=sandbox,
         coding=coding,
         orchestrator=orchestrator,
+        expert_vault=expert_vault,
+        expert_coding=expert_coding,
         web=web,
     )
 
