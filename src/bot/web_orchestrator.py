@@ -2139,7 +2139,7 @@ def extract_delegated_subagents(
                 for r in rooms:
                     r_id = r.get("id") or ""
                     r_title = r.get("title") or ""
-                    if r_id != CORE_ORCHESTRATOR_ROOM_ID and (r_title == final_title or final_title in r_title):
+                    if r_id not in ORCHESTRATOR_ROOM_IDS and (r_title == final_title or final_title in r_title):
                         final_rid = r_id
                         final_title = r_title
                         break
@@ -2159,7 +2159,7 @@ def extract_delegated_subagents(
             continue
 
         resolved_rid = final_rid or final_title
-        if resolved_rid in seen_room_ids or resolved_rid == CORE_ORCHESTRATOR_ROOM_ID:
+        if resolved_rid in seen_room_ids or resolved_rid in ORCHESTRATOR_ROOM_IDS:
             continue
         seen_room_ids.add(resolved_rid)
 
