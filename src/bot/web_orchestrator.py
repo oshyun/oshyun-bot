@@ -1551,6 +1551,35 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
     })
 
 
+def ensure_orchestrator_room(
+    room_id: str,
+    current_chat_db: Any = None,
+    *,
+    model: str | None = None,
+    effort: str | None = None,
+) -> dict[str, Any]:
+    """총괄 에이전트 및 전문가 에이전트 대화방이 chat_db 에 항상 존재하도록 보장한다."""
+    db = current_chat_db or _get_mod_attr("chat_db", chat_db)
+    clean_rid = str(room_id or "").strip()
+    if clean_rid == EXPERT_VAULT_ROOM_ID:
+        title = EXPERT_VAULT_TITLE
+        rid = EXPERT_VAULT_ROOM_ID
+    elif clean_rid == EXPERT_CODING_ROOM_ID:
+        title = EXPERT_CODING_TITLE
+        rid = EXPERT_CODING_ROOM_ID
+    else:
+        title = CORE_ORCHESTRATOR_TITLE
+        rid = CORE_ORCHESTRATOR_ROOM_ID
+    return db.get_or_create_room(
+        rid,
+        session_id=None,
+        title=title,
+        channel="web",
+        model=model,
+        effort=effort,
+    )
+
+
 def ensure_core_orchestrator_room(
     current_chat_db: Any = None,
     *,
@@ -1558,23 +1587,33 @@ def ensure_core_orchestrator_room(
     effort: str | None = None,
 ) -> dict[str, Any]:
     """총괄 에이전트(`__core__`) 대화방이 chat_db 에 항상 존재하도록 보장한다."""
-    db = current_chat_db or _get_mod_attr("chat_db", chat_db)
-    return db.get_or_create_room(
-        CORE_ORCHESTRATOR_ROOM_ID,
-        session_id=None,
-        title=CORE_ORCHESTRATOR_TITLE,
-        channel="web",
-        model=model,
-        effort=effort,
-    )
+    return ensure_orchestrator_room(CORE_ORCHESTRATOR_ROOM_ID, current_chat_db, model=model, effort=effort)
 
 
 async def reset_core_orchestrator_state(
     *,
+    target_room_id: str = CORE_ORCHESTRATOR_ROOM_ID,
     memory_mode: str = "keep",
     clear_done_tasks: bool = False,
 ) -> dict[str, Any]:
-    """마스터 에이전트(`__core__`) 대화·세션을 초기화하고 4계층 메모리 정리 정책을 적용한다."""
+    """마스터 에이전트(`__core__`) 또는 전문가 에이전트 대화·세션을 초기화하고 4계층 메모리 정리 정책을 적용한다."""
+    target_rid = str(target_room_id or CORE_ORCHESTRATOR_ROOM_ID).strip()
+    if target_rid not in ORCHESTRATOR_ROOM_IDS:
+        target_rid = CORE_ORCHESTRATOR_ROOM_ID
+
+    if target_rid == EXPERT_VAULT_ROOM_ID:
+        ns = "vault_"
+        agent_id = "vault"
+        agent_name = "세컨브레인"
+    elif target_rid == EXPERT_CODING_ROOM_ID:
+        ns = "coding_"
+        agent_id = "coding"
+        agent_name = "봇개발"
+    else:
+        ns = "core_"
+        agent_id = "master"
+        agent_name = "총괄"
+
     mode = str(memory_mode or "keep").strip().lower()
     if mode == "none":
         mode = "keep"
@@ -1605,7 +1644,7 @@ async def reset_core_orchestrator_state(
     # 1. 기존 모델/effort 및 세션 ID 확보 (대화방 재생성·CLI 세션 파일 정리용)
     old_row: dict[str, Any] | None = None
     try:
-        old_row = current_chat_db.get_room(CORE_ORCHESTRATOR_ROOM_ID)
+        old_row = current_chat_db.get_room(target_rid)
     except Exception:
         old_row = None
 
@@ -1617,21 +1656,21 @@ async def reset_core_orchestrator_state(
     old_sids: list[str] = []
     for cand in (
         (old_row or {}).get("sessionId"),
-        _room_session_ids.get(CORE_ORCHESTRATOR_ROOM_ID),
-        ws_session_map.get(CORE_ORCHESTRATOR_ROOM_ID) if isinstance(ws_session_map, dict) else None,
-        get_session(ns="core_"),
+        _room_session_ids.get(target_rid),
+        ws_session_map.get(target_rid) if isinstance(ws_session_map, dict) else None,
+        get_session(ns=ns),
     ):
         sid = str(cand or "").strip()
         if sid and sid not in old_sids:
             old_sids.append(sid)
 
-    # 2. 실행 중인 마스터 작업/큐/백그라운드 잡 즉시 중단
+    # 2. 실행 중인 작업/큐/백그라운드 잡 즉시 중단
     if cancel_run_fn:
-        cancel_run_fn(CORE_ORCHESTRATOR_ROOM_ID)
+        cancel_run_fn(target_rid)
 
-    _room_session_ids.pop(CORE_ORCHESTRATOR_ROOM_ID, None)
+    _room_session_ids.pop(target_rid, None)
     if isinstance(ws_session_map, dict):
-        ws_session_map.pop(CORE_ORCHESTRATOR_ROOM_ID, None)
+        ws_session_map.pop(target_rid, None)
 
     if load_jobs_fn and remove_job_fn:
         try:
@@ -1644,42 +1683,49 @@ async def reset_core_orchestrator_state(
                 continue
             j_rid = str(jrec.get("room_id") or "").strip()
             j_sid = str(jrec.get("session_id") or "").strip()
-            if j_rid == CORE_ORCHESTRATOR_ROOM_ID or (j_sid and j_sid in old_sid_set):
+            if j_rid == target_rid or (j_sid and j_sid in old_sid_set):
                 j_pid = jrec.get("pid")
                 if j_pid and kill_job_fn:
                     kill_job_fn(j_pid)
                 remove_job_fn(jid)
 
-    # 3. core_ 네임스페이스 세션 초기화 및 CLI 세션 파일 정리
-    clear_session_fn(ns="core_")
+    # 3. 네임스페이스 세션 초기화 및 CLI 세션 파일 정리
+    clear_session_fn(ns=ns)
     for sid in old_sids:
         try:
             delete_session_files(sid)
         except Exception:
             pass
 
-    # 4. 대화방 메시지 완전 삭제 후 동일 설정(model/effort)의 빈 __core__ 방 재생성
+    # 4. 대화방 메시지 완전 비우기 후 빈 룸 보장
     try:
-        current_chat_db.delete_room(CORE_ORCHESTRATOR_ROOM_ID, hard_delete=True)
+        if hasattr(current_chat_db, "clear_room_messages"):
+            current_chat_db.clear_room_messages(target_rid)
+        else:
+            current_chat_db.delete_room(target_rid, hard_delete=True)
     except Exception as exc:
-        logger.warning("[orchestrator] __core__ 초기화 중 DB 삭제 실패: %s", exc)
-    room_row = ensure_core_orchestrator_room(current_chat_db, model=old_model, effort=old_effort)
+        logger.warning("[orchestrator] %s 초기화 중 DB 처리 실패: %s", target_rid, exc)
+    room_row = ensure_orchestrator_room(target_rid, current_chat_db, model=old_model, effort=old_effort)
 
     # 5. 4계층 메모리 처리 ("cascade": hot→warm 연쇄 이동, "clear": 전 계층 삭제, "keep": 유지)
     if mode == "cascade":
-        memory_snap = master_memory.demote_tier("hot")
+        memory_snap = master_memory.demote_tier("hot", agent_id=agent_id)
     elif mode == "clear":
-        memory_snap = master_memory.clear_memory("all")
+        memory_snap = master_memory.clear_memory("all", agent_id=agent_id)
     else:
-        memory_snap = master_memory.get_memory_snapshot(limit_per_tier=25)
+        memory_snap = master_memory.get_memory_snapshot(limit_per_tier=25, agent_id=agent_id)
 
-    cleared_tasks = master_tasks.clear_terminal_tasks() if clear_done_tasks else 0
+    cleared_tasks = (
+        master_tasks.clear_terminal_tasks()
+        if (clear_done_tasks and target_rid == CORE_ORCHESTRATOR_ROOM_ID)
+        else 0
+    )
     vault_log_fn(
-        "🧹 마스터 초기화",
-        f"[총괄 에이전트] 대화 초기화 완료 (memoryMode={mode}, clearedTasks={cleared_tasks})",
+        f"🧹 {agent_name} 초기화",
+        f"[{agent_name} 에이전트] 대화 초기화 완료 (memoryMode={mode}, clearedTasks={cleared_tasks})",
     )
 
-    if supervisor is not None:
+    if target_rid == CORE_ORCHESTRATOR_ROOM_ID and supervisor is not None:
         supervisor.poke()
         try:
             snap = supervisor.host.snapshot()
@@ -1698,23 +1744,24 @@ async def reset_core_orchestrator_state(
     if broadcast_fn:
         await broadcast_fn({
             "type": "session_reset",
-            "roomId": CORE_ORCHESTRATOR_ROOM_ID,
+            "roomId": target_rid,
             "memoryMode": mode,
             "clearedTasks": cleared_tasks,
             "memory": memory_snap,
             "room": room_row,
         })
-        await broadcast_fn({
-            "type": "master_graph",
-            "graph": graph if isinstance(graph, dict) else {"memory": memory_snap},
-        })
-        build_status_fn = _get_mod_attr("build_status_payload", None)
-        if build_status_fn:
-            await broadcast_fn(build_status_fn())
+        if target_rid == CORE_ORCHESTRATOR_ROOM_ID:
+            await broadcast_fn({
+                "type": "master_graph",
+                "graph": graph if isinstance(graph, dict) else {"memory": memory_snap},
+            })
+            build_status_fn = _get_mod_attr("build_status_payload", None)
+            if build_status_fn:
+                await broadcast_fn(build_status_fn())
 
     return {
         "ok": True,
-        "roomId": CORE_ORCHESTRATOR_ROOM_ID,
+        "roomId": target_rid,
         "memoryMode": mode,
         "clearedTasks": cleared_tasks,
         "room": room_row,
@@ -1906,13 +1953,22 @@ async def handle_orchestrator_skill_post(request: web.Request) -> web.Response:
 
 
 async def handle_orchestrator_reset(request: web.Request) -> web.Response:
-    """POST /api/orchestrator/reset — 마스터 에이전트(`__core__`) 대화/세션 초기화 및 메모리 정리."""
+    """POST /api/orchestrator/reset — 마스터 또는 전문가 에이전트 대화/세션 초기화 및 메모리 정리."""
     try:
         payload = await request.json()
     except Exception:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
+
+    target_room_id = str(
+        payload.get("roomId") or payload.get("room_id")
+        or (EXPERT_VAULT_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("vault", "expert_vault") else
+            EXPERT_CODING_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("coding", "expert_coding") else
+            CORE_ORCHESTRATOR_ROOM_ID)
+    ).strip()
+    if target_room_id not in ORCHESTRATOR_ROOM_IDS:
+        target_room_id = CORE_ORCHESTRATOR_ROOM_ID
 
     if payload.get("clearMemory") is True and "memoryMode" not in payload and "memory_mode" not in payload:
         memory_mode = "clear"
@@ -1922,6 +1978,7 @@ async def handle_orchestrator_reset(request: web.Request) -> web.Response:
 
     try:
         res = await reset_core_orchestrator_state(
+            target_room_id=target_room_id,
             memory_mode=memory_mode,
             clear_done_tasks=clear_done_tasks,
         )
