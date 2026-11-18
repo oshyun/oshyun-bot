@@ -3298,6 +3298,52 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             turn1_gate.set()
             await ws.close()
 
+    async def test_orchestrator_dispatch_spawn_parent_and_slash_commands(self):
+        """POST /api/orchestrator/dispatch 스폰 시 parentAgentId 귀속 및 rawPrompt/slashCommands 전달 검증."""
+        import web_execution
+
+        enqueue_calls = []
+
+        async def fake_enqueue(**kwargs):
+            enqueue_calls.append(kwargs)
+            return False, 0
+
+        with (
+            patch.object(web_server, "enqueue_room_turn", new=fake_enqueue),
+            patch.object(web_server, "broadcast_ws_json", new=AsyncMock()),
+            patch.object(web_execution, "enqueue_room_turn", new=fake_enqueue),
+            patch.object(web_execution, "broadcast_ws_json", new=AsyncMock()),
+        ):
+            for agent_id, parent_id in [
+                ("master", "__core__"),
+                ("second_brain", "__expert_vault__"),
+                ("bot_dev", "__expert_coding__"),
+            ]:
+                res = await self.client.post(
+                    "/api/orchestrator/dispatch",
+                    json={
+                        "action": "spawn",
+                        "forceNew": True,
+                        "parentAgentId": parent_id,
+                        "title": f"{agent_id} 메모리 리밸런싱",
+                        "prompt": f"/memory-rebalance --agent-id {agent_id}",
+                        "rawPrompt": True,
+                        "slashCommands": True,
+                        "model": "gemini-3.8-flash",
+                        "effort": "low",
+                        "wait": False,
+                    },
+                )
+                self.assertEqual(res.status, 200)
+                body = await res.json()
+                self.assertTrue(body.get("ok"))
+                self.assertEqual(body.get("parentAgentId"), parent_id)
+
+        self.assertEqual(len(enqueue_calls), 3)
+        for call_kwargs in enqueue_calls:
+            self.assertTrue(call_kwargs.get("raw_prompt"))
+            self.assertTrue(call_kwargs.get("slash_commands"))
+
 
 class TestWebCrashRecovery(unittest.TestCase):
     """서버 재시작 및 비정상 종료 시 미완결 작업 자가 복구 단위 테스트."""
@@ -4245,6 +4291,24 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
         # 5. visibilitychange 이벤트 리스너의 룸 컨텍스트 보존(preservedRoomId) 및 복구
         self.assertIn("const preservedRoomId = currentRoomId;", content)
         self.assertIn("currentRoomId = preservedRoomId;", content)
+
+    def test_memory_rebalance_dynamic_parent_ui_wiring(self):
+        """웹 UI 메모리 리밸런싱이 선택 에이전트(master/second_brain/bot_dev)에 따라 동적 parentAgentId로 스폰하는지 검증."""
+        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("const MEMORY_AGENT_PARENT_MAP =", content)
+        self.assertIn("master: CORE_ROOM_ID", content)
+        self.assertIn("second_brain: EXPERT_VAULT_ROOM_ID", content)
+        self.assertIn("bot_dev: EXPERT_CODING_ROOM_ID", content)
+
+        rebalance_block = content.split("async function rebalanceMasterMemory()")[1].split("function applyOptimisticMemoryMove(")[0]
+        self.assertIn("fetch('/api/orchestrator/dispatch'", rebalance_block)
+        self.assertIn("parentAgentId: parentRoomId", rebalance_block)
+        self.assertIn("rawPrompt: true", rebalance_block)
+        self.assertIn("slashCommands: true", rebalance_block)
+        self.assertIn("forceNew: true", rebalance_block)
 
 
 if __name__ == "__main__":
