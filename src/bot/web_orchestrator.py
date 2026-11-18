@@ -27,7 +27,7 @@ from master_supervisor import (
 )
 import master_memory
 import master_tasks
-from paths import MASTER_STATE_FILE, WORKDIR
+from paths import MASTER_STATE_FILE, WORKDIR, child_default_workdir
 
 AGY_BRAIN_DIR = os.path.expanduser("~/.gemini/antigravity/brain")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -853,6 +853,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                     channel="web",
                     model=clean_model,
                     effort=clean_effort,
+                    workdir=child_default_workdir(parent_agent_id),
                     parent_agent_id=parent_agent_id,
                 )
             except Exception as exc:

@@ -45,6 +45,7 @@ import master_memory
 import master_tasks
 from paths import (
     CODEDIR,
+    child_default_workdir,
     DEFAULT_SSL_CERT_FILE,
     JOBS_DIR,
     STATE_DIR,
@@ -1600,7 +1601,9 @@ async def execute_chat_turn(
     room_db = current_chat_db.get_room(room_key) if room_key != "__default__" else None
     room_model = (room_db.get("model") if room_db else None) or None
     room_effort = (room_db.get("effort") if room_db else None) or None
-    room_workdir = (room_db.get("workdir") if room_db else None) or None
+    room_workdir = (room_db.get("workdir") if room_db else None) or (
+        child_default_workdir(room_db.get("parent_agent_id")) if room_db else None
+    )
     if room_workdir and not is_orchestrator:
         target_workdir = room_workdir
 

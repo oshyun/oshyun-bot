@@ -115,3 +115,10 @@ GOOGLE_TOKEN_FILE = _resolve_data_rel_path(
 CAL_REFRESH_TRIGGER_PATH = os.path.join(
     WORKDIR, os.getenv("CAL_REFRESH_TRIGGER") or "_bot/.cal-refresh"
 )
+
+
+def child_default_workdir(parent_agent_id: str | None) -> str | None:
+    """봇개발 에이전트 하위 방의 기본 작업경로(CODEDIR). 해당 없으면 None(기존 폴백 유지)."""
+    if parent_agent_id == "__expert_coding__":
+        return CODEDIR or WORKDIR
+    return None
