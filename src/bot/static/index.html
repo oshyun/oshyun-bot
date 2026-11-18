@@ -5911,22 +5911,44 @@
       if (window.innerWidth <= 1024) {
         toggleMasterSidebar(false);
       }
-      createNewChat(true);
-      const room = getCurrentRoom();
-      if (room) {
-        room.title = '메모리 리밸런싱';
-        saveChatRoomsToStorage();
-        renderRoomList();
-        updateTopbarTitle();
+      const btn = document.getElementById('btn-msb-mem-rebalance');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch('/api/orchestrator/dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'spawn',
+            parent: CORE_ROOM_ID,
+            parentAgentId: CORE_ROOM_ID,
+            title: '메모리 리밸런싱',
+            prompt: '/memory-rebalance',
+            model: 'gemini-3.8-flash',
+            effort: 'low',
+            forceNew: true,
+            rawPrompt: true,
+            slashCommands: true,
+            orchestrator: true,
+            wait: false
+          })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`마스터 하위 세션 '${data.title || '메모리 리밸런싱'}'에서 리밸런싱을 시작했습니다.`);
+          await loadChatRoomsFromServer();
+          loadMasterGraphFromServer();
+          loadMasterTasksFromServer();
+          if (data.roomId) {
+            selectRoom(data.roomId);
+          }
+        } else {
+          showToast('메모리 리밸런싱 시작 실패: ' + (data.error || '오류'));
+        }
+      } catch (err) {
+        showToast('메모리 리밸런싱 요청 중 오류: ' + err);
+      } finally {
+        if (btn) btn.disabled = false;
       }
-      _nextSendOptions = {
-        rawPrompt: true,
-        slashCommands: true,
-        orchestrator: true,
-        model: 'gemini-3.8-flash',
-        effort: 'low'
-      };
-      await sendUserMessage('/memory-rebalance', false);
     }
 
     function applyOptimisticMemoryMove(snap, itemId, toTier) {
