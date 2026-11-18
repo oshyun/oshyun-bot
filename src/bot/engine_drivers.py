@@ -25,7 +25,7 @@ from paths import (
     LOGS_DIR as _LOGS_DIR,
     ROOT_DIR as _ROOT_DIR,
 )
-from usage_pricing import _resolve_agy_bin
+from usage_pricing import _resolve_agy_bin, get_cached_agy_usage
 
 ProgressCb = Callable[[str], Awaitable[None]]
 
@@ -113,6 +113,35 @@ _DEFAULT_WEB_SYSTEM_PROMPT = _combine_instructions("web", _FALLBACK_WEB_PROMPT)
 WEB_SYSTEM_PROMPT = os.getenv(
     "OSHYUN_BOT_WEB_SYSTEM_PROMPT", _DEFAULT_WEB_SYSTEM_PROMPT
 )
+
+
+def get_quota_alert_prompt(
+    threshold: float = 50.0,
+    cache_file: str | None = None,
+) -> str:
+    """AGY Gemini 잔여 쿼터가 threshold 미만이면 런타임 [QUOTA ALERT] 지시문을 반환한다."""
+    usage = get_cached_agy_usage(allow_refresh=False, cache_file=cache_file)
+    if not isinstance(usage, dict):
+        return ""
+    five_pct = (usage.get("five_hour") or {}).get("pct")
+    weekly_pct = (usage.get("weekly") or {}).get("pct")
+    candidates = [float(p) for p in (five_pct, weekly_pct) if isinstance(p, (int, float))]
+    if not candidates:
+        return ""
+    min_pct = min(candidates)
+    if min_pct >= threshold:
+        return ""
+    parts = []
+    if five_pct is not None:
+        parts.append(f"5시간 {five_pct:.1f}%")
+    if weekly_pct is not None:
+        parts.append(f"주간 {weekly_pct:.1f}%")
+    status_str = ", ".join(parts)
+    return (
+        f"[QUOTA ALERT] 현재 AGY Gemini 잔여 쿼터가 부족합니다({status_str}; 최저 {min_pct:.1f}% < {threshold:.0f}%). "
+        "고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링 작업 시 자체 AGY 토큰을 소모하지 말고 "
+        "1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50`)를 호출하여 오프로드하세요."
+    )
 
 
 def _resolve_system_prompt(
@@ -399,6 +428,10 @@ class ClaudeEngine(BaseEngine):
             coding=coding,
             web=web,
         )
+        if not orchestrator and not expert_vault and not expert_coding:
+            quota_alert = get_quota_alert_prompt()
+            if quota_alert:
+                system_prompt = f"{system_prompt}\n\n{quota_alert}" if system_prompt else quota_alert
         if system_prompt:
             cmd += ["--append-system-prompt", system_prompt]
         if session_id:

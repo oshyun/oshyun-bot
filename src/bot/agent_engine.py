@@ -37,6 +37,7 @@ from engine_drivers import (
     _LEGACY_AGY_MODEL_ALIASES,
     get_engine_instance,
     get_instruction_dir,
+    get_quota_alert_prompt,
 )
 from engine_sandbox import (
     SANDBOX_ENABLED,
@@ -192,6 +193,31 @@ def kill_job(pid: int | None) -> None:
             pass
 
 
+def _inject_quota_alert_for_agy(
+    prompt: str,
+    *,
+    slash_commands: bool = False,
+    orchestrator: bool = False,
+    expert_vault: bool = False,
+    expert_coding: bool = False,
+) -> str:
+    """AGY 엔진은 --append-system-prompt 가 없으므로 쿼터 부족 시 프롬프트 상단에 [QUOTA ALERT] 를 주입한다."""
+    if (
+        orchestrator
+        or expert_vault
+        or expert_coding
+        or slash_commands
+        or not prompt
+        or prompt.lstrip().startswith(("/", "[QUOTA ALERT]"))
+        or get_engine_instance().name != "agy"
+    ):
+        return prompt
+    quota_alert = get_quota_alert_prompt()
+    if not quota_alert:
+        return prompt
+    return f"{quota_alert}\n\n{prompt}"
+
+
 def spawn_agent(
     prompt: str,
     session_id: str | None,
@@ -212,8 +238,15 @@ def spawn_agent(
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.Popen:
     """에이전트를 **분리된 세션(setsid)** 으로 띄우고 stream-json 을 out_file 에 기록한다."""
-    invocation = _build_invocation(
+    effective_prompt = _inject_quota_alert_for_agy(
         prompt,
+        slash_commands=slash_commands,
+        orchestrator=orchestrator,
+        expert_vault=expert_vault,
+        expert_coding=expert_coding,
+    )
+    invocation = _build_invocation(
+        effective_prompt,
         session_id,
         workdir=workdir,
         model=model,
@@ -407,8 +440,15 @@ async def run_agent(
     web: bool = False,
 ) -> dict:
     """엔진 1회 동기식 실행(PIPE 기반)."""
-    invocation = _build_invocation(
+    effective_prompt = _inject_quota_alert_for_agy(
         prompt,
+        slash_commands=slash_commands,
+        orchestrator=orchestrator,
+        expert_vault=expert_vault,
+        expert_coding=expert_coding,
+    )
+    invocation = _build_invocation(
+        effective_prompt,
         session_id,
         workdir=workdir,
         model=model,
