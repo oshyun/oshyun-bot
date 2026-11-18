@@ -2731,6 +2731,97 @@
       opacity: 1 !important;
     }
 
+    /* ═══ 모바일 핀치 줌 폰트 크기 HUD ═══ */
+    .pinch-font-hud {
+      position: absolute;
+      top: calc(58px + env(safe-area-inset-top, 0px));
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px) scale(0.92);
+      z-index: 28;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: 9999px;
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .pinch-font-hud.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+    .pinch-hud-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .pinch-hud-icon {
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .pinch-hud-label {
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .pinch-hud-size {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-weight: 700;
+      min-width: 42px;
+      text-align: center;
+    }
+    .pinch-hud-badge {
+      display: none;
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .pinch-hud-badge.is-limit {
+      display: inline-block;
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+    .pinch-hud-badge.is-default {
+      display: inline-block;
+      background: var(--bg-hover);
+      color: var(--text-2);
+    }
+    .pinch-hud-track {
+      width: 104px;
+      height: 3.5px;
+      border-radius: 2px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    .pinch-hud-fill {
+      height: 100%;
+      width: 30%;
+      border-radius: 2px;
+      background: var(--accent);
+      transition: width 0.05s linear;
+    }
+    /* 핀치 제스처 중 텍스트 선택 및 불필요한 터치 동작 방지 */
+    body.is-pinching-font {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+
     /* ═══ 마스터 에이전트 모니터 인스펙터 (우측 온디맨드 패널) ═══ */
     .master-ctrl-btn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -3487,6 +3578,23 @@
         </div>
       </div>
 
+      <!-- 모바일 핀치 줌 폰트 크기 HUD 인디케이터 -->
+      <div id="pinch-font-hud" class="pinch-font-hud" aria-hidden="true">
+        <div class="pinch-hud-pill">
+          <svg class="pinch-hud-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+          <span class="pinch-hud-label">글자 크기</span>
+          <span id="pinch-hud-size" class="pinch-hud-size">15px</span>
+          <span id="pinch-hud-badge" class="pinch-hud-badge"></span>
+        </div>
+        <div class="pinch-hud-track">
+          <div id="pinch-hud-fill" class="pinch-hud-fill"></div>
+        </div>
+      </div>
+
       <div class="conn-banner" id="conn-banner"><span class="spinner"></span><span>서버에 다시 연결하는 중…</span></div>
 
       <!-- 뷰: 대화 -->
@@ -3721,7 +3829,7 @@
                 <div class="setting-row">
                   <div>
                     <div class="setting-label">채팅방 본문 폰트</div>
-                    <div class="setting-desc">대화 타임라인, 말풍선, 마크다운 본문, 코드블록 및 입력창 글자 크기를 조절합니다. (12px ~ 22px)</div>
+                    <div class="setting-desc">대화 타임라인, 말풍선, 마크다운 본문, 코드블록 및 입력창 글자 크기를 조절합니다. (12px ~ 22px · 모바일 두 손가락 핀치 제스처 지원)</div>
                   </div>
                   <div class="ctrl font-size-ctrl">
                     <span class="font-size-bound">12</span>
@@ -6663,6 +6771,8 @@
         ptr.style.transform = '';
         ptr.style.opacity = '';
       }
+      const pinchHud = document.getElementById('pinch-font-hud');
+      if (pinchHud) pinchHud.classList.remove('visible');
 
       if (viewName === 'vault') refreshVaultTree();
       else if (viewName === 'automation') { if (typeof loadAutomationData === 'function') loadAutomationData(); }
@@ -11254,6 +11364,183 @@
       window.addEventListener('touchcancel', finishPull, { passive: true });
     }
 
+    // ─── 모바일 핀치 줌인/줌아웃 채팅방 본문 글자 크기 실시간 조절 ───
+    function initPinchZoomFontSize() {
+      const hud = document.getElementById('pinch-font-hud');
+      const hudSize = document.getElementById('pinch-hud-size');
+      const hudBadge = document.getElementById('pinch-hud-badge');
+      const hudFill = document.getElementById('pinch-hud-fill');
+
+      let isPinching = false;
+      let pinchStartDist = 0;
+      let pinchStartFontSize = FONT_SIZE_DEFAULT;
+      let pinchCurrentFontSize = FONT_SIZE_DEFAULT;
+      let pinchRafId = null;
+      let hudHideTimer = null;
+      let hasMovedSignificantly = false;
+
+      function getTouchDistance(t1, t2) {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.hypot(dx, dy);
+      }
+
+      function updateHud(size, isLimitMin, isLimitMax) {
+        if (!hud) return;
+        const rounded = Math.round(size * 2) / 2;
+        if (hudSize) hudSize.textContent = formatFontSize(rounded);
+
+        if (hudFill) {
+          const pct = Math.max(0, Math.min(100, ((size - FONT_SIZE_MIN) / (FONT_SIZE_MAX - FONT_SIZE_MIN)) * 100));
+          hudFill.style.width = pct + '%';
+        }
+
+        if (hudBadge) {
+          if (isLimitMin) {
+            hudBadge.textContent = '최소';
+            hudBadge.className = 'pinch-hud-badge is-limit';
+          } else if (isLimitMax) {
+            hudBadge.textContent = '최대';
+            hudBadge.className = 'pinch-hud-badge is-limit';
+          } else if (rounded === FONT_SIZE_DEFAULT) {
+            hudBadge.textContent = '기본값';
+            hudBadge.className = 'pinch-hud-badge is-default';
+          } else {
+            hudBadge.textContent = '';
+            hudBadge.className = 'pinch-hud-badge';
+          }
+        }
+      }
+
+      function showHud(size) {
+        if (!hud) return;
+        if (hudHideTimer) {
+          clearTimeout(hudHideTimer);
+          hudHideTimer = null;
+        }
+        updateHud(size, size <= FONT_SIZE_MIN, size >= FONT_SIZE_MAX);
+        hud.classList.add('visible');
+      }
+
+      function hideHud() {
+        if (!hud) return;
+        if (hudHideTimer) clearTimeout(hudHideTimer);
+        hudHideTimer = setTimeout(() => {
+          hud.classList.remove('visible');
+        }, 750);
+      }
+
+      window.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length !== 2) return;
+        if (currentView !== 'chat') return;
+
+        // 모달이나 사이드바가 열려 있으면 핀치 무시
+        const sidebar = document.getElementById('room-sidebar');
+        const masterSidebar = document.getElementById('master-sidebar');
+        const modalBackdrop = document.querySelector('.modal-backdrop.open');
+        if (modalBackdrop ||
+            (sidebar && sidebar.classList.contains('open')) ||
+            (masterSidebar && masterSidebar.classList.contains('open'))) {
+          return;
+        }
+
+        // 대화창 영역 내부 터치인지 확인
+        const target = e.target;
+        if (!target || !target.closest || !target.closest('#chat-main-area, #messages-container, #view-chat')) {
+          return;
+        }
+
+        const dist = getTouchDistance(e.touches[0], e.touches[1]);
+        if (dist < 15) return;
+
+        isPinching = true;
+        hasMovedSignificantly = false;
+        pinchStartDist = dist;
+        pinchStartFontSize = getFontSize();
+        pinchCurrentFontSize = pinchStartFontSize;
+
+        document.body.classList.add('is-pinching-font');
+
+        if (window.getSelection) {
+          try { window.getSelection().removeAllRanges(); } catch (_) {}
+        }
+
+        if (e.cancelable) e.preventDefault();
+        showHud(pinchCurrentFontSize);
+      }, { passive: false });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!isPinching) return;
+        if (!e.touches || e.touches.length < 2) return;
+
+        if (e.cancelable) e.preventDefault();
+
+        const curDist = getTouchDistance(e.touches[0], e.touches[1]);
+        if (Math.abs(curDist - pinchStartDist) > 5) {
+          hasMovedSignificantly = true;
+        }
+
+        // 거리 비율에 댐핑 계수(0.85)를 적용하여 부드럽고 정밀한 실시간 조절
+        const scale = curDist / pinchStartDist;
+        const factor = 1 + (scale - 1) * 0.85;
+        let targetSize = pinchStartFontSize * factor;
+        targetSize = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, targetSize));
+        pinchCurrentFontSize = targetSize;
+
+        if (!pinchRafId) {
+          pinchRafId = requestAnimationFrame(() => {
+            pinchRafId = null;
+            applyFontSize(pinchCurrentFontSize);
+            const rounded = Math.round(pinchCurrentFontSize * 2) / 2;
+            updateFontSizeUi(rounded);
+            updateHud(pinchCurrentFontSize, pinchCurrentFontSize <= FONT_SIZE_MIN, pinchCurrentFontSize >= FONT_SIZE_MAX);
+          });
+        }
+      }, { passive: false });
+
+      function endPinch() {
+        if (!isPinching) return;
+        isPinching = false;
+        document.body.classList.remove('is-pinching-font');
+
+        if (pinchRafId) {
+          cancelAnimationFrame(pinchRafId);
+          pinchRafId = null;
+        }
+
+        if (hasMovedSignificantly) {
+          const finalSize = normalizeFontSize(pinchCurrentFontSize);
+          setFontSize(finalSize, true);
+
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try { navigator.vibrate(12); } catch (_) {}
+          }
+        }
+
+        hideHud();
+      }
+
+      window.addEventListener('touchend', (e) => {
+        if (isPinching && (!e.touches || e.touches.length < 2)) {
+          endPinch();
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchcancel', () => {
+        if (isPinching) endPinch();
+      }, { passive: true });
+
+      // iOS Safari gesturestart/change/end 방지 (전체 뷰포트 확대 차단)
+      const preventSafariGesture = (e) => {
+        if (currentView === 'chat' && e.cancelable) {
+          e.preventDefault();
+        }
+      };
+      document.addEventListener('gesturestart', preventSafariGesture, { passive: false });
+      document.addEventListener('gesturechange', preventSafariGesture, { passive: false });
+      document.addEventListener('gestureend', preventSafariGesture, { passive: false });
+    }
+
     function initVisualViewportHandler() {
       const updateViewportHeight = () => {
         if (window.visualViewport) {
@@ -12070,6 +12357,7 @@
         bindMessageLongPressEvents();
         initMobileSwipeGestures();
         initPullToRefresh();
+        initPinchZoomFontSize();
         initVisualViewportHandler();
 
         document.addEventListener('pointerdown', (e) => {
