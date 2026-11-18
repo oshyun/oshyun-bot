@@ -255,13 +255,14 @@ class TestDelegatedSubagentChips(unittest.TestCase):
             web_rooms.chat_db = mock_db
             if web_server and hasattr(web_server, "chat_db"):
                 web_server.chat_db = mock_db
-            msgs = _load_room_messages("__core__")
-            self.assertEqual(len(msgs), 2)
-            self.assertNotIn("delegatedRooms", msgs[0])  # user 메시지에는 없음
-            self.assertIn("delegatedRooms", msgs[1])      # assistant 메시지에 주입됨
-            self.assertEqual(len(msgs[1]["delegatedRooms"]), 1)
-            self.assertEqual(msgs[1]["delegatedRooms"][0]["roomId"], "room-cal-999")
-            self.assertEqual(msgs[1]["delegatedRooms"][0]["title"], "일정 조사")
+            for orch_rid in ("__core__", "__expert_vault__", "__expert_coding__"):
+                msgs = _load_room_messages(orch_rid)
+                self.assertEqual(len(msgs), 2)
+                self.assertNotIn("delegatedRooms", msgs[0])  # user 메시지에는 없음
+                self.assertIn("delegatedRooms", msgs[1])      # assistant 메시지에 주입됨
+                self.assertEqual(len(msgs[1]["delegatedRooms"]), 1)
+                self.assertEqual(msgs[1]["delegatedRooms"][0]["roomId"], "room-cal-999")
+                self.assertEqual(msgs[1]["delegatedRooms"][0]["title"], "일정 조사")
         finally:
             web_rooms.chat_db = orig_chat_db
             if web_server and orig_ws_chat_db is not None:
