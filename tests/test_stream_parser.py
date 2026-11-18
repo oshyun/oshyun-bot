@@ -151,6 +151,41 @@ class TestStreamParser(unittest.TestCase):
         parsed = stream_parser._parse_stream("\n".join(lines))
         self.assertEqual(parsed["result"], f"⚠️ {err_msg}")
 
+    def test_extract_agy_transcript_multi_turn_isolation(self):
+        """다중 턴 세션에서 이전 턴 답변이 새 턴으로 누출되지 않고 마지막 USER_INPUT 이후의 답변만 격리 추출되는지 검증."""
+        conv_id = "test-conv-multi-turn"
+        brain_dir = os.path.join(self.temp_dir, "brain", conv_id, ".system_generated", "logs")
+        os.makedirs(brain_dir, exist_ok=True)
+        transcript_path = os.path.join(brain_dir, "transcript.jsonl")
+
+        # 턴 1: 질문1 -> 답변1
+        with open(transcript_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"step_index": 0, "type": "USER_INPUT", "content": "질문 1"}) + "\n")
+            f.write(json.dumps({"step_index": 1, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "답변 1입니다."}) + "\n")
+
+        with patch("os.path.expanduser", return_value=transcript_path):
+            res1 = stream_parser.extract_agy_transcript_final_response(conv_id)
+            self.assertEqual(res1, "답변 1입니다.")
+
+        # 턴 2: 질문2 진입 후 도구만 실행하고 아직 모델 텍스트 답변이 없거나 프로세스가 조기 종료된 상태
+        with open(transcript_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"step_index": 2, "type": "USER_INPUT", "content": "질문 2"}) + "\n")
+            f.write(json.dumps({"step_index": 3, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": None, "tool_calls": [{"name": "cmd"}]}) + "\n")
+            f.write(json.dumps({"step_index": 4, "source": "MODEL", "type": "GENERIC", "content": "도구 실행 결과"}) + "\n")
+
+        with patch("os.path.expanduser", return_value=transcript_path):
+            # 질문2 이후에 텍스트 응답이 없으므로 이전 턴의 '답변 1입니다.'가 누출되지 않고 None이어야 함!
+            res2 = stream_parser.extract_agy_transcript_final_response(conv_id)
+            self.assertIsNone(res2)
+
+        # 턴 2 완성: 답변 2가 정상 기록된 상태
+        with open(transcript_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"step_index": 5, "source": "MODEL", "type": "PLANNER_RESPONSE", "content": "답변 2입니다."}) + "\n")
+
+        with patch("os.path.expanduser", return_value=transcript_path):
+            res3 = stream_parser.extract_agy_transcript_final_response(conv_id)
+            self.assertEqual(res3, "답변 2입니다.")
+
 
 if __name__ == "__main__":
     unittest.main()
