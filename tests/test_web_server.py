@@ -1208,12 +1208,25 @@ class TestWebServerStandalone(unittest.TestCase):
         self.assertNotIn("if (!textOverride && input)", content)
         self.assertRegex(
             content,
-            r"function sendUserMessage\(textOverride,\s*isVoiceTurn\s*=\s*false\)\s*\{[\s\S]*?setChatInputText\(''\);",
+            r"function sendUserMessage\(textOverride,\s*isVoiceTurn\s*=\s*false(?:\s*,\s*options\s*=\s*\{\})?\)\s*\{[\s\S]*?setChatInputText\(''\);",
         )
 
         # 3. /voice 경로 또는 ?voice=1 파라미터 접속 시 tryStartVoice 호출을 통해 원래 페이지에서 음성 입력이 활성화되는지 검증
         self.assertIn("window.location.pathname === '/voice'", content)
         self.assertIn("tryStartVoice(false)", content)
+
+    def test_static_index_html_retry_skips_input_focus(self):
+        """다시 실행(retryMessageByIndex) 시 입력창 focus()가 호출되지 않고 blur 처리되는지 검증."""
+        import os
+        from web_server import INTERNAL_STATIC_DIR
+
+        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("sendUserMessage(targetPrompt, false, { skipFocus: true })", content)
+        self.assertIn("const skipFocus = Boolean(isVoiceTurn || (options && options.skipFocus));", content)
+        self.assertIn("if (!skipFocus) {\n        focusChatInput();", content)
 
     def test_static_index_html_abort_preserves_chat_input(self):
         """답변 생성 중단 버튼 클릭 시 작성 중이던 입력창 텍스트가 지워지지 않고 보존되는지 검증."""
