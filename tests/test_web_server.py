@@ -4207,6 +4207,40 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
         )
         self.assertEqual(res.returncode, 0, res.stderr or res.stdout)
 
+    def test_file_picker_and_visibilitychange_room_context_preservation(self):
+        """파일 피커/이미지 첨부 및 visibilitychange 복귀 시 전문가/마스터 에이전트 룸 컨텍스트 유지 방어 로직 검증."""
+        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 1. 파일 피커 활성화 플래그 및 핸들러 바인딩
+        self.assertIn("let isFilePickerActive = false;", content)
+        self.assertIn("isFilePickerActive = true;", content)
+        self.assertIn("isFilePickerActive = false;", content)
+        self.assertIn("fi.addEventListener('cancel'", content)
+
+        # 2. cleanUnusedEmptyRooms 및 cleanCurrentIfUnusedEmpty의 파일 피커 가드 & ORCHESTRATOR_ROOM_IDS 보존
+        clean_rooms_block = content.split("function cleanUnusedEmptyRooms(")[1].split("function cleanCurrentIfUnusedEmpty(")[0]
+        self.assertIn("if (typeof isFilePickerActive !== 'undefined' && isFilePickerActive) return;", clean_rooms_block)
+        self.assertIn("!orchIds.includes(currentRoomId)", clean_rooms_block)
+
+        # 3. loadChatRoomsFromServer의 ensureCoreRoom 상시 호출 및 오케스트레이터 방 fallback 차단
+        load_rooms_block = content.split("async function loadChatRoomsFromServer(")[1].split("async function syncRoomsWithServer(")[0]
+        self.assertIn("ensureCoreRoom();", load_rooms_block)
+        self.assertIn("isOrchRoom", load_rooms_block)
+        self.assertIn("currentRoomId !== CORE_ROOM_ID && !isOrchRoom", load_rooms_block)
+
+        # 4. getRoomById 및 getCurrentRoom의 전문가/오케스트레이터 룸 보장
+        get_room_block = content.split("function getRoomById(")[1].split("function ensureRoomLiveState(")[0]
+        self.assertIn("orchIds.includes(roomId)", get_room_block)
+
+        cur_room_block = content.split("function getCurrentRoom(")[1].split("function getWorkdirForRoom(")[0]
+        self.assertIn("orchIds.includes(currentRoomId)", cur_room_block)
+
+        # 5. visibilitychange 이벤트 리스너의 룸 컨텍스트 보존(preservedRoomId) 및 복구
+        self.assertIn("const preservedRoomId = currentRoomId;", content)
+        self.assertIn("currentRoomId = preservedRoomId;", content)
+
 
 if __name__ == "__main__":
     unittest.main()
