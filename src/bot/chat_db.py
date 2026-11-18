@@ -21,6 +21,10 @@ from paths import CHAT_DB_FILE, CHAT_ROOMS_FILE, CHATS_DIR, STATE_DIR
 
 logger = logging.getLogger("oshyun-chat-db")
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
+CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+EXPERT_VAULT_ROOM_ID = "__expert_vault__"
+EXPERT_CODING_ROOM_ID = "__expert_coding__"
+PROTECTED_ROOM_IDS = {CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID}
 _SUB_AGENT_REPORT_PREFIXES = (
     "[하위 작업 완료 보고]",
     "[하위 작업 중단/오류 보고]",
@@ -1020,20 +1024,44 @@ def get_messages(
         return messages
 
 
+def clear_room_messages(
+    room_id_or_session_id: str,
+    db_path: str | None = None,
+) -> int:
+    """대화방의 모든 메시지를 삭제하고 방의 session_id를 초기화한다 (방 자체는 보존)."""
+    target = str(room_id_or_session_id).strip()
+    if not target:
+        return 0
+    room = get_room(target, db_path=db_path)
+    if not room:
+        return 0
+    actual_room_id = room["id"]
+    with get_connection(db_path) as conn:
+        cursor = conn.execute("DELETE FROM messages WHERE room_id = ?;", (actual_room_id,))
+        deleted_count = cursor.rowcount
+        conn.execute(
+            "UPDATE rooms SET session_id = NULL, updated_at = ? WHERE id = ?;",
+            (time.time(), actual_room_id),
+        )
+    return deleted_count
+
+
 def delete_room(
     room_id_or_session_id: str,
     hard_delete: bool = True,
     db_path: str | None = None,
 ) -> bool:
-    """대화방을 삭제(기본: 완전 삭제, 외래키로 메시지도 함께 삭제) 처리한다."""
+    """대화방을 삭제(기본: 완전 삭제, 외래키로 메시지도 함께 삭제) 처리한다 (마스터 및 전문가 에이전트는 삭제 불가)."""
     target = str(room_id_or_session_id).strip()
-    if not target:
+    if not target or target in PROTECTED_ROOM_IDS:
         return False
 
     room = get_room(target, db_path=db_path)
     if not room:
         return False
     actual_room_id = room["id"]
+    if actual_room_id in PROTECTED_ROOM_IDS:
+        return False
 
     with get_connection(db_path) as conn:
         if hard_delete:
@@ -1049,8 +1077,23 @@ def delete_rooms_bulk(
     hard_delete: bool = True,
     db_path: str | None = None,
 ) -> int:
-    """여러 대화방(방 ID 또는 세션 ID 목록)을 단일 트랜잭션으로 일괄 삭제 처리한다."""
-    cleaned = list(dict.fromkeys(str(t).strip() for t in targets if t and str(t).strip()))
+    """여러 대화방(방 ID 또는 세션 ID 목록)을 단일 트랜잭션으로 일괄 삭제 처리한다 (마스터 및 전문가 에이전트는 삭제 불가)."""
+    cleaned = [str(t).strip() for t in targets if t and str(t).strip() and str(t).strip() not in PROTECTED_ROOM_IDS]
+    cleaned = list(dict.fromkeys(cleaned))
+    if not cleaned:
+        return 0
+
+    # 보호 대상 룸의 세션 ID도 삭제 대상에서 제외
+    protected_sids: set[str] = set()
+    for pid in PROTECTED_ROOM_IDS:
+        try:
+            p_room = get_room(pid, db_path=db_path)
+            if p_room and p_room.get("sessionId"):
+                protected_sids.add(str(p_room["sessionId"]).strip())
+        except Exception:
+            pass
+    if protected_sids:
+        cleaned = [t for t in cleaned if t not in protected_sids]
     if not cleaned:
         return 0
 

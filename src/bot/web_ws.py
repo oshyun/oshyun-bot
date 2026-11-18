@@ -20,6 +20,9 @@ from bot_logger import logger, vault_log
 from web_speech import deduplicate_speech_text
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+EXPERT_VAULT_ROOM_ID = "__expert_vault__"
+EXPERT_CODING_ROOM_ID = "__expert_coding__"
+ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 
 
 def _get_mod_attr(attr_name: str, fallback: any) -> any:
@@ -97,6 +100,10 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                     if terminate_session:
                         if target_room == CORE_ORCHESTRATOR_ROOM_ID:
                             session_namespace = "core_"
+                        elif target_room == EXPERT_VAULT_ROOM_ID:
+                            session_namespace = "vault_"
+                        elif target_room == EXPERT_CODING_ROOM_ID:
+                            session_namespace = "coding_"
                         else:
                             session_namespace = "coding_" if get_coding_mode() else ""
                         clear_session_fn(ns=session_namespace)
@@ -188,9 +195,13 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                                 cancel_run_fn(crid)
                     else:
                         cancel_run_fn(target_room)
-                    if target_room == CORE_ORCHESTRATOR_ROOM_ID:
-                        clear_session_fn(ns="core_")
-                        _room_session_ids.pop(CORE_ORCHESTRATOR_ROOM_ID, None)
+                    if target_room in ORCHESTRATOR_ROOM_IDS:
+                        ns = (
+                            "core_" if target_room == CORE_ORCHESTRATOR_ROOM_ID
+                            else ("vault_" if target_room == EXPERT_VAULT_ROOM_ID else "coding_")
+                        )
+                        clear_session_fn(ns=ns)
+                        _room_session_ids.pop(target_room, None)
                     if isinstance(raw_sids, list) and raw_sids:
                         for sid in raw_sids:
                             csid = str(sid or "").strip()
@@ -220,7 +231,7 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                         target_room = target_room.strip() or None
                     else:
                         target_room = None
-                    if target_room == CORE_ORCHESTRATOR_ROOM_ID:
+                    if target_room in ORCHESTRATOR_ROOM_IDS:
                         import web_orchestrator
                         reset_fn = _get_mod_attr(
                             "reset_core_orchestrator_state",
@@ -232,8 +243,8 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                             mem_mode = str(incoming.get("memoryMode") or incoming.get("memory_mode") or "cascade").strip().lower()
                         clear_done = bool(incoming.get("clearDoneTasks") or incoming.get("clear_done_tasks"))
                         try:
-                            await reset_fn(memory_mode=mem_mode, clear_done_tasks=clear_done)
-                        except ValueError:
+                            await reset_fn(target_room_id=target_room, memory_mode=mem_mode, clear_done_tasks=clear_done)
+                        except (ValueError, TypeError):
                             await reset_fn(memory_mode="cascade", clear_done_tasks=clear_done)
                     else:
                         cancel_run_fn(target_room)
