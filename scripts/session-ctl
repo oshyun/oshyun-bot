@@ -25,21 +25,28 @@ def _load_env() -> None:
     """리포지토리 루트의 .env 파일을 자동으로 로드한다."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(script_dir)
-    for env_name in (".env.defaults", ".env"):
-        env_file = os.path.join(root_dir, env_name)
-        if os.path.exists(env_file):
-            try:
-                with open(env_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            k, v = line.split("=", 1)
-                            k = k.strip()
-                            v = v.strip().strip("'\"")
-                            if env_name == ".env" or k not in os.environ:
-                                os.environ[k] = v
-            except Exception:
-                pass
+    candidate_roots = [root_dir]
+    # git worktree인 경우 원본 메인 리포지토리 탐색
+    main_repo = "/Users/user/repos/oshyun-bot"
+    if main_repo not in candidate_roots and os.path.isdir(main_repo):
+        candidate_roots.append(main_repo)
+
+    for r_dir in candidate_roots:
+        for env_name in (".env.defaults", ".env"):
+            env_file = os.path.join(r_dir, env_name)
+            if os.path.exists(env_file):
+                try:
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                k, v = line.split("=", 1)
+                                k = k.strip()
+                                v = v.strip().strip("'\"")
+                                if env_name == ".env" or k not in os.environ:
+                                    os.environ[k] = v
+                except Exception:
+                    pass
 
 
 def _get_api_config() -> tuple[str, str]:
@@ -50,7 +57,19 @@ def _get_api_config() -> tuple[str, str]:
     port = os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765"
     base_url = os.getenv("OSHYUN_ORCHESTRATOR_API_URL", "").strip()
     if not base_url or (port != "8765" and base_url in ("http://127.0.0.1:8765", "http://localhost:8765")):
-        base_url = f"http://{host}:{port}"
+        proto = "http"
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            src_bot_dir = os.path.join(os.path.dirname(script_dir), "src", "bot")
+            if src_bot_dir not in sys.path:
+                sys.path.insert(0, src_bot_dir)
+            from paths import DEFAULT_SSL_CERT_FILE
+            ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
+            if ssl_enabled:
+                proto = "https"
+        except Exception:
+            pass
+        base_url = f"{proto}://{host}:{port}"
     base_url = base_url.rstrip("/")
     token = os.getenv("WEB_TOKEN", os.getenv("OSHYUN_ORCHESTRATOR_TOKEN", os.getenv("VOICE_WEB_TOKEN", ""))).strip()
     return base_url, token
@@ -58,36 +77,47 @@ def _get_api_config() -> tuple[str, str]:
 
 def _api_request(method: str, path: str, payload: dict | None = None, timeout: int = 620) -> dict:
     base_url, token = _get_api_config()
-    url = f"{base_url}{path}"
-    headers = {"Accept": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
 
-    data_bytes = None
-    if payload is not None:
-        headers["Content-Type"] = "application/json; charset=utf-8"
-        data_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    def _execute(url_target: str) -> dict:
+        headers = {"Accept": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
-    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
-    ssl_context = None
-    if url.startswith("https://"):
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-            return json.loads(raw) if raw.strip() else {"ok": True}
-    except urllib.error.HTTPError as e:
-        err_body = ""
+        data_bytes = None
+        if payload is not None:
+            headers["Content-Type"] = "application/json; charset=utf-8"
+            data_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        req = urllib.request.Request(url_target, data=data_bytes, headers=headers, method=method)
+        ssl_context = None
+        if url_target.startswith("https://"):
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
         try:
-            err_body = e.read().decode("utf-8", "replace")
-            parsed_err = json.loads(err_body)
-            return {"ok": False, "error": parsed_err.get("error") or parsed_err.get("message") or f"HTTP {e.code}"}
-        except Exception:
-            return {"ok": False, "error": f"HTTP {e.code}: {err_body or e.reason}"}
-    except Exception as e:
-        return {"ok": False, "error": f"API 연결 실패 ({url}): {e}"}
+            with urllib.request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+                return json.loads(raw) if raw.strip() else {"ok": True}
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", "replace")
+                parsed_err = json.loads(err_body)
+                return {"ok": False, "error": parsed_err.get("error") or parsed_err.get("message") or f"HTTP {e.code}"}
+            except Exception:
+                return {"ok": False, "error": f"HTTP {e.code}: {err_body or e.reason}"}
+        except Exception as e:
+            return {"ok": False, "error": f"API 연결 실패 ({url_target}): {e}"}
+
+    primary_url = f"{base_url}{path}"
+    res = _execute(primary_url)
+    # http -> https 자동 폴백 (서버가 SSL인데 클라이언트가 http로 접속하여 연결이 끊긴 경우)
+    if not res.get("ok") and primary_url.startswith("http://") and "Remote end closed connection" in str(res.get("error")):
+        fallback_url = f"https://{primary_url[7:]}"
+        fallback_res = _execute(fallback_url)
+        if fallback_res.get("ok"):
+            return fallback_res
+    return res
 
 
 def cmd_list(args: argparse.Namespace) -> int:
