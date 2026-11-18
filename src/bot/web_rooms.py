@@ -42,26 +42,42 @@ def _get_hidden_file() -> str:
 
 
 def _load_hidden_rooms() -> set[str]:
-    """사용자가 삭제(숨김) 처리한 대화방/세션 ID 집합을 반환한다."""
+    """사용자가 삭제(숨김) 처리한 대화방/세션 ID 집합을 반환한다 (마스터 및 전문가 ID는 자동 자정 정화)."""
     hidden_file = _get_hidden_file()
+    hidden: set[str] = set()
     if os.path.isfile(hidden_file):
         try:
             with open(hidden_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return set(str(x) for x in data if x)
+                    hidden = set(str(x) for x in data if x)
         except Exception:
             pass
-    return set()
+
+    # 마스터 및 전문가 에이전트(ORCHESTRATOR_ROOM_IDS)는 영구 숨김 불가 — 자정(Self-healing) 처리
+    polluted = any(orch_id in hidden for orch_id in ORCHESTRATOR_ROOM_IDS)
+    if polluted:
+        for orch_id in ORCHESTRATOR_ROOM_IDS:
+            hidden.discard(orch_id)
+        try:
+            tmp_path = f"{hidden_file}.tmp.{os.getpid()}"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(sorted(list(hidden)), f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, hidden_file)
+        except Exception:
+            pass
+    return hidden
 
 
 def _save_hidden_rooms(room_ids: list[str] | set[str]) -> None:
-    """하나 이상의 대화방/세션 ID를 숨김 목록에 원자적으로 추가 저장한다."""
-    cleaned = [str(r).strip() for r in room_ids if r and str(r).strip()]
+    """하나 이상의 대화방/세션 ID를 숨김 목록에 원자적으로 추가 저장한다 (ORCHESTRATOR_ROOM_IDS는 원천 차단)."""
+    cleaned = [str(r).strip() for r in room_ids if r and str(r).strip() and str(r).strip() not in ORCHESTRATOR_ROOM_IDS]
     if not cleaned:
         return
     hidden = _load_hidden_rooms()
     hidden.update(cleaned)
+    for orch_id in ORCHESTRATOR_ROOM_IDS:
+        hidden.discard(orch_id)
     hidden_file = _get_hidden_file()
     os.makedirs(os.path.dirname(hidden_file), exist_ok=True)
     tmp_path = f"{hidden_file}.tmp.{os.getpid()}"
@@ -127,7 +143,7 @@ def _append_room_message(room_id: str, msg_record: dict) -> int | None:
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid != CORE_ORCHESTRATOR_ROOM_ID:
+    if clean_rid not in ORCHESTRATOR_ROOM_IDS:
         hidden = current_load_hidden()
         if clean_rid in hidden or (sid and sid in hidden):
             return None
@@ -167,7 +183,7 @@ def _load_room_messages(room_id: str) -> list[dict]:
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid != CORE_ORCHESTRATOR_ROOM_ID and clean_rid in current_load_hidden():
+    if clean_rid not in ORCHESTRATOR_ROOM_IDS and clean_rid in current_load_hidden():
         return []
     try:
         msgs = current_chat_db.get_messages(clean_rid)
@@ -401,7 +417,7 @@ def _load_chat_rooms_index() -> list[dict]:
     valid_rooms = [
         r for r in merged_rooms_list
         if (
-            r.get("id") == CORE_ORCHESTRATOR_ROOM_ID
+            r.get("id") in ORCHESTRATOR_ROOM_IDS
             or r.get("messageCount", 0) > 0
             or (r.get("messages") and len(r["messages"]) > 0)
             or (r.get("title") and r.get("title") not in ("새 대화", "대화방", ""))
@@ -436,12 +452,16 @@ def _update_room_metadata(
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid != CORE_ORCHESTRATOR_ROOM_ID:
+    if clean_rid not in ORCHESTRATOR_ROOM_IDS:
         hidden = current_load_hidden()
         if clean_rid in hidden or (clean_sid and clean_sid in hidden):
             return
     if clean_rid == CORE_ORCHESTRATOR_ROOM_ID:
         title = CORE_ORCHESTRATOR_TITLE
+    elif clean_rid == EXPERT_VAULT_ROOM_ID:
+        title = EXPERT_VAULT_TITLE
+    elif clean_rid == EXPERT_CODING_ROOM_ID:
+        title = EXPERT_CODING_TITLE
     try:
         current_chat_db.get_or_create_room(clean_rid, session_id=clean_sid, title=title, channel="web")
         current_chat_db.update_room(
@@ -450,7 +470,7 @@ def _update_room_metadata(
             preview=preview,
             session_id=clean_sid,
             channel="web",
-            force_title=(clean_rid == CORE_ORCHESTRATOR_ROOM_ID),
+            force_title=(clean_rid in ORCHESTRATOR_ROOM_IDS),
         )
     except Exception as exc:
         logger.warning("[chat_db] SQLite 방 메타데이터 갱신 실패: %s", exc)
@@ -465,8 +485,8 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
     if not isinstance(payload, dict):
         payload = {}
 
-    session_id = str(payload.get("sessionId") or "").strip() or None
-    room_id = str(payload.get("roomId") or "").strip() or None
+    session_id = str(payload.get("sessionId") or request.query.get("sessionId") or request.query.get("session_id") or "").strip() or None
+    room_id = str(payload.get("roomId") or request.query.get("roomId") or request.query.get("room_id") or "").strip() or None
 
     raw_room_ids = payload.get("roomIds")
     raw_session_ids = payload.get("sessionIds")
@@ -549,23 +569,33 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
                     kill_job_fn(j_pid)
                 remove_job_fn(jid)
 
-    # 1. 숨김 목록에 선제 등록 (__core__는 영구 숨김 제외)
-    hideable_keys = [k for k in all_target_keys if k != CORE_ORCHESTRATOR_ROOM_ID]
+    # 1. 숨김 목록에 선제 등록 (마스터 및 전문가 에이전트는 영구 숨김 제외)
+    hideable_keys = [k for k in all_target_keys if k not in ORCHESTRATOR_ROOM_IDS]
     if hideable_keys:
         _save_hidden_rooms(hideable_keys)
+
+    mod = sys.modules.get("web_server")
     if CORE_ORCHESTRATOR_ROOM_ID in all_target_keys:
         clear_session(ns="core_")
-        mod = sys.modules.get("web_server")
         if mod and hasattr(mod, "_room_session_ids"):
             mod._room_session_ids.pop(CORE_ORCHESTRATOR_ROOM_ID, None)
+    if EXPERT_VAULT_ROOM_ID in all_target_keys:
+        clear_session(ns="vault_")
+        if mod and hasattr(mod, "_room_session_ids"):
+            mod._room_session_ids.pop(EXPERT_VAULT_ROOM_ID, None)
+    if EXPERT_CODING_ROOM_ID in all_target_keys:
+        clear_session(ns="coding_")
+        if mod and hasattr(mod, "_room_session_ids"):
+            mod._room_session_ids.pop(EXPERT_CODING_ROOM_ID, None)
 
-    # 2. SQLite DB 영구 삭제 처리
-    if all_target_keys:
+    # 2. SQLite DB 영구 삭제 처리 (마스터 및 전문가 에이전트는 DB 삭제 제외)
+    deletable_keys = [k for k in all_target_keys if k not in ORCHESTRATOR_ROOM_IDS]
+    if deletable_keys:
         try:
-            if len(all_target_keys) == 1:
-                current_chat_db.delete_room(all_target_keys[0], hard_delete=True)
+            if len(deletable_keys) == 1:
+                current_chat_db.delete_room(deletable_keys[0], hard_delete=True)
             else:
-                current_chat_db.delete_rooms_bulk(all_target_keys, hard_delete=True)
+                current_chat_db.delete_rooms_bulk(deletable_keys, hard_delete=True)
         except Exception as exc:
             logger.warning("[chat_db] 대화방 삭제 실패: %s", exc)
 
@@ -864,7 +894,7 @@ async def handle_chat_history(request: web.Request) -> web.Response:
 
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
     hidden = current_load_hidden()
-    if room_id in hidden:
+    if room_id in hidden and room_id not in ORCHESTRATOR_ROOM_IDS:
         return web.json_response({"ok": True, "roomId": room_id, "messages": [], "liveRun": None})
 
     current_load_msgs = _get_mod_attr("_load_room_messages", _load_room_messages)
@@ -903,7 +933,12 @@ async def handle_chat_history(request: web.Request) -> web.Response:
     room_rec = current_chat_db.get_room(resolved_room_id) or current_chat_db.get_room(room_id)
     resolved_workdir = (room_rec.get("workdir") if room_rec and room_rec.get("workdir") else None)
     if not resolved_workdir:
-        if resolved_room_id == CORE_ORCHESTRATOR_ROOM_ID or room_id == CORE_ORCHESTRATOR_ROOM_ID:
+        if resolved_room_id == EXPERT_CODING_ROOM_ID or room_id == EXPERT_CODING_ROOM_ID:
+            resolved_workdir = CODEDIR or WORKDIR
+        elif (
+            resolved_room_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID)
+            or room_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID)
+        ):
             resolved_workdir = WORKDIR
         else:
             is_coding = get_coding_mode()
@@ -933,8 +968,8 @@ async def handle_archive_chat_room(request: web.Request) -> web.Response:
     if not room_id:
         return web.json_response({"ok": False, "error": "roomId 가 필요합니다."}, status=400)
 
-    if room_id == CORE_ORCHESTRATOR_ROOM_ID:
-        return web.json_response({"ok": False, "error": "마스터 에이전트 방은 아카이브할 수 없습니다."}, status=400)
+    if room_id in ORCHESTRATOR_ROOM_IDS:
+        return web.json_response({"ok": False, "error": "마스터 및 전문가 에이전트 방은 아카이브할 수 없습니다."}, status=400)
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     if "isArchived" in payload:

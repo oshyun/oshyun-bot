@@ -155,7 +155,7 @@ def _should_sync_global_session(
     global_session_id: str | None,
 ) -> bool:
     """웹 대화방 턴이 전역(텔레그램/코어) 세션을 동기화·덮어쓰기해야 하는지 판별한다."""
-    if not room_id or room_id in ("__default__", CORE_ORCHESTRATOR_ROOM_ID):
+    if not room_id or room_id == "__default__" or room_id in ORCHESTRATOR_ROOM_IDS:
         return True
     if global_session_id and global_session_id in (room_id, current_session_id):
         return True
@@ -1035,7 +1035,7 @@ async def _watch_and_finish_web_job(
     session_id = rec.get("session_id")
     session_namespace = rec.get("session_namespace", "")
     task_id = rec.get("task_id")
-    is_orchestrator = (room_id == CORE_ORCHESTRATOR_ROOM_ID)
+    is_orchestrator = (room_id in ORCHESTRATOR_ROOM_IDS)
 
     current_watch_agent = _get_mod_attr("watch_agent", watch_agent)
     current_chat_db = _get_mod_attr("chat_db", chat_db)
@@ -1153,7 +1153,7 @@ async def _watch_and_finish_web_job(
 
         hidden = _load_hidden_rooms()
         is_room_deleted = (
-            room_id != CORE_ORCHESTRATOR_ROOM_ID
+            room_id not in ORCHESTRATOR_ROOM_IDS
             and (room_id in hidden or (resolved_session_id and resolved_session_id in hidden))
         )
         job_model = agent_output.get("model") or rec.get("model") or get_model()
@@ -1337,7 +1337,7 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
     from web_rooms import _load_hidden_rooms, _update_room_metadata
 
     hidden = _load_hidden_rooms()
-    if room_id != CORE_ORCHESTRATOR_ROOM_ID and (
+    if room_id not in ORCHESTRATOR_ROOM_IDS and (
         room_id in hidden or (session_id and session_id in hidden)
     ):
         if pid:
@@ -1455,7 +1455,7 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
 
     hidden_after = _load_hidden_rooms()
     is_room_deleted = (
-        room_id != CORE_ORCHESTRATOR_ROOM_ID
+        room_id not in ORCHESTRATOR_ROOM_IDS
         and (room_id in hidden_after or (resolved_session_id and resolved_session_id in hidden_after))
     )
     job_model = agent_output.get("model") or rec.get("model") or get_model()
@@ -2186,7 +2186,7 @@ async def execute_chat_turn(
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     hidden_now = _load_hidden_rooms()
     is_room_deleted = (
-        room_key != CORE_ORCHESTRATOR_ROOM_ID
+        room_key not in ORCHESTRATOR_ROOM_IDS
         and (room_key in hidden_now or (resolved_session_id and resolved_session_id in hidden_now))
     )
     asst_model = agent_output.get("model") or active_model or get_model()
@@ -2239,7 +2239,12 @@ async def execute_chat_turn(
     elif channel == "schedule_trigger":
         log_tag = "🔔 스케줄"
     elif is_orchestrator:
-        log_tag = "마스터에이전트"
+        if room_key == EXPERT_VAULT_ROOM_ID:
+            log_tag = "세컨브레인"
+        elif room_key == EXPERT_CODING_ROOM_ID:
+            log_tag = "봇개발"
+        else:
+            log_tag = "마스터에이전트"
     elif channel == "orchestrator":
         log_tag = "세션지시"
     elif is_voice_mode:
