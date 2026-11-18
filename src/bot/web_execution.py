@@ -1817,22 +1817,32 @@ async def execute_chat_turn(
         }
     )
 
-    use_orchestrator = is_orchestrator if orchestrator is None else bool(orchestrator)
+    is_core = (room_key == CORE_ORCHESTRATOR_ROOM_ID)
+    is_expert_vault = (room_key == EXPERT_VAULT_ROOM_ID)
+    is_expert_coding = (room_key == EXPERT_CODING_ROOM_ID)
+
+    use_orchestrator = is_core if orchestrator is None else bool(orchestrator)
     spawn_kwargs: dict[str, Any] = {
         "workdir": target_workdir,
         "out_file": out_file_path,
         "err_file": err_file_path,
         "coding": is_coding,
-        "web": not use_orchestrator and not is_coding,
+        "web": not use_orchestrator and not is_expert_vault and not is_coding,
         "model": active_model,
         "effort": active_effort,
     }
     if slash_commands:
         spawn_kwargs["slash_commands"] = True
     if use_orchestrator:
+        spawn_kwargs["orchestrator"] = True
+    elif is_expert_vault:
+        spawn_kwargs["expert_vault"] = True
+    elif is_expert_coding:
+        spawn_kwargs["expert_coding"] = True
+
+    if use_orchestrator or is_expert_vault or is_expert_coding:
         ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
         proto = "https" if ssl_enabled else "http"
-        spawn_kwargs["orchestrator"] = True
         spawn_kwargs["extra_env"] = {
             "OSHYUN_ORCHESTRATOR_API_URL": f"{proto}://127.0.0.1:{WEB_PORT}",
             "OSHYUN_ORCHESTRATOR_TOKEN": WEB_TOKEN,
