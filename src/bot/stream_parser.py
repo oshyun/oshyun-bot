@@ -149,8 +149,17 @@ def _append_session_log(out: str) -> None:
         pass
 
 
-def extract_agy_transcript_final_response(conversation_id: str | None) -> str | None:
-    """AGY 세션의 brain transcript.jsonl 에서 최종 PLANNER_RESPONSE 의 텍스트 답변을 추출한다."""
+def extract_agy_transcript_final_response(
+    conversation_id: str | None,
+    *,
+    min_step_index: int | None = None,
+) -> str | None:
+    """AGY 세션의 brain transcript.jsonl 에서 최종 턴(마지막 USER_INPUT 이후)의 PLANNER_RESPONSE 답변을 추출한다.
+
+    중요: 과거 대화 턴의 답변이 현재 턴의 답변으로 오인(재발화/중복 출력)되지 않도록,
+    반드시 '가장 마지막 USER_INPUT' 이후에 발생한 MODEL의 PLANNER_RESPONSE 만을 추출한다.
+    만약 마지막 USER_INPUT 이후에 텍스트 응답이 없으면 절대 과거 턴의 응답을 반환하지 않고 None을 반환한다.
+    """
     if not conversation_id:
         return None
     transcript_path = os.path.expanduser(
@@ -170,8 +179,21 @@ def extract_agy_transcript_final_response(conversation_id: str | None) -> str | 
                     obj = json.loads(line_str)
                 except Exception:
                     continue
+
+                ev_type = obj.get("type")
+                step_idx = obj.get("step_index")
+
+                # 새 사용자 입력(USER_INPUT)이 등장하면 새로운 턴이 시작된 것이므로
+                # 이전 턴의 어시스턴트 응답을 즉시 폐기(초기화)하여 과거 응답 누출/중복을 방지한다.
+                if ev_type == "USER_INPUT":
+                    final_content = None
+                    continue
+
+                if min_step_index is not None and step_idx is not None and step_idx < min_step_index:
+                    continue
+
                 # MODEL의 PLANNER_RESPONSE 이벤트만 어시스턴트 최종 답변으로 인정 (source가 명시되지 않은 레거시/목 객체 허용)
-                if obj.get("type") == "PLANNER_RESPONSE" and obj.get("source") in ("MODEL", None):
+                if ev_type == "PLANNER_RESPONSE" and obj.get("source") in ("MODEL", None):
                     cnt = obj.get("content")
                     if cnt and isinstance(cnt, str) and cnt.strip():
                         if "<SYSTEM_MESSAGE>" not in cnt:

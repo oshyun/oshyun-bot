@@ -979,6 +979,10 @@ async def _run_stream_tail_loop(
                             if s_idx is not None:
                                 seen_step_indices.add(s_idx)
 
+                            # 새 사용자 입력(USER_INPUT) 감지 시 이전 턴 스트림 텍스트 즉시 초기화
+                            if t_obj.get("type") == "USER_INPUT":
+                                live_snapshot["streamText"] = ""
+
                             if t_obj.get("source") == "MODEL" and t_obj.get("type") == "PLANNER_RESPONSE":
                                 c_txt = t_obj.get("content") or ""
                                 if isinstance(c_txt, str) and c_txt.strip() and "<SYSTEM_MESSAGE>" not in c_txt:
