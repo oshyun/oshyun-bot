@@ -1100,19 +1100,13 @@ class TestHubApi(AioHTTPTestCase):
         hist_after = await self.client.request("GET", f"/api/chat/history?roomId={room_id}", headers=headers)
         self.assertEqual((await hist_after.json()).get("messages"), [])
 
-    async def test_activity_audit_and_removed_goals_ideas(self):
-        """GET /api/activity/audit 정상 응답 및 제거된 목표/아이디어 엔드포인트 404 검증."""
+    async def test_removed_audit_goals_ideas(self):
+        """제거된 감사 로그(Audit), 목표, 아이디어 엔드포인트가 라우팅되지 않고 404/405 반환되는지 검증."""
         headers = {"Authorization": "Bearer super-secret-password-999"}
 
-        # 1. Audit (유지됨)
-        audit_res = await self.client.request("GET", "/api/activity/audit", headers=headers)
-        self.assertEqual(audit_res.status, 200)
-        audit_data = await audit_res.json()
-        self.assertTrue(audit_data.get("ok"))
-        self.assertIsInstance(audit_data.get("audit"), list)
-
-        # 2. 제거된 Goals / Ideas 엔드포인트 (add_static("/") 로 인해 미등록 GET=404, POST=405)
+        # 제거된 Audit / Goals / Ideas 엔드포인트 (add_static("/") 로 인해 미등록 GET=404, POST=405)
         for method, path in (
+            ("GET", "/api/activity/audit"),
             ("GET", "/api/goals"),
             ("POST", "/api/goals"),
             ("POST", "/api/goals/delete"),
