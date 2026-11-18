@@ -5835,6 +5835,13 @@
       if (currentView !== 'chat') {
         switchView('chat');
       }
+      if (currentRoomId === EXPERT_VAULT_ROOM_ID) {
+        switchMsbMemoryAgent('second_brain');
+      } else if (currentRoomId === EXPERT_CODING_ROOM_ID) {
+        switchMsbMemoryAgent('bot_dev');
+      } else if (currentRoomId === CORE_ROOM_ID) {
+        switchMsbMemoryAgent('master');
+      }
       toggleMasterSidebar(true);
       setTimeout(() => {
         const sec = document.getElementById('msb-memory-section');
@@ -5973,38 +5980,54 @@
       renderMsbMemory();
     }
 
+    const MEMORY_AGENT_PARENT_MAP = {
+      master: CORE_ROOM_ID,
+      second_brain: EXPERT_VAULT_ROOM_ID,
+      bot_dev: EXPERT_CODING_ROOM_ID
+    };
+    const MEMORY_AGENT_LABEL_MAP = {
+      master: '마스터',
+      second_brain: '세컨브레인',
+      bot_dev: '봇개발'
+    };
+
     async function rebalanceMasterMemory() {
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        showToast('서버에 연결되지 않았습니다. 연결 후 다시 시도해 주세요.');
-        return;
-      }
-      if (window.innerWidth <= 1024) {
-        toggleMasterSidebar(false);
-      }
+      const agentId = MEMORY_AGENT_PARENT_MAP[currentMsbAgent] ? currentMsbAgent : 'master';
+      const parentRoomId = MEMORY_AGENT_PARENT_MAP[agentId] || CORE_ROOM_ID;
+      const agentLabel = MEMORY_AGENT_LABEL_MAP[agentId] || '마스터';
+      const roomTitle = `${agentLabel} 메모리 리밸런싱`;
+      const prompt = agentId === 'master'
+        ? '/memory-rebalance --agent-id master'
+        : `/memory-rebalance --agent-id ${agentId} (${agentLabel} 전용 메모리 대상)`;
+
       const btn = document.getElementById('btn-msb-mem-rebalance');
-      if (btn) btn.disabled = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ 스폰 중…';
+      }
       try {
         const res = await fetch('/api/orchestrator/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'spawn',
-            parent: CORE_ROOM_ID,
-            parentAgentId: CORE_ROOM_ID,
-            title: '메모리 리밸런싱',
-            prompt: '/memory-rebalance',
-            model: 'gemini-3.8-flash',
-            effort: 'low',
             forceNew: true,
+            parentAgentId: parentRoomId,
+            title: roomTitle,
+            prompt,
             rawPrompt: true,
             slashCommands: true,
-            orchestrator: true,
+            model: 'gemini-3.8-flash',
+            effort: 'low',
             wait: false
           })
         });
         const data = await res.json();
-        if (data.ok) {
-          showToast(`마스터 하위 세션 '${data.title || '메모리 리밸런싱'}'에서 리밸런싱을 시작했습니다.`);
+        if (data && data.ok) {
+          if (window.innerWidth <= 1024) {
+            toggleMasterSidebar(false);
+          }
+          showToast(`${agentLabel} 하위 세션(${parentRoomId})으로 메모리 리밸런싱을 시작했습니다.`);
           await loadChatRoomsFromServer();
           loadMasterGraphFromServer();
           loadMasterTasksFromServer();
@@ -6012,12 +6035,15 @@
             selectRoom(data.roomId);
           }
         } else {
-          showToast('메모리 리밸런싱 시작 실패: ' + (data.error || '오류'));
+          showToast('메모리 리밸런싱 스폰 실패: ' + ((data && data.error) || '알 수 없는 오류'));
         }
       } catch (err) {
-        showToast('메모리 리밸런싱 요청 중 오류: ' + err);
+        showToast('메모리 리밸런싱 스폰 중 오류: ' + (err.message || String(err)));
       } finally {
-        if (btn) btn.disabled = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '⚖️ 리밸런싱';
+        }
       }
     }
 
