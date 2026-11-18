@@ -132,7 +132,7 @@
               ${item.model ? `<span class="auto-badge">${esc(item.model)}</span>` : ''}
               ${item.effort ? `<span class="auto-badge">${esc(item.effort)}</span>` : ''}
               <span style="flex:1"></span>
-              <button class="auto-btn" onclick="openEditScheduleModal('${esc(item.id)}')">수정 ✏️</button>
+              <button class="auto-btn" onclick="openEditScheduleModal('${esc(item.id)}')">수정</button>
               <button class="auto-btn" onclick="toggleScheduleEnabled('${esc(item.id)}', ${!item.enabled})">${item.enabled ? '일시중지' : '활성화'}</button>
               <button class="auto-btn" onclick="runScheduleNow('${esc(item.id)}')">▶ 실행</button>
               <button class="auto-btn danger" onclick="deleteScheduleItem('${esc(item.id)}')">삭제</button>
