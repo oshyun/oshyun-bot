@@ -757,6 +757,11 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:
         parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
 
+    raw_prompt = bool(payload.get("rawPrompt") or payload.get("raw_prompt"))
+    slash_commands = bool(payload.get("slashCommands") or payload.get("slash_commands"))
+    req_orchestrator = payload.get("orchestrator")
+    orchestrator_flag: bool | None = bool(req_orchestrator) if req_orchestrator is not None else None
+
     if not message:
         return web.json_response({"ok": False, "error": "전송할 message가 비어 있습니다."}, status=400)
 
@@ -969,20 +974,28 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     loop = asyncio.get_running_loop()
     result_future: asyncio.Future | None = loop.create_future() if wait_for_result else None
 
-    is_already_running, q_size = await current_enqueue(
-        room_id=room_id,
-        user_text=message,
-        is_voice_mode=False,
-        client_session_id=session_id,
-        is_new_session=is_new_session,
-        channel="orchestrator",
-        model=clean_model,
-        effort=clean_effort,
-        result_future=result_future,
-        task_id=task_id,
-        user_msg_id=user_msg_id,
-        client_msg_id=dispatch_client_msg_id,
-    )
+    enqueue_kwargs: dict[str, Any] = {
+        "room_id": room_id,
+        "user_text": message,
+        "is_voice_mode": False,
+        "client_session_id": session_id,
+        "is_new_session": is_new_session,
+        "channel": "orchestrator",
+        "model": clean_model,
+        "effort": clean_effort,
+        "result_future": result_future,
+        "task_id": task_id,
+        "user_msg_id": user_msg_id,
+        "client_msg_id": dispatch_client_msg_id,
+    }
+    if raw_prompt:
+        enqueue_kwargs["raw_prompt"] = True
+    if slash_commands:
+        enqueue_kwargs["slash_commands"] = True
+    if orchestrator_flag is not None:
+        enqueue_kwargs["orchestrator"] = orchestrator_flag
+
+    is_already_running, q_size = await current_enqueue(**enqueue_kwargs)
 
     if not wait_for_result or result_future is None:
         resp_body: dict[str, Any] = {
