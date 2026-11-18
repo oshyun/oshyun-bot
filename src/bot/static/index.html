@@ -4654,6 +4654,7 @@
                 sRoom.lastChannel === 'orchestrator' ||
                 (prevMeta && (prevMeta.isOrchestratorChild || prevMeta.byOrchestrator))
               ),
+              parentAgentId: sRoom.parentAgentId || (prevMeta && prevMeta.parentAgentId) || null,
               historyLoaded: preservedHistoryLoaded,
               pinned: Boolean(sRoom.pinned),
               isArchived: Boolean(sRoom.isArchived),
@@ -6919,6 +6920,7 @@
         const sRoom = data.room;
         const rId = String(sRoom.id || sRoom.roomId || '').trim();
         const isChild = Boolean(data.byOrchestrator || sRoom.byOrchestrator || sRoom.isOrchestratorChild || sRoom.channel === 'orchestrator');
+        const resolvedParent = sRoom.parentAgentId || data.parentAgentId || (isChild ? CORE_ROOM_ID : null);
         let existing = getRoomById(rId);
         if (!existing && rId) {
           existing = {
@@ -6932,6 +6934,7 @@
             sessionId: sRoom.sessionId || null,
             byOrchestrator: isChild,
             isOrchestratorChild: isChild,
+            parentAgentId: resolvedParent,
             historyLoaded: false,
             updatedAt: Date.now(),
             createdAt: Date.now(),
@@ -6944,6 +6947,7 @@
           if (sRoom.preview) existing.preview = sRoom.preview;
           if (sRoom.model) existing.model = sRoom.model;
           if (sRoom.effort) existing.effort = sRoom.effort;
+          if (resolvedParent) existing.parentAgentId = resolvedParent;
           if (isChild) {
             existing.byOrchestrator = true;
             existing.isOrchestratorChild = true;
@@ -6960,6 +6964,7 @@
       }
       if (data.type === 'orchestrator_dispatch') {
         const targetId = String(data.roomId || data.sessionId || '').trim();
+        const dispatchParent = data.parentAgentId || CORE_ROOM_ID;
         let targetRoom = getRoomById(targetId);
         if (!targetRoom && targetId) {
           targetRoom = {
@@ -6973,6 +6978,7 @@
             sessionId: data.sessionId || null,
             byOrchestrator: true,
             isOrchestratorChild: true,
+            parentAgentId: dispatchParent,
             historyLoaded: false,
             updatedAt: Date.now(),
             createdAt: Date.now(),
@@ -6983,6 +6989,7 @@
         } else if (targetRoom) {
           if (data.model !== undefined && data.model !== null) targetRoom.model = data.model;
           if (data.effort !== undefined && data.effort !== null) targetRoom.effort = data.effort;
+          if (dispatchParent) targetRoom.parentAgentId = dispatchParent;
           targetRoom.isOrchestratorChild = true;
         }
         if (targetRoom && data.text) {
@@ -7214,7 +7221,13 @@
           const oldRoomId = targetRoom.id;
           targetRoom.sessionId = data.sessionId;
           targetRoom.isNewSession = false;
-          if (oldRoomId !== CORE_ROOM_ID) {
+          if (data.parentAgentId) {
+            targetRoom.parentAgentId = data.parentAgentId;
+          }
+          const isOrchRoom = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined')
+            ? ORCHESTRATOR_ROOM_IDS.includes(oldRoomId)
+            : (oldRoomId === CORE_ROOM_ID || oldRoomId === '__expert_vault__' || oldRoomId === '__expert_coding__');
+          if (!isOrchRoom) {
             if (!String(oldRoomId || '').startsWith('room-')) {
               targetRoom.id = data.sessionId;
               if (wasCurrentRoom) currentRoomId = data.sessionId;
