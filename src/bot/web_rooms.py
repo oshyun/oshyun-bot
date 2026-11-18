@@ -17,7 +17,7 @@ import chat_db
 from agent_engine import clear_session, delete_session_files, kill_job
 from bot_logger import logger, vault_log
 from engine_settings import get_coding_mode
-from paths import ATTACHED_FILES_DIR, CHATS_DIR, CODEDIR, STATE_DIR, WORKDIR
+from paths import ATTACHED_FILES_DIR, CHATS_DIR, CODEDIR, STATE_DIR, WORKDIR, child_default_workdir
 
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -393,6 +393,8 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["workdir"] = CODEDIR or WORKDIR
             elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
                 merged["workdir"] = WORKDIR
+            elif child_default_workdir(merged.get("parentAgentId")):
+                merged["workdir"] = child_default_workdir(merged.get("parentAgentId"))
             else:
                 is_coding = get_coding_mode()
                 merged["workdir"] = (CODEDIR or WORKDIR) if is_coding else WORKDIR
@@ -940,6 +942,8 @@ async def handle_chat_history(request: web.Request) -> web.Response:
             or room_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID)
         ):
             resolved_workdir = WORKDIR
+        elif child_default_workdir(room_rec.get("parent_agent_id") if room_rec else None):
+            resolved_workdir = child_default_workdir(room_rec.get("parent_agent_id"))
         else:
             is_coding = get_coding_mode()
             resolved_workdir = (CODEDIR or WORKDIR) if is_coding else WORKDIR
