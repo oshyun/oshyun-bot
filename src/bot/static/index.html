@@ -3858,6 +3858,47 @@
               </div>
             </div>
 
+            <div class="settings-group" id="settings-group-notification">
+              <div class="settings-group-title">알림</div>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div>
+                    <div class="setting-label">브라우저 및 시스템 알림</div>
+                    <div class="setting-desc">에이전트 답변이 완료되었을 때 브라우저/기기 알림을 표시합니다. (백그라운드 또는 다른 창 작업 시 유용)</div>
+                  </div>
+                  <div class="ctrl">
+                    <select id="select-notification-mode" class="select" onchange="onNotificationModeChange()">
+                      <option value="background">다른 탭/백그라운드일 때만 (권장)</option>
+                      <option value="always">항상 알림 받기</option>
+                      <option value="off">알림 끄기</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting-row" id="row-notification-permission">
+                  <div>
+                    <div class="setting-label">알림 권한</div>
+                    <div class="setting-desc" id="notification-permission-desc">확인 중…</div>
+                  </div>
+                  <div class="ctrl" style="display:flex; gap:8px; align-items:center;">
+                    <button type="button" class="btn sm" id="btn-request-notification" onclick="requestNotificationPermissionManual()">권한 허용</button>
+                    <button type="button" class="btn sm ghost" id="btn-test-notification" onclick="testNotificationManual()">테스트 알림</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <div class="setting-label">알림 효과음</div>
+                    <div class="setting-desc">답변 완료 알림 시 짧은 안내 차임 벨소리를 함께 재생합니다.</div>
+                  </div>
+                  <div class="ctrl">
+                    <select id="select-notification-sound" class="select" onchange="onNotificationSoundChange()">
+                      <option value="true">소리 켜기 (맑은 차임 벨)</option>
+                      <option value="false">무음 (소리 끔)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="settings-group" id="pwa-install-card">
               <div class="settings-group-title">앱</div>
               <div class="settings-card">
@@ -6722,7 +6763,7 @@
 
       if (viewName === 'vault') refreshVaultTree();
       else if (viewName === 'automation') { if (typeof loadAutomationData === 'function') loadAutomationData(); }
-      else if (viewName === 'settings') { loadStatusAndSettings(); updatePwaUi(); updateMobileAutofocusUi(); updateUiFontSizeUi(); updateFontSizeUi(); }
+      else if (viewName === 'settings') { loadStatusAndSettings(); updatePwaUi(); updateNotificationUi(); updateMobileAutofocusUi(); updateUiFontSizeUi(); updateFontSizeUi(); }
       else if (viewName === 'chat') {
         if (chatRooms.length === 0) {
           createNewChat();
@@ -7727,6 +7768,11 @@
           showToast(`[${targetRoom.title}] 답변이 도착했습니다.`);
         }
 
+        // 브라우저 및 시스템 레벨 알림 (백그라운드/다른 탭/다른 방)
+        if (typeof handleAgentResponseNotification === 'function') {
+          handleAgentResponseNotification(targetRoom, replyText);
+        }
+
         const ttsMode = getTtsMode();
         const wasVoiceTurn = Boolean(data.voiceMode);
         const shouldPlayTts = ttsMode === 'always' || (ttsMode === 'voice_only' && wasVoiceTurn);
@@ -7762,6 +7808,11 @@
           setOrbState('idle', '오류 발생');
           renderMessagesForCurrentRoom();
           updateSendButtonState();
+        } else {
+          showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`);
+        }
+        if (typeof handleAgentResponseNotification === 'function') {
+          handleAgentResponseNotification(targetRoom, errMsg, { isError: true });
         }
       }
     }
@@ -8576,6 +8627,7 @@
     let _nextSendOptions = null;
 
     async function sendUserMessage(textOverride, isVoiceTurn = false) {
+      maybeRequestNotificationPermission();
       const text = (textOverride !== undefined ? textOverride : getChatInputText()).trim();
       const hasAttachments = Boolean(pendingAttachments && pendingAttachments.length > 0);
       if (!text && !hasAttachments) return;
@@ -12035,11 +12087,284 @@
       } catch (_) {}
     }
 
+    // ─── 브라우저 / 시스템 알림 (Notification API & Service Worker) ───
+    const STORAGE_KEY_NOTIFICATION_MODE = 'oshyun_notification_mode'; // 'background' | 'always' | 'off'
+    const STORAGE_KEY_NOTIFICATION_SOUND = 'oshyun_notification_sound'; // 'true' | 'false'
+    let hasAutoPromptedNotification = false;
+
+    function getNotificationMode() {
+      try {
+        const val = localStorage.getItem(STORAGE_KEY_NOTIFICATION_MODE);
+        if (val === 'background' || val === 'always' || val === 'off') return val;
+      } catch (_) {}
+      return 'background';
+    }
+
+    function isNotificationSoundEnabled() {
+      try {
+        const val = localStorage.getItem(STORAGE_KEY_NOTIFICATION_SOUND);
+        if (val !== null) return val === 'true';
+      } catch (_) {}
+      return true;
+    }
+
+    function cleanNotificationText(raw) {
+      if (!raw) return '답변이 완료되었습니다.';
+      let text = String(raw);
+      text = text.replace(/```[\s\S]*?```/g, ' [코드] ');
+      text = text.replace(/`([^`]+)`/g, '$1');
+      text = text.replace(/\[link:([^\]]+)\]\([^)]+\)/g, '$1');
+      text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+      text = text.replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1');
+      text = text.replace(/^[#>\-*+]\s+/gm, '');
+      text = text.replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, '$1');
+      text = text.replace(/<[^>]+>/g, '');
+      text = text.replace(/\s+/g, ' ').trim();
+      if (!text) return '답변이 완료되었습니다.';
+      return text.length > 120 ? text.slice(0, 117) + '…' : text;
+    }
+
+    function playNotificationChime() {
+      if (!isNotificationSoundEnabled()) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // 1st note (587.33 Hz - D5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0, now);
+        gain1.gain.linearRampToValueAtTime(0.12, now + 0.02);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.22);
+
+        // 2nd note (880 Hz - A5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, now + 0.1);
+        gain2.gain.setValueAtTime(0, now + 0.1);
+        gain2.gain.linearRampToValueAtTime(0.16, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.1);
+        osc2.stop(now + 0.4);
+
+        setTimeout(() => { ctx.close().catch(() => {}); }, 800);
+      } catch (_) {}
+    }
+
+    async function triggerSystemNotification({ title, body, roomId }) {
+      if (!('Notification' in window)) return false;
+      if (Notification.permission !== 'granted') return false;
+
+      const options = {
+        body: body || '답변이 도착했습니다.',
+        icon: '/icons/icon-192.png',
+        badge: '/favicon.svg',
+        tag: `room-${roomId || 'general'}`,
+        renotify: true,
+        data: {
+          roomId: roomId || '',
+          url: roomId ? `/?room=${encodeURIComponent(roomId)}` : '/'
+        }
+      };
+
+      // 1. Service Worker 등록 확인 (PWA / 백그라운드 우선)
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg && typeof reg.showNotification === 'function') {
+            await reg.showNotification(title, options);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[Notification] SW showNotification 실패, window.Notification 폴백:', err);
+      }
+
+      // 2. 일반 Notification API 폴백
+      try {
+        const notif = new Notification(title, options);
+        notif.onclick = function () {
+          try {
+            window.focus();
+            if (roomId && typeof selectRoom === 'function') {
+              selectRoom(roomId);
+            }
+          } catch (_) {}
+          notif.close();
+        };
+        return true;
+      } catch (err) {
+        console.warn('[Notification] Notification 인스턴스 생성 실패:', err);
+        return false;
+      }
+    }
+
+    function handleAgentResponseNotification(targetRoom, replyText, opts = {}) {
+      const mode = getNotificationMode();
+      if (mode === 'off') return;
+
+      const isCurrentRoom = targetRoom && (targetRoom.id === currentRoomId);
+      const isHidden = document.hidden || (document.visibilityState === 'hidden') || !document.hasFocus();
+
+      // 'always'이거나, 'background' 상태(문서가 가려졌거나 포커스가 없거나 다른 대화방일 때)
+      const shouldNotify = (mode === 'always') || (mode === 'background' && (isHidden || !isCurrentRoom));
+
+      if (!shouldNotify) return;
+
+      const roomTitle = (targetRoom && targetRoom.title) ? targetRoom.title : '대화방';
+      const cleanBody = cleanNotificationText(replyText);
+      const isError = Boolean(opts && opts.isError);
+      const title = isError ? `[${roomTitle}] 실행 오류` : `[${roomTitle}] 답변 완료`;
+
+      // 브라우저/기기 알림 발송
+      triggerSystemNotification({
+        title,
+        body: cleanBody,
+        roomId: targetRoom ? targetRoom.id : ''
+      });
+
+      // 알림음 재생
+      playNotificationChime();
+    }
+
+    function maybeRequestNotificationPermission() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'default') return;
+      if (getNotificationMode() === 'off') return;
+      if (hasAutoPromptedNotification) return;
+
+      hasAutoPromptedNotification = true;
+      try {
+        Notification.requestPermission().then(() => {
+          updateNotificationUi();
+        }).catch(() => {});
+      } catch (_) {}
+    }
+
+    async function requestNotificationPermissionManual() {
+      if (!('Notification' in window)) {
+        showToast('이 브라우저는 웹 알림(Notification API)을 지원하지 않습니다.');
+        return;
+      }
+      try {
+        const perm = await Notification.requestPermission();
+        updateNotificationUi();
+        if (perm === 'granted') {
+          showToast('브라우저 알림 권한이 허용되었습니다.');
+          triggerSystemNotification({
+            title: '알림 설정 완료',
+            body: '답변이 완료되면 이와 같이 브라우저/시스템 알림이 표시됩니다.',
+            roomId: currentRoomId
+          });
+          playNotificationChime();
+        } else if (perm === 'denied') {
+          showToast('알림 권한이 차단되었습니다. 브라우저 사이트 설정에서 허용해 주세요.');
+        }
+      } catch (err) {
+        showToast('알림 권한 요청 중 오류: ' + (err.message || String(err)));
+      }
+    }
+
+    function testNotificationManual() {
+      if (!('Notification' in window)) {
+        showToast('이 브라우저는 웹 알림을 지원하지 않습니다.');
+        return;
+      }
+      if (Notification.permission !== 'granted') {
+        showToast('먼저 [권한 허용] 버튼을 눌러 알림을 허용해 주세요.');
+        return;
+      }
+      const currentRoom = (typeof findRoom === 'function') ? findRoom(currentRoomId) : null;
+      const roomTitle = currentRoom ? currentRoom.title : '테스트 대화방';
+      triggerSystemNotification({
+        title: `[${roomTitle}] 답변 완료 (테스트)`,
+        body: '알림이 정상적으로 수신되었습니다. 에이전트 응답 시 이와 같이 안내됩니다.',
+        roomId: currentRoomId
+      });
+      playNotificationChime();
+      showToast('테스트 알림을 발송했습니다.');
+    }
+
+    function updateNotificationUi() {
+      const permDesc = document.getElementById('notification-permission-desc');
+      const btnReq = document.getElementById('btn-request-notification');
+      const selMode = document.getElementById('select-notification-mode');
+      const selSound = document.getElementById('select-notification-sound');
+
+      if (selMode) selMode.value = getNotificationMode();
+      if (selSound) selSound.value = isNotificationSoundEnabled() ? 'true' : 'false';
+
+      if (!('Notification' in window)) {
+        if (permDesc) permDesc.innerHTML = '<span style="color:var(--text-3);">이 브라우저는 알림을 지원하지 않습니다.</span>';
+        if (btnReq) btnReq.style.display = 'none';
+        return;
+      }
+
+      const perm = Notification.permission;
+      if (perm === 'granted') {
+        if (permDesc) permDesc.innerHTML = '<span style="color:#2e9b3f; font-weight:600;">✓ 허용됨</span>';
+        if (btnReq) btnReq.style.display = 'none';
+      } else if (perm === 'denied') {
+        if (permDesc) permDesc.innerHTML = '<span style="color:#e03131; font-weight:600;">✕ 차단됨</span> (브라우저 주소창 설정에서 해제 필요)';
+        if (btnReq) {
+          btnReq.style.display = 'inline-flex';
+          btnReq.innerText = '재시도';
+        }
+      } else {
+        if (permDesc) permDesc.innerHTML = '<span style="color:var(--text-2);">권한 요청 대기 중</span>';
+        if (btnReq) {
+          btnReq.style.display = 'inline-flex';
+          btnReq.innerText = '권한 허용';
+        }
+      }
+    }
+
+    function onNotificationModeChange() {
+      const sel = document.getElementById('select-notification-mode');
+      if (!sel) return;
+      try {
+        localStorage.setItem(STORAGE_KEY_NOTIFICATION_MODE, sel.value);
+      } catch (_) {}
+      if (sel.value !== 'off' && 'Notification' in window && Notification.permission === 'default') {
+        requestNotificationPermissionManual();
+      } else {
+        showToast('알림 모드가 저장되었습니다.');
+      }
+    }
+
+    function onNotificationSoundChange() {
+      const sel = document.getElementById('select-notification-sound');
+      if (!sel) return;
+      try {
+        localStorage.setItem(STORAGE_KEY_NOTIFICATION_SOUND, sel.value);
+      } catch (_) {}
+      showToast('알림 효과음 설정이 저장되었습니다.');
+    }
+
     // ─── PWA ───
     let deferredPwaPrompt = null;
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'NAVIGATE_ROOM') {
+          const targetId = event.data.roomId;
+          if (targetId && typeof selectRoom === 'function') {
+            selectRoom(targetId);
+          }
+        }
       });
     }
 
@@ -12361,9 +12686,19 @@
         loadStatusAndSettings();
         initUsagePolling();
         updatePwaUi();
+        updateNotificationUi();
 
         try {
           const urlParams = new URLSearchParams(window.location.search);
+          const initialRoom = urlParams.get('room');
+          if (initialRoom) {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('room');
+            window.history.replaceState({}, '', cleanUrl.toString());
+            setTimeout(() => {
+              if (typeof selectRoom === 'function') selectRoom(initialRoom);
+            }, 100);
+          }
           const isVoicePath = window.location.pathname === '/voice' || window.location.pathname === '/voice/';
           const isVoiceParam = urlParams.has('voice') && urlParams.get('voice') !== '0' && urlParams.get('voice') !== 'false';
           const isAutoParam = urlParams.get('auto') === '1' || urlParams.get('auto') === 'true';
