@@ -652,6 +652,16 @@
       padding: 2px 8px; border-radius: 999px;
       margin-bottom: 5px; align-self: flex-end;
     }
+    .orch-msg-tag.is-vault {
+      color: #d97706;
+      background: rgba(217, 119, 6, 0.12);
+      border-color: rgba(217, 119, 6, 0.28);
+    }
+    .orch-msg-tag.is-coding {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.28);
+    }
     /* ─── 사이드바 대화방 검색 & 다중 선택 툴바 ─── */
     .sb-rooms-toolbar {
       display: flex; align-items: center; gap: 6px;
@@ -10329,36 +10339,37 @@
       }
 
       // 5. 하위 세션 (마스터 / 전문가 직속 하위 에이전트)
-      const isSubtask = Boolean(room && isMasterSubtaskRoom(room));
+      const isSubtask = Boolean((room && isMasterSubtaskRoom(room)) || (room && room.parentAgentId) || (m && m.parentAgentId));
       if (isSubtask) {
-        const pId = String((room && room.parentAgentId) || (m && m.parentAgentId) || '').trim();
-        let parentBadge = '';
-        let parentBadgeCls = '';
-        let defaultSubName = '하위 에이전트';
+        let pId = String((room && room.parentAgentId) || (m && m.parentAgentId) || '').trim();
+        if (!pId && Array.isArray(latestMasterTasks)) {
+          const t = latestMasterTasks.find(task => task && (task.roomId === rId || (room && task.roomId === room.id)));
+          if (t && t.parentAgentId) pId = String(t.parentAgentId).trim();
+        }
+        if (!pId && latestMasterGraph && Array.isArray(latestMasterGraph.nodes)) {
+          const node = latestMasterGraph.nodes.find(n => n && n.id === rId);
+          if (node && node.parentAgentId) pId = String(node.parentAgentId).trim();
+        }
+
+        let workerName = '하위 일꾼';
         let avatarIcon = ICONS.spark;
         let avatarCls = 'is-subtask';
 
         if (pId === EXPERT_VAULT_ROOM_ID) {
-          parentBadge = '세컨브레인 직속';
-          parentBadgeCls = 'is-vault';
-          defaultSubName = '세컨브레인 하위 에이전트';
+          workerName = '세컨브레인 일꾼';
           avatarIcon = ICONS.brain;
           avatarCls = 'is-vault';
         } else if (pId === EXPERT_CODING_ROOM_ID) {
-          parentBadge = '봇개발 직속';
-          parentBadgeCls = 'is-coding';
-          defaultSubName = '봇개발 하위 에이전트';
+          workerName = '봇개발 일꾼';
           avatarIcon = ICONS.terminal;
           avatarCls = 'is-coding';
         } else if (pId === CORE_ROOM_ID) {
-          parentBadge = '마스터 직속';
-          parentBadgeCls = '';
-          defaultSubName = '마스터 하위 에이전트';
+          workerName = '마스터 일꾼';
           avatarIcon = ICONS.spark;
           avatarCls = 'is-subtask';
         }
 
-        // 연결된 원장 태스크 조회 (있으면 작업 제목 확인)
+        // 연결된 원장 태스크 조회 (있으면 작업 제목 확인 - 마우스 hover 툴팁용)
         const linkedTask = Array.isArray(latestMasterTasks)
           ? latestMasterTasks.find(t => t && (t.roomId === rId || (room && t.roomId === room.id)))
           : null;
@@ -10375,18 +10386,16 @@
           rawTitle === '에이전트 세션' ||
           rawTitle === rId;
 
-        const displayName = isGeneric ? defaultSubName : rawTitle;
-        const roleBadgeHtml = parentBadge
-          ? `<span class="model-tag sub-agent-badge ${parentBadgeCls}" title="${escapeHtml(parentBadge)}">${escapeHtml(parentBadge)}</span>`
-          : `<span class="model-tag sub-agent-badge" title="하위 에이전트">하위 에이전트</span>`;
+        // fullName은 발화자명 마우스 오버 시 상세 툴팁으로 사용됨
+        const fullTooltip = (!isGeneric && rawTitle) ? `${workerName} (${rawTitle})` : workerName;
 
         return {
-          name: displayName,
-          fullName: rawTitle ? `${displayName} (${parentBadge || '하위 에이전트'})` : displayName,
+          name: workerName,
+          fullName: fullTooltip,
           role: 'subtask',
           avatarCls: avatarCls,
           avatarIcon: avatarIcon,
-          roleBadgeHtml: roleBadgeHtml
+          roleBadgeHtml: ''
         };
       }
 
@@ -10487,9 +10496,24 @@
         row.appendChild(actions);
       } else if (sender === 'user') {
         if (m.channel === 'orchestrator') {
+          const curRoom = (m && m.roomId ? getRoomById(m.roomId) : getCurrentRoom());
+          let pId = String((curRoom && curRoom.parentAgentId) || (m && m.parentAgentId) || '').trim();
+          if (!pId && curRoom && Array.isArray(latestMasterTasks)) {
+            const t = latestMasterTasks.find(task => task && task.roomId === curRoom.id);
+            if (t && t.parentAgentId) pId = String(t.parentAgentId).trim();
+          }
+          let orchLabel = '마스터 에이전트 지시';
+          let orchCls = '';
+          if (pId === EXPERT_CODING_ROOM_ID) {
+            orchLabel = '봇개발 전문가 지시';
+            orchCls = ' is-coding';
+          } else if (pId === EXPERT_VAULT_ROOM_ID) {
+            orchLabel = '세컨브레인 전문가 지시';
+            orchCls = ' is-vault';
+          }
           const orchTag = document.createElement('div');
-          orchTag.className = 'orch-msg-tag';
-          orchTag.innerHTML = '<span>마스터 에이전트 지시</span>';
+          orchTag.className = 'orch-msg-tag' + orchCls;
+          orchTag.innerHTML = `<span>${escapeHtml(orchLabel)}</span>`;
           row.appendChild(orchTag);
         }
         if (isQueued) {
