@@ -3742,6 +3742,13 @@ class TestWebCrashRecovery(unittest.TestCase):
         ptr_block = content.split('function initPullToRefresh(')[1].split('function initVisualViewportHandler(')[0]
         self.assertIn("document.getElementById('master-sidebar')", ptr_block)
         self.assertIn('.master-drawer-backdrop', ptr_block)
+        # 스크롤할 내용이 없는 짧은 대화방 및 빈 화면에서도 당겨서 새로고침(PTR)이 정상 트리거되도록 하는 판정 로직 검증
+        self.assertIn('canScrollUp = scrollTop > 2;', ptr_block)
+        self.assertIn('canScrollDown = distFromBottom > 2;', ptr_block)
+        self.assertIn('isAtTop = !canScrollUp;', ptr_block)
+        self.assertIn('isAtBottom = !canScrollDown;', ptr_block)
+        self.assertIn('(canScrollDown && dy < 0) || (canScrollUp && dy > 0)', ptr_block)
+        self.assertIn('dy >= 95', ptr_block)
 
         # 5. sub-agent 보고 메시지 좌측 발화 UI 및 내부 메타데이터 필터링 검증
         self.assertIn('function isSubAgentReportMessage(', content)
