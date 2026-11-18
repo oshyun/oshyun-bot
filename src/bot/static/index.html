@@ -3063,11 +3063,12 @@
         </button>
       </nav>
 
-      <!-- 상단 고정: 마스터 에이전트 + 하위 태스크 트리 -->
+      <!-- 상단 고정: 마스터/전문가 에이전트 + 하위 태스크 트리 -->
       <div class="sb-core-section" id="sb-core-section">
+        <!-- 1. 마스터 에이전트 -->
         <div class="sb-core-label">마스터 에이전트</div>
         <div class="sb-core-row">
-          <div class="core-agent-slot" id="core-agent-slot" onclick="selectRoom('__core__')" title="모든 채팅방(AGY 세션)을 읽고 지시하거나 새 세션을 생성하는 마스터 에이전트">
+          <div class="core-agent-slot" id="core-agent-slot" onclick="selectRoom('__core__')" title="모든 채팅방(AGY 세션)을 읽고 지시하거나 새 세션을 생성하는 총괄 마스터 에이전트">
             <div class="core-agent-icon">
               <svg class="i" viewBox="0 0 16 16" stroke-width="1.5"><circle cx="8" cy="2" r="0.8"/><line x1="8" y1="2.9" x2="8" y2="5"/><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><circle cx="6" cy="9" r="0.8"/><circle cx="10" cy="9" r="0.8"/><line x1="5.5" y1="13.5" x2="5.5" y2="15"/><line x1="10.5" y1="13.5" x2="10.5" y2="15"/></svg>
             </div>
@@ -3078,11 +3079,51 @@
               <div class="core-agent-sub" id="core-agent-sub">대기</div>
             </div>
           </div>
-          <button type="button" class="core-agent-reset-btn" id="btn-core-agent-reset" onclick="resetCoreOrchestratorRoom(event)" title="마스터 에이전트 대화 및 세션 초기화">
+          <button type="button" class="core-agent-reset-btn" id="btn-core-agent-reset" onclick="resetCoreOrchestratorRoom(event, '__core__')" title="마스터 에이전트 대화 및 세션 초기화">
             <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           </button>
         </div>
         <div class="sb-core-tree" id="master-subtask-tree"></div>
+
+        <!-- 2. 세컨브레인 에이전트 -->
+        <div class="sb-core-label" style="margin-top:8px;">세컨브레인 에이전트</div>
+        <div class="sb-core-row">
+          <div class="core-agent-slot" id="expert-vault-slot" onclick="selectRoom('__expert_vault__')" title="개인·업무 볼트 지식·가계부·건강·일정 전문 에이전트">
+            <div class="core-agent-icon" style="background:rgba(217,119,6,0.15);color:#d97706;">
+              <svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>
+            </div>
+            <div class="core-agent-body">
+              <div class="core-agent-top">
+                <span class="core-agent-title">세컨브레인</span>
+              </div>
+              <div class="core-agent-sub" id="expert-vault-sub">대기</div>
+            </div>
+          </div>
+          <button type="button" class="core-agent-reset-btn" id="btn-expert-vault-reset" onclick="resetCoreOrchestratorRoom(event, '__expert_vault__')" title="세컨브레인 에이전트 세션 초기화">
+            <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+        <div class="sb-core-tree" id="expert-vault-subtask-tree"></div>
+
+        <!-- 3. 봇개발 에이전트 -->
+        <div class="sb-core-label" style="margin-top:8px;">봇개발 에이전트</div>
+        <div class="sb-core-row">
+          <div class="core-agent-slot" id="expert-coding-slot" onclick="selectRoom('__expert_coding__')" title="oshyun-bot 소스코드 개발·테스트·토큰버닝 전문 에이전트">
+            <div class="core-agent-icon" style="background:rgba(59,130,246,0.15);color:#3b82f6;">
+              <svg class="i" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div class="core-agent-body">
+              <div class="core-agent-top">
+                <span class="core-agent-title">봇개발</span>
+              </div>
+              <div class="core-agent-sub" id="expert-coding-sub">대기</div>
+            </div>
+          </div>
+          <button type="button" class="core-agent-reset-btn" id="btn-expert-coding-reset" onclick="resetCoreOrchestratorRoom(event, '__expert_coding__')" title="봇개발 에이전트 세션 초기화">
+            <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+        <div class="sb-core-tree" id="expert-coding-subtask-tree"></div>
         <div class="sb-core-divider"></div>
       </div>
 
@@ -3297,6 +3338,13 @@
           <div class="master-sidebar-scroll">
 
             <div class="msb-section" id="msb-memory-section">
+              <!-- 에이전트 메모리 스코프 탭 -->
+              <div class="msb-agent-tabs" id="msb-agent-tabs" style="display:flex;gap:4px;margin-bottom:10px;background:var(--bg-card);padding:3px;border-radius:8px;border:1px solid var(--border);">
+                <button type="button" class="btn sm tab active" data-agent="master" onclick="switchMsbMemoryAgent('master')" style="flex:1;font-size:11px;padding:4px 0;">👑 마스터</button>
+                <button type="button" class="btn sm tab" data-agent="second_brain" onclick="switchMsbMemoryAgent('second_brain')" style="flex:1;font-size:11px;padding:4px 0;">🧠 세컨브레인</button>
+                <button type="button" class="btn sm tab" data-agent="bot_dev" onclick="switchMsbMemoryAgent('bot_dev')" style="flex:1;font-size:11px;padding:4px 0;">💻 봇개발</button>
+              </div>
+
               <div class="msb-mem-pipeline" id="msb-mem-pipeline">
                 <button type="button" class="msb-mem-node active" data-tier="hot" onclick="selectMsbMemoryTier('hot')" title="HOT: 즉시 활성 컨텍스트 (초과 시 WARM 이동)">
                   <div class="msb-mem-node-top"><span style="color:#ef4444;">HOT</span><span id="msb-mem-cnt-hot">0</span></div>
@@ -3746,6 +3794,11 @@
 
     const CORE_ROOM_ID = '__core__';
     const CORE_ROOM_TITLE = '마스터 에이전트';
+    const EXPERT_VAULT_ROOM_ID = '__expert_vault__';
+    const EXPERT_VAULT_TITLE = '세컨브레인 에이전트';
+    const EXPERT_CODING_ROOM_ID = '__expert_coding__';
+    const EXPERT_CODING_TITLE = '봇개발 에이전트';
+    const ORCHESTRATOR_ROOM_IDS = [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID];
     const CORE_ORCHESTRATOR_SUGGESTIONS = [
       { tag: '전체 세션 브리핑', title: '열려 있는 모든 채팅방(AGY 세션) 요약', prompt: '현재 열려 있는 모든 채팅방(AGY 세션) 목록을 조회하고 최근 진행 상황을 한눈에 브리핑해줘.' },
       { tag: '세션 상세 열람', title: '가장 최근 채팅방 대화 내용 분석', prompt: '가장 최근에 대화한 채팅방의 내용을 읽고 핵심 결론과 남은 할 일을 정리해줘.' },
@@ -4236,54 +4289,58 @@
     }
 
     function ensureCoreRoom() {
-      let coreRoom = chatRooms.find(r => r && r.id === CORE_ROOM_ID);
-      if (!coreRoom) {
-        coreRoom = {
-          id: CORE_ROOM_ID,
-          title: CORE_ROOM_TITLE,
-          preview: '전체 AGY 세션 열람 · 지시 · 스폰',
-          messageCount: 0,
-          messages: [],
-          isNewSession: true,
-          sessionId: null,
-          workdir: (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '',
-          updatedAt: 0
-        };
-        chatRooms.push(coreRoom);
-      } else {
-        coreRoom.title = CORE_ROOM_TITLE;
-        if (!coreRoom.workdir && serverStatus) {
-          coreRoom.workdir = serverStatus.vaultDir || serverStatus.workdir || '';
+      const ensureAgent = (id, title, desc, workdir) => {
+        let room = chatRooms.find(r => r && r.id === id);
+        if (!room) {
+          room = {
+            id,
+            title,
+            preview: desc,
+            messageCount: 0,
+            messages: [],
+            isNewSession: true,
+            sessionId: null,
+            workdir: workdir || (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '',
+            updatedAt: 0
+          };
+          chatRooms.push(room);
+        } else {
+          room.title = title;
+          if (!room.workdir && serverStatus) {
+            room.workdir = workdir || serverStatus.vaultDir || serverStatus.workdir || '';
+          }
         }
-      }
+        return room;
+      };
+
+      const coreRoom = ensureAgent(CORE_ROOM_ID, CORE_ROOM_TITLE, '전체 AGY 세션 열람 · 지시 · 스폰', (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '');
+      ensureAgent(EXPERT_VAULT_ROOM_ID, EXPERT_VAULT_TITLE, '옵시디언 볼트 지식 · 개인 기록 전담', (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '');
+      ensureAgent(EXPERT_CODING_ROOM_ID, EXPERT_CODING_TITLE, 'oshyun-bot 개발 · 테스트 전담', (serverStatus && (serverStatus.codeDir || serverStatus.codedir || serverStatus.vaultDir)) || '');
       return coreRoom;
     }
 
     function updateCoreAgentSlotUi() {
-      const slot = document.getElementById('core-agent-slot');
-      const subEl = document.getElementById('core-agent-sub');
-      if (!slot) return;
       ensureCoreRoom();
-      const coreLive = roomLiveStates[CORE_ROOM_ID];
-      const isCoreRunning = Boolean(coreLive && coreLive.isRunning);
-      slot.classList.toggle('active', currentRoomId === CORE_ROOM_ID && currentView === 'chat');
-      slot.classList.toggle('running', isCoreRunning);
-
-      if (subEl) {
-        if (isCoreRunning) {
-          subEl.textContent = '작업 중';
-        } else {
-          const runningWorkers = Object.entries(roomLiveStates).filter(([k, st]) => k !== CORE_ROOM_ID && st && st.isRunning).length;
-          const attentionCount = (latestMasterGraph && latestMasterGraph.summary && latestMasterGraph.summary.attention) || 0;
-          if (runningWorkers > 0) {
-            subEl.textContent = `실행 ${runningWorkers}`;
-          } else if (attentionCount > 0) {
-            subEl.textContent = `확인 ${attentionCount}`;
+      const updateSlot = (slotId, subId, roomId) => {
+        const slot = document.getElementById(slotId);
+        const subEl = document.getElementById(subId);
+        if (!slot) return;
+        const live = roomLiveStates[roomId];
+        const isRunning = Boolean(live && live.isRunning);
+        slot.classList.toggle('active', currentRoomId === roomId && currentView === 'chat');
+        slot.classList.toggle('running', isRunning);
+        if (subEl) {
+          if (isRunning) {
+            subEl.textContent = '작업 중';
           } else {
             subEl.textContent = '대기';
           }
         }
-      }
+      };
+
+      updateSlot('core-agent-slot', 'core-agent-sub', CORE_ROOM_ID);
+      updateSlot('expert-vault-slot', 'expert-vault-sub', EXPERT_VAULT_ROOM_ID);
+      updateSlot('expert-coding-slot', 'expert-coding-sub', EXPERT_CODING_ROOM_ID);
     }
 
     function applyMasterSessionResetLocal(data = {}) {
@@ -4308,8 +4365,12 @@
       updateCoreAgentSlotUi();
     }
 
-    async function resetCoreOrchestratorRoom(event) {
+    async function resetCoreOrchestratorRoom(event, targetRoomId = CORE_ROOM_ID) {
       if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      const targetId = targetRoomId || CORE_ROOM_ID;
+      const agentScope = targetId === EXPERT_VAULT_ROOM_ID ? 'second_brain' : (targetId === EXPERT_CODING_ROOM_ID ? 'bot_dev' : 'master');
+      const agentLabel = targetId === EXPERT_VAULT_ROOM_ID ? '세컨브레인' : (targetId === EXPERT_CODING_ROOM_ID ? '봇개발' : '마스터');
+
       const doReset = async (clearDoneTasks = false) => {
         applyMasterSessionResetLocal({});
         try {
@@ -4317,6 +4378,8 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              roomId: targetId,
+              agentId: agentScope,
               memoryMode: 'keep',
               clearDoneTasks: Boolean(clearDoneTasks),
             })
@@ -4326,12 +4389,12 @@
             applyMasterSessionResetLocal(data);
             await loadMasterGraphFromServer();
             await loadMasterTasksFromServer();
-            showToast('마스터 대화가 초기화되었고 4계층 메모리는 그대로 유지되었습니다.');
+            showToast(`${agentLabel} 대화가 초기화되었고 4계층 메모리는 그대로 유지되었습니다.`);
           } else {
-            showToast('마스터 초기화 실패: ' + ((data && data.error) || '알 수 없는 오류'));
+            showToast(`${agentLabel} 초기화 실패: ` + ((data && data.error) || '알 수 없는 오류'));
           }
         } catch (err) {
-          showToast('마스터 초기화 요청 실패: ' + err.message);
+          showToast(`${agentLabel} 초기화 요청 실패: ` + err.message);
         }
       };
 
@@ -5446,6 +5509,29 @@
       btn.classList.toggle('has-attention', attentionCount > 0);
     }
 
+    let currentMsbAgent = 'master';
+
+    function switchMsbMemoryAgent(agentId) {
+      currentMsbAgent = agentId || 'master';
+      const tabs = document.querySelectorAll('#msb-agent-tabs button');
+      tabs.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.agent === currentMsbAgent);
+      });
+      loadMasterMemoryFromServer();
+    }
+
+    async function loadMasterMemoryFromServer() {
+      try {
+        const res = await fetch(`/api/orchestrator/memory?agentId=${currentMsbAgent}`);
+        const data = await res.json();
+        if (data && data.ok) {
+          renderMsbMemory(data);
+        }
+      } catch (err) {
+        console.warn('에이전트 메모리 로드 실패:', err);
+      }
+    }
+
     function selectMsbMemoryTier(tier) {
       const normalized = ['hot', 'warm', 'cold', 'freeze'].includes(tier) ? tier : 'hot';
       currentMsbMemoryTier = normalized;
@@ -5542,7 +5628,7 @@
         const res = await fetch('/api/orchestrator/memory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'move', itemId, toTier })
+          body: JSON.stringify({ action: 'move', itemId, toTier, agentId: currentMsbAgent })
         });
         const data = await res.json();
         if (data && data.ok) {
@@ -5564,7 +5650,7 @@
         const res = await fetch('/api/orchestrator/memory', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', itemId })
+          body: JSON.stringify({ action: 'delete', itemId, agentId: currentMsbAgent })
         });
         const data = await res.json();
         if (data && data.ok) {
@@ -5592,7 +5678,7 @@
             const res = await fetch('/api/orchestrator/memory', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'clear', tier: target })
+              body: JSON.stringify({ action: 'clear', tier: target, agentId: currentMsbAgent })
             });
             const data = await res.json();
             if (data && data.ok) {
@@ -8665,7 +8751,8 @@
     }
 
     function isMasterSubtaskRoom(r) {
-      if (!r || !r.id || r.id === CORE_ROOM_ID) return false;
+      if (!r || !r.id || ORCHESTRATOR_ROOM_IDS.includes(r.id)) return false;
+      if (r.parentAgentId) return true;
       if (r.isOrchestratorChild || r.channel === 'orchestrator') return true;
       if (Array.isArray(r.messages) && r.messages.some(m => m && m.channel === 'orchestrator')) return true;
       if (Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id)) return true;
@@ -8679,34 +8766,44 @@
     }
 
     function renderMasterSubtaskTree(masterChildRooms) {
-      const treeEl = document.getElementById('master-subtask-tree');
-      if (!treeEl) return;
-      if (!masterChildRooms || masterChildRooms.length === 0) {
-        treeEl.innerHTML = '';
-        return;
-      }
-      treeEl.innerHTML = masterChildRooms.slice(0, 20).map(r => {
-        const safeId = escapeHtml(r.id);
-        const live = roomLiveStates[r.id];
-        const isRunning = Boolean(live && live.isRunning);
-        const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
-        const hasPendingTask = Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
-        const isUnread = Boolean(r.unread || hasPendingTask || isRunning);
-        const cls = [
-          'sb-tree-item',
-          r.id === currentRoomId ? 'active' : '',
-          isRunning ? 'running' : '',
-          isUnread ? 'unread' : '',
-        ].filter(Boolean).join(' ');
-        return `
-          <div class="${cls}" data-room-id="${safeId}" onclick="onRoomItemClick(event, '${safeId}')" title="${escapeHtml(r.title || '하위 태스크')}">
-            <svg class="i sb-tree-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span class="sb-tree-title">${escapeHtml(r.title || '하위 태스크')}</span>
-            ${relTime ? `<span class="sb-tree-time">${escapeHtml(relTime)}</span>` : ''}
-            ${isUnread ? '<span class="sb-tree-dot"></span>' : ''}
-          </div>
-        `;
-      }).join('');
+      const renderTree = (containerId, rooms) => {
+        const treeEl = document.getElementById(containerId);
+        if (!treeEl) return;
+        if (!rooms || rooms.length === 0) {
+          treeEl.innerHTML = '';
+          return;
+        }
+        treeEl.innerHTML = rooms.slice(0, 20).map(r => {
+          const safeId = escapeHtml(r.id);
+          const live = roomLiveStates[r.id];
+          const isRunning = Boolean(live && live.isRunning);
+          const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
+          const hasPendingTask = Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
+          const isUnread = Boolean(r.unread || hasPendingTask || isRunning);
+          const cls = [
+            'sb-tree-item',
+            r.id === currentRoomId ? 'active' : '',
+            isRunning ? 'running' : '',
+            isUnread ? 'unread' : '',
+          ].filter(Boolean).join(' ');
+          return `
+            <div class="${cls}" data-room-id="${safeId}" onclick="onRoomItemClick(event, '${safeId}')" title="${escapeHtml(r.title || '하위 태스크')}">
+              <svg class="i sb-tree-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span class="sb-tree-title">${escapeHtml(r.title || '하위 태스크')}</span>
+              ${relTime ? `<span class="sb-tree-time">${escapeHtml(relTime)}</span>` : ''}
+              ${isUnread ? '<span class="sb-tree-dot"></span>' : ''}
+            </div>
+          `;
+        }).join('');
+      };
+
+      const masterRooms = masterChildRooms.filter(r => !r.parentAgentId || r.parentAgentId === CORE_ROOM_ID);
+      const vaultRooms = masterChildRooms.filter(r => r.parentAgentId === EXPERT_VAULT_ROOM_ID);
+      const codingRooms = masterChildRooms.filter(r => r.parentAgentId === EXPERT_CODING_ROOM_ID);
+
+      renderTree('master-subtask-tree', masterRooms);
+      renderTree('expert-vault-subtask-tree', vaultRooms);
+      renderTree('expert-coding-subtask-tree', codingRooms);
     }
 
     function renderRoomList() {

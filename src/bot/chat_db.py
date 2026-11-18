@@ -97,7 +97,8 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
                 is_archived INTEGER DEFAULT 0,
                 model TEXT DEFAULT NULL,
                 effort TEXT DEFAULT NULL,
-                workdir TEXT DEFAULT NULL
+                workdir TEXT DEFAULT NULL,
+                parent_agent_id TEXT DEFAULT NULL
             );
         """)
         conn.execute("""
@@ -162,7 +163,15 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
         except sqlite3.OperationalError:
             pass
 
+        # rooms 테이블 parent_agent_id 컬럼 누락 시 하위 호환 추가
+        try:
+            conn.execute("ALTER TABLE rooms ADD COLUMN parent_agent_id TEXT DEFAULT NULL;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(is_archived, updated_at DESC);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rooms_parent_agent ON rooms(parent_agent_id);")
 
         # 밀리초 단위(> 100억)로 저장된 기존 타임스탬프를 초 단위로 자동 정규화 (1회 보정)
         conn.execute("UPDATE rooms SET updated_at = updated_at / 1000.0 WHERE updated_at > 10000000000;")
@@ -417,6 +426,7 @@ def get_or_create_room(
     model: str | None = None,
     effort: str | None = None,
     workdir: str | None = None,
+    parent_agent_id: str | None = None,
     db_path: str | None = None,
 ) -> dict:
     """방 ID 또는 세션 ID로 대화방을 조회하고, 없으면 생성하여 반환한다."""
@@ -426,6 +436,7 @@ def get_or_create_room(
     clean_model = str(model).strip() if model else None
     clean_effort = str(effort).strip() if effort else None
     clean_workdir = str(workdir).strip() if workdir else None
+    clean_parent = str(parent_agent_id).strip() if parent_agent_id else None
 
     with get_connection(db_path) as conn:
         cur = conn.cursor()
@@ -452,6 +463,9 @@ def get_or_create_room(
             if clean_workdir is not None:
                 updates.append("workdir = ?")
                 params.append(clean_workdir)
+            if clean_parent is not None:
+                updates.append("parent_agent_id = ?")
+                params.append(clean_parent)
             if updates:
                 params.append(row["id"])
                 conn.execute(f"UPDATE rooms SET {', '.join(updates)} WHERE id = ?;", params)
@@ -463,10 +477,10 @@ def get_or_create_room(
         init_title = title or "새 대화"
         conn.execute(
             """
-            INSERT INTO rooms (id, session_id, title, preview, created_at, updated_at, last_channel, is_hidden, is_archived, model, effort, workdir)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?);
+            INSERT INTO rooms (id, session_id, title, preview, created_at, updated_at, last_channel, is_hidden, is_archived, model, effort, workdir, parent_agent_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?);
             """,
-            (clean_rid, clean_sid, init_title, "", now, now, channel, clean_model, clean_effort, clean_workdir),
+            (clean_rid, clean_sid, init_title, "", now, now, channel, clean_model, clean_effort, clean_workdir, clean_parent),
         )
         conn.commit()
         cur.execute("SELECT * FROM rooms WHERE id = ?;", (clean_rid,))
@@ -484,6 +498,7 @@ def get_or_create_room(
             "model": clean_model,
             "effort": clean_effort,
             "workdir": clean_workdir,
+            "parent_agent_id": clean_parent,
         }
 
 
@@ -496,6 +511,7 @@ def update_room(
     model: str | None = None,
     effort: str | None = None,
     workdir: str | None = None,
+    parent_agent_id: str | None = None,
     is_archived: bool | None = None,
     updated_at: float | None = None,
     force_title: bool = True,
@@ -548,6 +564,10 @@ def update_room(
             clean_w = str(workdir).strip() if workdir else None
             updates.append("workdir = ?")
             params.append(clean_w)
+        if parent_agent_id is not None:
+            clean_p = str(parent_agent_id).strip() if parent_agent_id else None
+            updates.append("parent_agent_id = ?")
+            params.append(clean_p)
         if is_archived is not None:
             updates.append("is_archived = ?")
             params.append(1 if is_archived else 0)
@@ -752,8 +772,9 @@ def get_rooms(
                 r.model,
                 r.effort,
                 r.workdir,
+                r.parent_agent_id AS parentAgentId,
                 (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
-                EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator') AS isOrchestratorChild
+                (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild
             FROM rooms r
             {where_sql}
             ORDER BY r.updated_at DESC
@@ -768,6 +789,8 @@ def get_rooms(
             d["isNewSession"] = not bool(d.get("sessionId"))
             d["isArchived"] = bool(d.get("isArchived"))
             d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
+            if d["isOrchestratorChild"] and not d.get("parentAgentId"):
+                d["parentAgentId"] = "__core__"
             sid = (d.get("sessionId") or "").strip()
             rid = (d.get("id") or "").strip()
 
@@ -806,8 +829,9 @@ _ROOM_SELECT_COLS = """
     r.model,
     r.effort,
     r.workdir,
+    r.parent_agent_id AS parentAgentId,
     (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
-    EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator') AS isOrchestratorChild
+    (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild
 """
 
 
@@ -818,6 +842,8 @@ def _row_to_room_dict(row: sqlite3.Row | None) -> dict | None:
     d["isNewSession"] = not bool(d.get("sessionId"))
     d["isArchived"] = bool(d.get("isArchived"))
     d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
+    if d["isOrchestratorChild"] and not d.get("parentAgentId"):
+        d["parentAgentId"] = "__core__"
     return d
 
 

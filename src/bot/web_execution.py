@@ -70,6 +70,11 @@ from web_speech import clean_text_for_speech, VOICE_MODE_PROMPT_SUFFIX
 WEB_JOBS_FILE = os.path.join(STATE_DIR, "web_jobs.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_VAULT_ROOM_ID = "__expert_vault__"
+EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
+EXPERT_CODING_ROOM_ID = "__expert_coding__"
+EXPERT_CODING_TITLE = "봇개발 에이전트"
+ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 IDLE_RESET_SECONDS = 6 * 3600
 WEB_PORT = int(os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765")
 WEB_TOKEN = os.getenv("WEB_TOKEN", os.getenv("VOICE_WEB_TOKEN", "")).strip()
@@ -649,25 +654,40 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
 
 
 async def _notify_master_agent(room_id: str, task_id: str | None, result_text: str, is_success: bool = True) -> None:
-    """하위 작업 완료/중단 시 마스터 에이전트(__core__)에게 결과를 알리고 후속 턴을 트리거한다."""
-    if room_id == CORE_ORCHESTRATOR_ROOM_ID:
+    """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가)에게 결과를 알리고 후속 턴을 트리거한다."""
+    if room_id in ORCHESTRATOR_ROOM_IDS:
         return
     if task_id and not master_tasks.claim_report(task_id):
         return  # 이미 보고됨(중복 방지)
+
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    room_record = current_chat_db.get_room(room_id) if current_chat_db else None
+    target_parent_id = (room_record.get("parentAgentId") if room_record else None) or CORE_ORCHESTRATOR_ROOM_ID
+    if target_parent_id not in ORCHESTRATOR_ROOM_IDS:
+        target_parent_id = CORE_ORCHESTRATOR_ROOM_ID
+
     room_title = room_id
-    try:
-        from web_rooms import _load_chat_rooms_index
-        rooms = _load_chat_rooms_index()
-        for r in rooms:
-            if r.get("id") == room_id:
-                room_title = r.get("title") or room_id
-                break
-    except Exception:
-        pass
+    if room_record and room_record.get("title"):
+        room_title = room_record["title"]
+    else:
+        try:
+            from web_rooms import _load_chat_rooms_index
+            rooms = _load_chat_rooms_index()
+            for r in rooms:
+                if r.get("id") == room_id:
+                    room_title = r.get("title") or room_id
+                    break
+        except Exception:
+            pass
 
     short_res = result_text.strip()
     if len(short_res) > 1500:
         short_res = short_res[:1500] + "…"
+
+    parent_label = (
+        "세컨브레인" if target_parent_id == EXPERT_VAULT_ROOM_ID
+        else ("봇개발" if target_parent_id == EXPERT_CODING_ROOM_ID else "마스터")
+    )
 
     if is_success:
         report_msg = (
@@ -679,7 +699,7 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
         report_msg += (
             f"• 상태: 정상 완료 (원장 자동 검토 완료)\n"
             f"• 하위 에이전트 응답 요약:\n{short_res}\n\n"
-            f"※ 마스터 지침: 작업 원장은 자동 완료 처리되었으므로 별도 `session-ctl task --close` 호출 없이 결과만 확인하고 후속 지시가 필요할 때만 이어가세요."
+            f"※ {parent_label} 지침: 작업 원장은 자동 완료 처리되었으므로 별도 `session-ctl task --close` 호출 없이 결과만 확인하고 후속 지시가 필요할 때만 이어가세요."
         )
     else:
         report_msg = (
@@ -691,7 +711,7 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
         report_msg += (
             f"• 상태: 비정상 중단 / 오류\n"
             f"• 내용: {short_res}\n\n"
-            f"※ 마스터 지침: 작업 실패 원인을 확인하고 재시도 여부를 판단하세요."
+            f"※ {parent_label} 지침: 작업 실패 원인을 확인하고 재시도 여부를 판단하세요."
         )
 
     try:
@@ -709,20 +729,21 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
             room_id=room_id,
             task_id=task_id or "",
             summarize=True,
+            agent_id=master_memory.normalize_agent_id(target_parent_id),
         )
     except Exception:
         pass
     try:
         enqueue_fn = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
         await enqueue_fn(
-            room_id=CORE_ORCHESTRATOR_ROOM_ID,
+            room_id=target_parent_id,
             user_text=report_msg,
             channel="task_report",
             task_id=task_id,
         )
-        logger.info("[web_jobs] 마스터 에이전트(__core__)에게 완료 보고 전달 완료 (task_id=%s, room=%s)", task_id, room_id)
+        logger.info("[web_jobs] %s 에이전트(%s)에게 완료 보고 전달 완료 (task_id=%s, room=%s)", parent_label, target_parent_id, task_id, room_id)
     except Exception as exc:
-        logger.error("[web_jobs] 마스터 에이전트 완료 보고 전달 실패: %s", exc)
+        logger.error("[web_jobs] %s 에이전트 완료 보고 전달 실패: %s", parent_label, exc)
         if task_id:
             master_tasks.release_report(task_id)  # 감독 루프 안전망이 재시도
 
@@ -1195,15 +1216,17 @@ async def _watch_and_finish_web_job(
 
         if is_orchestrator and reply_text and not reply_text.startswith("⚠️"):
             try:
+                orch_agent = master_memory.normalize_agent_id(room_id)
                 master_memory.record_orchestrator_turn_memory(
                     user_text=rec.get("user_text") or "",
                     reply_text=reply_text,
                     channel=rec.get("channel", "web"),
                     task_id=task_id or "",
-                    room_id=CORE_ORCHESTRATOR_ROOM_ID,
+                    room_id=room_id,
+                    agent_id=orch_agent,
                 )
                 if resolved_session_id:
-                    master_memory.commit_memory_prompt_checkpoint(resolved_session_id)
+                    master_memory.commit_memory_prompt_checkpoint(resolved_session_id, agent_id=orch_agent)
             except Exception:
                 pass
 
@@ -1537,13 +1560,22 @@ async def execute_chat_turn(
 ) -> dict[str, Any]:
     """단일 대화방(AGY 세션)의 1턴 질의응답을 실행하고 실시간 스트림을 브로드캐스트한다."""
     room_key = room_id or "__default__"
-    is_orchestrator = room_key == CORE_ORCHESTRATOR_ROOM_ID
-    is_coding = get_coding_mode()
-    session_namespace = "core_" if is_orchestrator else ("coding_" if is_coding else "")
+    is_orchestrator = room_key in ORCHESTRATOR_ROOM_IDS
+    is_coding = get_coding_mode() or (room_key == EXPERT_CODING_ROOM_ID)
+    session_namespace = (
+        "core_" if room_key == CORE_ORCHESTRATOR_ROOM_ID
+        else ("vault_" if room_key == EXPERT_VAULT_ROOM_ID
+        else ("coding_" if is_coding else ""))
+    )
     mod = sys.modules.get("web_server")
     curr_workdir = getattr(mod, "WORKDIR", WORKDIR) if mod else WORKDIR
     curr_codedir = getattr(mod, "CODEDIR", CODEDIR) if mod else CODEDIR
-    target_workdir = (curr_codedir or curr_workdir) if is_coding else curr_workdir
+    if room_key == EXPERT_CODING_ROOM_ID:
+        target_workdir = curr_codedir or curr_workdir
+    elif room_key in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
+        target_workdir = curr_workdir
+    else:
+        target_workdir = (curr_codedir or curr_workdir) if is_coding else curr_workdir
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_spawn_agent = _get_mod_attr("spawn_agent", spawn_agent)
@@ -1593,11 +1625,11 @@ async def execute_chat_turn(
         current_session_id = client_session_id.strip() or None
     elif is_orchestrator:
         current_session_id = (
-            _room_session_ids.get(CORE_ORCHESTRATOR_ROOM_ID)
-            or current_get_session(ns="core_")
+            _room_session_ids.get(room_key)
+            or current_get_session(ns=session_namespace)
         )
         if not current_session_id:
-            core_room = current_chat_db.get_room(CORE_ORCHESTRATOR_ROOM_ID)
+            core_room = current_chat_db.get_room(room_key)
             if core_room and core_room.get("sessionId"):
                 current_session_id = core_room["sessionId"]
     elif room_id is not None:
@@ -1627,7 +1659,11 @@ async def execute_chat_turn(
 
     if is_orchestrator and not raw_prompt:
         try:
-            mem_ctx = master_memory.build_memory_prompt_context(session_key=current_session_id)
+            orch_agent = master_memory.normalize_agent_id(room_key)
+            mem_ctx = master_memory.build_memory_prompt_context(
+                session_key=current_session_id,
+                agent_id=orch_agent,
+            )
             if mem_ctx:
                 effective_prompt = f"{mem_ctx}\n\n[현재 요청]\n{effective_prompt}"
         except Exception:
@@ -1666,7 +1702,14 @@ async def execute_chat_turn(
     existing_title = (cur_room_info.get("title") or "").strip() if cur_room_info else ""
     first_line = user_text.splitlines()[0].strip() if user_text else ("사진 분석" if attached_paths else "새 대화")
     if not existing_title or existing_title in ("새 대화", "대화방"):
-        new_title = CORE_ORCHESTRATOR_TITLE if is_orchestrator else first_line[:24]
+        if room_key == CORE_ORCHESTRATOR_ROOM_ID:
+            new_title = CORE_ORCHESTRATOR_TITLE
+        elif room_key == EXPERT_VAULT_ROOM_ID:
+            new_title = EXPERT_VAULT_TITLE
+        elif room_key == EXPERT_CODING_ROOM_ID:
+            new_title = EXPERT_CODING_TITLE
+        else:
+            new_title = first_line[:24]
     else:
         new_title = existing_title
 
@@ -1793,6 +1836,7 @@ async def execute_chat_turn(
         spawn_kwargs["extra_env"] = {
             "OSHYUN_ORCHESTRATOR_API_URL": f"{proto}://127.0.0.1:{WEB_PORT}",
             "OSHYUN_ORCHESTRATOR_TOKEN": WEB_TOKEN,
+            "OSHYUN_AGENT_ROOM_ID": room_key,
         }
 
     try:
@@ -2217,15 +2261,17 @@ async def execute_chat_turn(
             await _notify_master_agent(room_id, task_id, reply_text, is_success=bool(reply_text))
     if is_orchestrator and reply_text and not reply_text.startswith("⚠️"):
         try:
+            orch_agent = master_memory.normalize_agent_id(room_key)
             master_memory.record_orchestrator_turn_memory(
                 user_text=user_text or "",
                 reply_text=reply_text,
                 channel=channel,
                 task_id=task_id or "",
-                room_id=CORE_ORCHESTRATOR_ROOM_ID,
+                room_id=room_key,
+                agent_id=orch_agent,
             )
             if resolved_session_id:
-                master_memory.commit_memory_prompt_checkpoint(resolved_session_id)
+                master_memory.commit_memory_prompt_checkpoint(resolved_session_id, agent_id=orch_agent)
         except Exception:
             pass
     if _master_supervisor:

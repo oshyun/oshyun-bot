@@ -32,6 +32,11 @@ from paths import MASTER_STATE_FILE, WORKDIR
 AGY_BRAIN_DIR = os.path.expanduser("~/.gemini/antigravity/brain")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_VAULT_ROOM_ID = "__expert_vault__"
+EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
+EXPERT_CODING_ROOM_ID = "__expert_coding__"
+EXPERT_CODING_TITLE = "봇개발 에이전트"
+ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 _master_state_lock = threading.Lock()
 
 
@@ -747,6 +752,11 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     req_effort = payload.get("effort")
     clean_effort = str(req_effort).strip() if (isinstance(req_effort, str) and req_effort.strip()) else None
 
+    req_parent = payload.get("parentAgentId") or payload.get("parent_agent_id") or payload.get("parent")
+    parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
+    if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:
+        parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
+
     if not message:
         return web.json_response({"ok": False, "error": "전송할 message가 비어 있습니다."}, status=400)
 
@@ -838,6 +848,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                     channel="web",
                     model=clean_model,
                     effort=clean_effort,
+                    parent_agent_id=parent_agent_id,
                 )
             except Exception as exc:
                 logger.warning("[orchestrator] 새 대화방 DB 생성 실패: %s", exc)
@@ -872,6 +883,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                     "effort": clean_effort,
                     "byOrchestrator": True,
                     "isOrchestratorChild": True,
+                    "parentAgentId": parent_agent_id,
                     "channel": "orchestrator",
                 },
                 "byOrchestrator": True,
@@ -880,11 +892,11 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         target = str(payload.get("target") or payload.get("roomId") or payload.get("sessionId") or "").strip()
         if not target:
             return web.json_response({"ok": False, "error": "target 식별자가 필요합니다."}, status=400)
-        if target == CORE_ORCHESTRATOR_ROOM_ID:
+        if target in ORCHESTRATOR_ROOM_IDS:
             if payload.get("allowCore") or payload.get("channel") in ("task_report", "master_patrol", "schedule_trigger"):
                 return await handle_orchestrator_notify(request)
             return web.json_response(
-                {"ok": False, "error": "마스터 에이전트 자신(__core__)에게는 일반 지시를 재귀 전송할 수 없습니다. 보고/알림은 /api/orchestrator/notify 를 사용하세요."},
+                {"ok": False, "error": f"오케스트레이터 에이전트({target})에게는 일반 지시를 재귀 전송할 수 없습니다. 보고/알림은 /api/orchestrator/notify 를 사용하세요."},
                 status=400,
             )
         resolve_fn = _get_mod_attr("_resolve_orchestrator_target_room", _resolve_orchestrator_target_room)
@@ -914,6 +926,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         "clientMsgId": dispatch_client_msg_id,
         "queued": will_be_queued,
         "isOrchestratorChild": True,
+        "parentAgentId": parent_agent_id,
         "model": clean_model,
         "effort": clean_effort,
         "wait": wait_for_result,
@@ -948,6 +961,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             room_id=room_id,
             task_id=task_id,
             summarize=True,
+            agent_id=master_memory.normalize_agent_id(parent_agent_id),
         )
     except Exception:
         pass
@@ -979,6 +993,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             "taskId": task_id,
             "roomId": room_id,
             "sessionId": session_id,
+            "parentAgentId": parent_agent_id,
             "title": room_title,
             "queuePosition": q_size,
         }
@@ -1246,6 +1261,11 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "JSON 객체가 필요합니다."}, status=400)
 
     message = str(payload.get("message") or payload.get("prompt") or payload.get("text") or "").strip()
+    req_parent = payload.get("parentAgentId") or payload.get("parent_agent_id") or payload.get("parent")
+    parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
+    if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:
+        parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
+
     if not message:
         return web.json_response({"ok": False, "error": "전송할 message가 비어 있습니다."}, status=400)
 
@@ -1703,15 +1723,16 @@ async def reset_core_orchestrator_state(
 
 
 async def handle_orchestrator_memory_get(request: web.Request) -> web.Response:
-    """GET /api/orchestrator/memory — 마스터 에이전트 4계층 메모리(hot/warm/cold/freeze) 현황 조회."""
+    """GET /api/orchestrator/memory — 마스터 또는 전문가 에이전트 4계층 메모리 현황 조회."""
     tier_raw = request.query.get("tier")
     tier = tier_raw.strip().lower() if isinstance(tier_raw, str) and tier_raw.strip() else None
+    agent_id = request.query.get("agentId") or request.query.get("agent_id") or request.query.get("agent") or "master"
     try:
         limit = max(1, min(200, int(request.query.get("limit", "50"))))
     except ValueError:
         limit = 50
     try:
-        snap = master_memory.get_memory_snapshot(tier=tier, limit_per_tier=limit)
+        snap = master_memory.get_memory_snapshot(tier=tier, limit_per_tier=limit, agent_id=agent_id)
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400)
     return web.json_response({"ok": True, **snap})
@@ -1726,6 +1747,7 @@ async def handle_orchestrator_memory_post(request: web.Request) -> web.Response:
     if not isinstance(payload, dict):
         payload = {}
 
+    agent_id = str(payload.get("agentId") or payload.get("agent_id") or payload.get("agent") or "master").strip()
     action = str(payload.get("action") or "add").strip().lower()
     try:
         if action == "add":
@@ -1741,20 +1763,21 @@ async def handle_orchestrator_memory_post(request: web.Request) -> web.Response:
                 task_id=str(payload.get("taskId") or payload.get("task_id") or "").strip(),
                 tier=str(payload.get("tier") or "hot").strip().lower(),
                 limits_override=limits_override,
+                agent_id=agent_id,
             )
         elif action == "demote":
             from_tier = str(payload.get("fromTier") or payload.get("from_tier") or payload.get("tier") or "hot").strip().lower()
-            snap = master_memory.demote_tier(from_tier)
+            snap = master_memory.demote_tier(from_tier, agent_id=agent_id)
         elif action == "promote":
             from_tier = str(payload.get("fromTier") or payload.get("from_tier") or payload.get("tier") or "warm").strip().lower()
-            snap = master_memory.promote_tier(from_tier)
+            snap = master_memory.promote_tier(from_tier, agent_id=agent_id)
         elif action == "move":
             item_id = str(payload.get("itemId") or payload.get("id") or "").strip()
             to_tier = str(payload.get("toTier") or payload.get("to_tier") or payload.get("tier") or "hot").strip().lower()
-            snap = master_memory.move_memory_item(item_id, to_tier)
+            snap = master_memory.move_memory_item(item_id, to_tier, agent_id=agent_id)
         elif action in ("delete", "remove"):
             item_id = str(payload.get("itemId") or payload.get("id") or "").strip()
-            snap = master_memory.delete_memory_item(item_id)
+            snap = master_memory.delete_memory_item(item_id, agent_id=agent_id)
         elif action == "update":
             item_id = str(payload.get("itemId") or payload.get("id") or "").strip()
             snap = master_memory.apply_memory_batch([{
@@ -1763,24 +1786,24 @@ async def handle_orchestrator_memory_post(request: web.Request) -> web.Response:
                 "text": payload.get("text"),
                 "title": payload.get("title"),
                 "tier": payload.get("tier") or payload.get("toTier"),
-            }])
+            }], agent_id=agent_id)
         elif action == "batch":
             operations = payload.get("operations")
             if not isinstance(operations, list):
                 return web.json_response({"ok": False, "error": "operations 리스트가 필요합니다."}, status=400)
-            snap = master_memory.apply_memory_batch(operations)
+            snap = master_memory.apply_memory_batch(operations, agent_id=agent_id)
         elif action in ("rebalance", "rebalance_memory"):
-            snap = await master_memory.rebalance_memory_with_llm()
+            snap = await master_memory.rebalance_memory_with_llm(agent_id=agent_id)
         elif action in ("compact", "compact_memory"):
-            snap = master_memory.compact_memory()
+            snap = master_memory.compact_memory(agent_id=agent_id)
         elif action == "clear":
             target_tier = payload.get("tier")
-            snap = master_memory.clear_memory(str(target_tier).strip().lower() if target_tier else "all")
+            snap = master_memory.clear_memory(str(target_tier).strip().lower() if target_tier else "all", agent_id=agent_id)
         elif action in ("set_limits", "limits"):
             limits_patch = payload.get("limits")
             if not isinstance(limits_patch, dict):
                 return web.json_response({"ok": False, "error": "limits 객체가 필요합니다."}, status=400)
-            snap = master_memory.update_tier_limits(limits_patch)
+            snap = master_memory.update_tier_limits(limits_patch, agent_id=agent_id)
         else:
             return web.json_response({"ok": False, "error": f"지원하지 않는 action 입니다: {action}"}, status=400)
     except ValueError as exc:
