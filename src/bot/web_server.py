@@ -5,7 +5,6 @@
 - web_speech: 한국어 신경망 음성 합성(edge-tts) 및 TTS 텍스트 정제
 - web_vault: Obsidian 볼트 파일 탐색/읽기/쓰기/생성 REST API
 - web_rooms: 대화방 인덱스(SQLite SSOT), 히스토리, 세션 관리, 첨부파일 업로드
-- web_goals: 에이전트 및 볼트 활동 감사 로그(Audit)
 - web_execution: 비동기 워커 큐(FIFO), 백그라운드 재부착 및 턴 실행기
 - web_orchestrator: 총괄 에이전트(Core Orchestrator) 및 마스터 슈퍼바이저 세션 제어
 - web_ws: WebSocket 실시간 이벤트 디스패처
@@ -151,8 +150,6 @@ from web_vault import (
     handle_vault_save_file,
     handle_vault_tree,
 )
-
-from web_goals import handle_activity_audit
 
 import web_execution
 from web_execution import (
@@ -723,9 +720,6 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_get("/api/chat/rooms/backup", handle_chat_rooms_backup)
     web_app.router.add_post("/api/chat/rooms/backup", handle_chat_rooms_backup_save)
     web_app.router.add_get("/api/chat/history", handle_chat_history)
-
-    # 활동 감사 로그 (Audit Trail)
-    web_app.router.add_get("/api/activity/audit", handle_activity_audit)
 
     # 정기 작업(Schedules) 및 토큰 버닝(Token Burn) 자동화 API
     web_app.router.add_get("/api/schedules", handle_schedules_list)
