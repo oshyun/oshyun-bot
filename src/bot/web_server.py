@@ -78,6 +78,8 @@ from agent_engine import (
     get_model_labels,
     get_session,
     get_supported_efforts,
+    get_cached_agy_usage,
+    refresh_agy_quota_cache,
     is_quota_exhausted_error,
     is_session_stale_error,
     kill_job,
@@ -309,6 +311,7 @@ def build_status_payload() -> dict:
             {"id": "always", "label": "항상 낭독 (텍스트 및 음성 모두)"},
         ],
         "activeRuns": build_active_runs_payload(),
+        "usage": get_cached_agy_usage(allow_refresh=True),
     }
 
 
@@ -383,6 +386,18 @@ async def handle_status(request: web.Request) -> web.Response:
     payload["ipType"] = ip_type
     payload["ipDescription"] = ip_desc
     return web.json_response(payload)
+
+
+async def handle_usage(request: web.Request) -> web.Response:
+    """GET /api/usage — 현재 AGY 쿼터 잔여량(5시간/주간) 요약 및 캐시 상태 반환."""
+    refresh_param = request.query.get("refresh", "").lower() in ("1", "true", "yes")
+    if refresh_param:
+        await refresh_agy_quota_cache()
+    usage = get_cached_agy_usage(allow_refresh=True)
+    return web.json_response({
+        "status": "ok",
+        "usage": usage,
+    })
 
 
 async def handle_settings(request: web.Request) -> web.Response:
@@ -667,6 +682,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
 
     # API 엔드포인트
     web_app.router.add_get("/api/status", handle_status)
+    web_app.router.add_get("/api/usage", handle_usage)
     web_app.router.add_post("/api/settings", handle_settings)
     web_app.router.add_post("/api/session/delete", handle_api_delete_session)
     web_app.router.add_post("/api/session/batch-delete", handle_api_delete_session)
