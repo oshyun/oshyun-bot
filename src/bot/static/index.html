@@ -1517,10 +1517,52 @@
       flex-shrink: 0;
     }
     .assistant-avatar svg.i { width: 13px; height: 13px; stroke-width: 1.6; }
+    .assistant-avatar.is-master {
+      background: #161B26;
+      border-color: rgba(122, 162, 247, .28);
+      color: #7AA2F7;
+    }
+    .assistant-avatar.is-vault {
+      background: rgba(217, 119, 6, 0.15);
+      border-color: rgba(217, 119, 6, 0.35);
+      color: #d97706;
+    }
+    .assistant-avatar.is-coding {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.35);
+      color: #3b82f6;
+    }
+    .assistant-avatar.is-subtask {
+      background: #0F1F1C;
+      border-color: rgba(16, 185, 129, .38);
+      color: #34D399;
+    }
+    .assistant-head .assistant-name {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .assistant-head .model-tag {
       font-size: calc(11px * var(--ui-scale, 1)); font-weight: 500; color: var(--text-3);
       background: var(--bg-subtle); border: 1px solid var(--border);
       padding: 0 6px; border-radius: 999px;
+    }
+    .assistant-head .model-tag.sub-agent-badge {
+      font-size: calc(10.5px * var(--ui-scale, 1));
+      color: var(--accent-text);
+      background: var(--accent-soft);
+      border-color: rgba(16, 185, 129, .28);
+    }
+    .assistant-head .model-tag.sub-agent-badge.is-vault {
+      color: #d97706;
+      background: rgba(217, 119, 6, 0.12);
+      border-color: rgba(217, 119, 6, 0.28);
+    }
+    .assistant-head .model-tag.sub-agent-badge.is-coding {
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.28);
     }
     .assistant-avatar.sub-agent-avatar {
       background: #0F1F1C;
@@ -9933,6 +9975,138 @@
       return wrap;
     }
 
+    /**
+     * 말풍선 좌측 어시스턴트 발화자 표시 정보(역할/이름/아바타/뱃지)를 결정한다.
+     * 마스터, 세컨브레인, 봇개발 전문가 및 하위 에이전트의 실제 역할/이름을 매핑한다.
+     */
+    function getAssistantDisplayInfo(targetRoom = null, m = null) {
+      const room = targetRoom || (m && m.roomId ? getRoomById(m.roomId) : getCurrentRoom());
+      const rId = String((room && (room.id || room.roomId)) || currentRoomId || '').trim();
+
+      // 1. 메시지 레벨에 명시적 에이전트 이름/역할이 있는 경우 최우선 존중
+      if (m && (m.agentName || m.senderName || m.agentRole)) {
+        const explicitName = String(m.agentName || m.senderName || m.agentRole).trim();
+        if (explicitName) {
+          return {
+            name: explicitName,
+            fullName: explicitName,
+            role: 'custom',
+            avatarCls: 'is-subtask',
+            avatarIcon: ICONS.spark,
+            roleBadgeHtml: ''
+          };
+        }
+      }
+
+      // 2. 마스터 오케스트레이터 에이전트 (__core__)
+      if (rId === CORE_ROOM_ID) {
+        return {
+          name: '마스터 에이전트',
+          fullName: '마스터 에이전트 (Core Orchestrator)',
+          role: 'master',
+          avatarCls: 'is-master',
+          avatarIcon: ICONS.spark,
+          roleBadgeHtml: ''
+        };
+      }
+
+      // 3. 세컨브레인 전문가 에이전트 (__expert_vault__)
+      if (rId === EXPERT_VAULT_ROOM_ID) {
+        return {
+          name: '세컨브레인 전문가',
+          fullName: '세컨브레인 전문가 (Obsidian Vault & Life Domains)',
+          role: 'expert_vault',
+          avatarCls: 'is-vault',
+          avatarIcon: ICONS.brain,
+          roleBadgeHtml: ''
+        };
+      }
+
+      // 4. 봇개발 전문가 에이전트 (__expert_coding__)
+      if (rId === EXPERT_CODING_ROOM_ID) {
+        return {
+          name: '봇개발 전문가',
+          fullName: '봇개발 전문가 (oshyun-bot Coding & Tests)',
+          role: 'expert_coding',
+          avatarCls: 'is-coding',
+          avatarIcon: ICONS.terminal,
+          roleBadgeHtml: ''
+        };
+      }
+
+      // 5. 하위 세션 (마스터 / 전문가 직속 하위 에이전트)
+      const isSubtask = Boolean(room && isMasterSubtaskRoom(room));
+      if (isSubtask) {
+        const pId = String((room && room.parentAgentId) || (m && m.parentAgentId) || '').trim();
+        let parentBadge = '';
+        let parentBadgeCls = '';
+        let defaultSubName = '하위 에이전트';
+        let avatarIcon = ICONS.spark;
+        let avatarCls = 'is-subtask';
+
+        if (pId === EXPERT_VAULT_ROOM_ID) {
+          parentBadge = '세컨브레인 직속';
+          parentBadgeCls = 'is-vault';
+          defaultSubName = '세컨브레인 하위 에이전트';
+          avatarIcon = ICONS.brain;
+          avatarCls = 'is-vault';
+        } else if (pId === EXPERT_CODING_ROOM_ID) {
+          parentBadge = '봇개발 직속';
+          parentBadgeCls = 'is-coding';
+          defaultSubName = '봇개발 하위 에이전트';
+          avatarIcon = ICONS.terminal;
+          avatarCls = 'is-coding';
+        } else if (pId === CORE_ROOM_ID) {
+          parentBadge = '마스터 직속';
+          parentBadgeCls = '';
+          defaultSubName = '마스터 하위 에이전트';
+          avatarIcon = ICONS.spark;
+          avatarCls = 'is-subtask';
+        }
+
+        // 연결된 원장 태스크 조회 (있으면 작업 제목 확인)
+        const linkedTask = Array.isArray(latestMasterTasks)
+          ? latestMasterTasks.find(t => t && (t.roomId === rId || (room && t.roomId === room.id)))
+          : null;
+
+        const rawTitle = String(
+          (linkedTask && linkedTask.title) ||
+          (room && room.title) ||
+          ''
+        ).trim();
+
+        const isGeneric = !rawTitle ||
+          rawTitle === '새 대화' ||
+          rawTitle === '새 세션' ||
+          rawTitle === '에이전트 세션' ||
+          rawTitle === rId;
+
+        const displayName = isGeneric ? defaultSubName : rawTitle;
+        const roleBadgeHtml = parentBadge
+          ? `<span class="model-tag sub-agent-badge ${parentBadgeCls}" title="${escapeHtml(parentBadge)}">${escapeHtml(parentBadge)}</span>`
+          : `<span class="model-tag sub-agent-badge" title="하위 에이전트">하위 에이전트</span>`;
+
+        return {
+          name: displayName,
+          fullName: rawTitle ? `${displayName} (${parentBadge || '하위 에이전트'})` : displayName,
+          role: 'subtask',
+          avatarCls: avatarCls,
+          avatarIcon: avatarIcon,
+          roleBadgeHtml: roleBadgeHtml
+        };
+      }
+
+      // 6. 일반 대화방 (사용자 개별 대화)
+      return {
+        name: '에이전트',
+        fullName: '에이전트',
+        role: 'general',
+        avatarCls: '',
+        avatarIcon: ICONS.spark,
+        roleBadgeHtml: ''
+      };
+    }
+
     function buildMessageRowDom(m, idx, qOrder = 0) {
       if (m.isHtml && typeof m.text === 'string' && m.text.includes('welcome-box')) return null;
       const sender = m.sender || m.role || 'assistant';
@@ -9959,7 +10133,7 @@
         const tagTitleAttr = parsed.badgeTitle ? ` title="${escapeHtml(parsed.badgeTitle)}"` : '';
         const roomChipHtml = parsed.roomId
           ? `<button type="button" class="sub-agent-room-btn" onclick="selectRoom('${escapeHtml(parsed.roomId)}')" title="해당 세션으로 이동">${escapeHtml(parsed.roomTitle || parsed.roomId)}</button>`
-          : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || 'sub-agent')}</span>`;
+          : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || '하위 에이전트')}</span>`;
         head.innerHTML = `<span class="assistant-avatar sub-agent-avatar${avatarErrCls}">${ICONS.spark}</span>${roomChipHtml}<span class="model-tag sub-agent-tag is-${parsed.statusKind}"${tagTitleAttr}>${escapeHtml(parsed.metaBadge)}</span>${buildMsgTimeHtml(m.createdAt)}`;
         row.appendChild(head);
 
@@ -10124,11 +10298,8 @@
         head.className = 'assistant-head';
         const headEffort = m.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
         const modelLabel = m.model ? `<span class="model-tag">${escapeHtml(m.model + (headEffort ? ` (${headEffort})` : ''))}</span>` : '';
-        let assistantName = 'agent';
-        if (currentRoomId === CORE_ROOM_ID) assistantName = 'master agent';
-        else if (currentRoomId === EXPERT_VAULT_ROOM_ID) assistantName = 'second-brain agent';
-        else if (currentRoomId === EXPERT_CODING_ROOM_ID) assistantName = 'bot-dev agent';
-        head.innerHTML = `<span class="assistant-avatar">${ICONS.spark}</span><span>${assistantName}</span>${modelLabel}${buildMsgTimeHtml(m.createdAt)}`;
+        const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);
+        head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}`;
         row.appendChild(head);
 
         const toolSteps = filterToolSteps(m.steps);
@@ -10374,11 +10545,12 @@
         const elapsedSec = liveState.startedAt ? Math.max(0, Math.floor((Date.now() - liveState.startedAt) / 1000)) : 0;
         const elapsedText = elapsedSec >= 1 ? `${elapsedSec}s` : '';
         const streamHtml = liveState.streamText ? formatMarkdown(liveState.streamText) : '';
-        const liveAssistantName = (room && room.id === CORE_ROOM_ID) ? 'master agent' : 'agent';
+        const liveAgentInfo = getAssistantDisplayInfo(room, null);
         liveRow.innerHTML = `
           <div class="assistant-head">
-            <span class="assistant-avatar">${ICONS.spark}</span>
-            <span>${liveAssistantName}</span>
+            <span class="assistant-avatar ${liveAgentInfo.avatarCls}">${liveAgentInfo.avatarIcon}</span>
+            <span class="assistant-name" title="${escapeHtml(liveAgentInfo.fullName)}">${escapeHtml(liveAgentInfo.name)}</span>
+            ${liveAgentInfo.roleBadgeHtml}
             ${modelBadgeHtml}
             ${queueBadgeHtml}
             ${buildMsgTimeHtml(liveState.startedAt)}
