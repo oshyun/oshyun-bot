@@ -376,7 +376,7 @@ class ClaudeEngine(BaseEngine):
     ) -> dict:
         use_sandbox = (
             False
-            if (orchestrator or expert_coding)
+            if (orchestrator or expert_vault or expert_coding)
             else (SANDBOX_ENABLED if sandbox is None else sandbox)
         )
         claude_cmd = _resolve_claude_bin()
@@ -556,7 +556,7 @@ class AGYEngine(BaseEngine):
             cmd += ["--effort", valid_effort]
 
         use_sandbox = True if sandbox is None else sandbox
-        if use_sandbox and not coding and not orchestrator and not expert_coding:
+        if use_sandbox and not coding and not orchestrator and not expert_vault and not expert_coding:
             cmd += ["--sandbox"]
         if extra_args:
             cmd += extra_args

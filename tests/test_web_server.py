@@ -2468,7 +2468,24 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         vault_cmd_str = " ".join(inv_vault["cmd"])
         vault_dir = agent_engine.get_instruction_dir("expert_vault")
         self.assertIn(f"--add-dir {vault_dir}", vault_cmd_str)
+        self.assertNotIn("--sandbox", inv_vault["cmd"])
         self.assertTrue(any(inv_vault["env"]["PATH"].startswith(p) for p in [os.path.join(engine_drivers._ROOT_DIR, "scripts")]))
+
+        # ClaudeDriver 세컨브레인 샌드박스 제외 검증
+        claude_engine = agent_engine.ClaudeEngine()
+        inv_claude_vault = claude_engine.build_cmd(
+            "건강검진 일정 확인해줘",
+            session_id="vault-sess-1",
+            model="claude-3-5-sonnet",
+            effort=None,
+            workdir="/Users/user/obsidian/oshyun",
+            extra_args=[],
+            slash_commands=False,
+            sandbox=True,
+            coding=False,
+            expert_vault=True,
+        )
+        self.assertNotIn("sandbox-exec", " ".join(inv_claude_vault["cmd"]))
 
         # 3. AGYEngine 빌드 검증 - 봇개발 (샌드박스 제외 및 scripts PATH 확인)
         inv_coding = engine.build_cmd(
