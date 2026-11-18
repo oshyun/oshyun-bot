@@ -1237,8 +1237,8 @@ class TestWebServerStandalone(unittest.TestCase):
             r"function abortCurrentSession\(roomId\s*=\s*currentRoomId\)\s*\{[\s\S]*?if \(inputEl\)\s*\{\s*isImeComposing\s*=\s*false;\s*onChatInput\(\);\s*\}",
         )
 
-    def test_attach_menu_and_clipboard_image_in_index_html(self):
-        """index.html 에 클립 아이콘 팝오버 메뉴 및 클립보드 이미지 첨부 기능이 올바르게 구현되어 있는지 검증."""
+    def test_image_attach_icon_and_direct_open_in_index_html(self):
+        """index.html 에 이미지 첨부 전용 아이콘 및 파일 선택기 원클릭 직접 실행, 클립보드 Paste 호환성이 올바르게 구현되어 있는지 검증."""
         import os
         from web_server import INTERNAL_STATIC_DIR
 
@@ -1246,38 +1246,34 @@ class TestWebServerStandalone(unittest.TestCase):
         with open(index_path, "r", encoding="utf-8") as f:
             html = f.read()
 
-        # 1. 팝오버 메뉴 및 래퍼 엘리먼트
-        self.assertIn('id="attach-menu-wrap"', html)
-        self.assertIn('id="attach-menu-popover"', html)
-        self.assertIn('class="attach-menu-popover"', html)
-        self.assertIn('onclick="toggleAttachMenu(event)"', html)
+        # 1. 원클릭 이미지 첨부 버튼 (#btn-attach 및 triggerFileInput 직접 호출)
+        self.assertIn('id="btn-attach"', html)
+        self.assertIn('onclick="triggerFileInput()"', html)
+        self.assertIn('title="이미지 첨부"', html)
 
-        # 2. 메뉴 옵션 1: 사진 / 파일 첨부
-        self.assertIn("사진 / 파일 첨부", html)
-        self.assertIn("onAttachFileOptionClick(event)", html)
+        # 2. 이미지/사진 전용 SVG 아이콘 (Lucide 규격: rect + circle + path 능선)
+        self.assertIn('<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>', html)
+        self.assertIn('<circle cx="9" cy="9" r="2"/>', html)
+        self.assertIn('<path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>', html)
 
-        # 3. 메뉴 옵션 2: 클립보드 이미지 붙여넣기
-        self.assertIn("클립보드 이미지 붙여넣기", html)
-        self.assertIn("onAttachClipboardOptionClick(event)", html)
+        # 3. 팝오버 메뉴 및 불필요한 레거시 팝업 로직 제거 검증
+        self.assertNotIn('id="attach-menu-popover"', html)
+        self.assertNotIn('class="attach-menu-popover"', html)
+        self.assertNotIn("toggleAttachMenu", html)
+        self.assertNotIn("onAttachClipboardOptionClick", html)
+        self.assertNotIn("onAttachFileOptionClick", html)
 
-        # 4. JS 함수 구현
-        self.assertIn("function toggleAttachMenu(", html)
-        self.assertIn("function openAttachMenu(", html)
-        self.assertIn("function closeAttachMenu(", html)
-        self.assertIn("async function pasteImageFromClipboard(", html)
+        # 4. 파일 입력창 속성 및 원클릭 트리거 함수 구현
+        self.assertIn('id="file-input"', html)
+        self.assertIn('accept="image/*"', html)
+        self.assertIn("function triggerFileInput(", html)
+        self.assertIn("function handleFileSelect(", html)
+        self.assertIn("function addAttachmentFiles(", html)
 
-        # 5. 클립보드 이미지 추출 및 토스트 메시지
-        self.assertIn("navigator.clipboard.read()", html)
-        self.assertIn("addAttachmentFiles(imgFiles)", html)
-        self.assertIn("클립보드 이미지가 첨부되었습니다.", html)
-        self.assertIn("클립보드에 복사된 이미지가 없습니다.", html)
-        self.assertIn("NotAllowedError", html)
-        self.assertIn("클립보드 접근 권한이 필요합니다.", html)
-
-        # 6. 스타일 검증
-        self.assertIn(".attach-menu-popover", html)
-        self.assertIn("--bg-elevated", html)
-        self.assertIn("--border", html)
+        # 5. 전역 클립보드 붙여넣기(Paste) 및 드래그앤드롭 호환성 검증
+        self.assertIn("extractImagesFromDataTransfer", html)
+        self.assertIn("addEventListener('paste'", html)
+        self.assertIn("개의 클립보드 이미지가 첨부되었습니다.", html)
         self.assertIn("--radius", html)
 
 
