@@ -187,7 +187,7 @@ def _load_room_messages(room_id: str) -> list[dict]:
         return []
     try:
         msgs = current_chat_db.get_messages(clean_rid)
-        if clean_rid == CORE_ORCHESTRATOR_ROOM_ID and msgs:
+        if clean_rid in ORCHESTRATOR_ROOM_IDS and msgs:
             try:
                 import web_orchestrator
                 for m in msgs:

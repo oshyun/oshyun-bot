@@ -6499,12 +6499,14 @@
       }
       const submitBtn = document.querySelector('#modal-spawn-session .modal-footer .btn.primary');
       if (submitBtn) submitBtn.disabled = true;
+      const parentRoomId = (currentRoomId && ORCHESTRATOR_ROOM_IDS.includes(currentRoomId)) ? currentRoomId : CORE_ROOM_ID;
       try {
         const res = await fetch('/api/orchestrator/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'spawn',
+            parentAgentId: parentRoomId,
             title: title || '새 에이전트 세션',
             prompt: prompt,
             wait: false
@@ -7353,7 +7355,10 @@
         saveChatRoomsToStorage();
         renderRoomList();
         if (data.byOrchestrator) {
-          showToast(`마스터 에이전트가 새 세션 '${sRoom.title || rId}'을 생성했습니다.`);
+          let creatorLabel = '마스터 에이전트';
+          if (resolvedParent === EXPERT_VAULT_ROOM_ID) creatorLabel = '세컨브레인 전문가';
+          else if (resolvedParent === EXPERT_CODING_ROOM_ID) creatorLabel = '봇개발 전문가';
+          showToast(`${creatorLabel}가 새 세션 '${sRoom.title || rId}'을 생성했습니다.`);
         }
         return;
       }
@@ -9874,7 +9879,7 @@
       }
       // roomId 를 못 찾았고 title 이 있다면 chatRooms 에서 제목 일치 검색
       if (!matchedRoom && title && Array.isArray(chatRooms)) {
-        matchedRoom = chatRooms.find(r => r.id !== CORE_ROOM_ID && (r.title === title || r.id === title));
+        matchedRoom = chatRooms.find(r => !ORCHESTRATOR_ROOM_IDS.includes(r.id) && (r.title === title || r.id === title));
         if (matchedRoom) {
           roomId = matchedRoom.id;
         }
@@ -9887,6 +9892,7 @@
 
       if (!roomId && !title) return null;
       const finalRoomId = roomId || title;
+      if (ORCHESTRATOR_ROOM_IDS.includes(finalRoomId)) return null;
 
       // 실시간 실행 상태(running/done/error) 판정
       const live = roomLiveStates[finalRoomId];
@@ -10016,7 +10022,7 @@
           reason: initialReason
         });
 
-        if (item && item.roomId && !seenRoomIds.has(item.roomId) && item.roomId !== CORE_ROOM_ID) {
+        if (item && item.roomId && !seenRoomIds.has(item.roomId) && !ORCHESTRATOR_ROOM_IDS.includes(item.roomId)) {
           seenRoomIds.add(item.roomId);
           results.push(item);
         }
@@ -10036,15 +10042,33 @@
       return extractDelegatedRoomsFromSteps(m.steps);
     }
 
-    function buildDelegatedSubAgentChipsDom(delegatedRooms) {
+    function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
       if (!Array.isArray(delegatedRooms) || delegatedRooms.length === 0) return null;
+
+      const pId = String(parentRoomId || currentRoomId || '').trim();
+      let labelIcon = ICONS.spark;
+      let labelText = '위임된 하위 에이전트';
+      let chipIcon = ICONS.spark;
+      if (pId === EXPERT_VAULT_ROOM_ID) {
+        labelIcon = ICONS.brain;
+        labelText = '위임된 세컨브레인 하위 에이전트';
+        chipIcon = ICONS.brain;
+      } else if (pId === EXPERT_CODING_ROOM_ID) {
+        labelIcon = ICONS.terminal;
+        labelText = '위임된 봇개발 하위 에이전트';
+        chipIcon = ICONS.terminal;
+      } else if (pId === CORE_ROOM_ID) {
+        labelIcon = ICONS.spark;
+        labelText = '위임된 마스터 하위 에이전트';
+        chipIcon = ICONS.spark;
+      }
 
       const wrap = document.createElement('div');
       wrap.className = 'sub-agent-chips-wrap';
 
       const labelEl = document.createElement('div');
       labelEl.className = 'sub-agent-chips-label';
-      labelEl.innerHTML = `<span class="chips-label-icon">${ICONS.spark}</span><span>위임된 하위 에이전트</span>`;
+      labelEl.innerHTML = `<span class="chips-label-icon">${labelIcon}</span><span>${escapeHtml(labelText)}</span>`;
       wrap.appendChild(labelEl);
 
       const listEl = document.createElement('div');
@@ -10074,7 +10098,7 @@
         }
 
         chipBtn.innerHTML = `
-          <span class="chip-icon">${ICONS.spark}</span>
+          <span class="chip-icon">${chipIcon}</span>
           <span class="chip-title">${escapeHtml(item.title || item.roomId)}</span>
           ${badgeHtml}
           <span class="chip-arrow">${ICONS.chevRight}</span>
@@ -10517,10 +10541,10 @@
           row.appendChild(emptyCard);
         }
 
-        if (currentRoomId === CORE_ROOM_ID) {
+        if (ORCHESTRATOR_ROOM_IDS.includes(currentRoomId)) {
           const delegatedRooms = extractDelegatedRoomsFromMessage(m);
           if (delegatedRooms && delegatedRooms.length > 0) {
-            const chipsDom = buildDelegatedSubAgentChipsDom(delegatedRooms);
+            const chipsDom = buildDelegatedSubAgentChipsDom(delegatedRooms, currentRoomId);
             if (chipsDom) row.appendChild(chipsDom);
           }
         }
@@ -10684,10 +10708,10 @@
             <span class="live-elapsed" id="live-elapsed-timer">${elapsedText}</span>
           </div>
         `;
-        if (room && room.id === CORE_ROOM_ID) {
+        if (room && ORCHESTRATOR_ROOM_IDS.includes(room.id)) {
           const liveDelegated = extractDelegatedRoomsFromSteps(liveState.steps);
           if (liveDelegated && liveDelegated.length > 0) {
-            const liveChipsDom = buildDelegatedSubAgentChipsDom(liveDelegated);
+            const liveChipsDom = buildDelegatedSubAgentChipsDom(liveDelegated, room.id);
             if (liveChipsDom) liveRow.appendChild(liveChipsDom);
           }
         }
@@ -10985,8 +11009,8 @@
             if (dx > 0) {
               // 오른쪽 스와이프: 좌측 사이드바 펼치기
               openRoomDrawer();
-            } else if (dx < 0 && currentRoomId === CORE_ROOM_ID) {
-              // 마스터 에이전트 화면에서 왼쪽 스와이프: 우측 현황 사이드바 열기
+            } else if (dx < 0 && ORCHESTRATOR_ROOM_IDS.includes(currentRoomId)) {
+              // 마스터/전문가 에이전트 화면에서 왼쪽 스와이프: 우측 현황 사이드바 열기
               toggleMasterSidebar(true);
             }
           }
