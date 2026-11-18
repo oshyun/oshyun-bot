@@ -3757,7 +3757,16 @@ class TestWebCrashRecovery(unittest.TestCase):
         self.assertIn('isAtTop = !canScrollUp;', ptr_block)
         self.assertIn('isAtBottom = !canScrollDown;', ptr_block)
         self.assertIn('(canScrollDown && dy < 0) || (canScrollUp && dy > 0)', ptr_block)
+        self.assertIn('!pullDirection && ((canScrollDown && dy < 0) || (canScrollUp && dy > 0))', ptr_block)
         self.assertIn('dy >= 95', ptr_block)
+        # 당겨서 새로고침 도중 취소 또는 완료 복귀 시 스크롤 위치 보존 및 부드러운 원위치 트랜지션 검증
+        self.assertIn('initialScrollTop = scrollTop;', ptr_block)
+        self.assertIn('resetScrollerTransform(', ptr_block)
+        self.assertIn('activeScroller.scrollTop = initialScrollTop;', ptr_block)
+        self.assertIn('executeRefreshAction()', ptr_block)
+        self.assertIn('.ptr-indicator.returning', content)
+        self.assertIn('.ptr-content-pulling', content)
+        self.assertIn('.ptr-content-returning', content)
 
         # 5. sub-agent 보고 메시지 좌측 발화 UI 및 내부 메타데이터 필터링 검증
         self.assertIn('function isSubAgentReportMessage(', content)
