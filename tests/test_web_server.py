@@ -2458,6 +2458,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn("봇개발 전문가 에이전트", coding_prompt)
         self.assertIn("워크트리", coding_prompt)
         self.assertIn("__expert_coding__", coding_prompt)
+        self.assertIn("session-ctl spawn", coding_prompt)
+        self.assertIn("하위 코딩 세션", coding_prompt)
 
         # 2. AGYEngine 빌드 검증 - 세컨브레인
         engine = agent_engine.AGYEngine()
@@ -2505,6 +2507,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn('id="expert-vault-subtask-tree"', html)
         self.assertIn('id="expert-coding-subtask-tree"', html)
         self.assertIn('id="master-subtask-tree"', html)
+        self.assertIn("ORCHESTRATOR_ROOM_IDS.includes(rid)", html)
 
     async def test_notify_master_agent_preserves_summary_up_to_1500_chars(self):
         """_notify_master_agent 가 400자를 넘는 간결한 응답(최대 1500자)을 잘리지 않게 마스터에 전달하는지 검증."""

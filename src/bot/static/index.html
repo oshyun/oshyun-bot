@@ -4589,7 +4589,7 @@
         if (data.ok && Array.isArray(data.rooms)) {
           // 1. 사용자가 직접 '새 대화' 버튼을 눌러 생성한 임시 빈 방, 현재 활성 미전송 방 및 마스터가 생성한 신규 방 보존
           const freshUnsentRooms = chatRooms.filter(
-            r => r && r.id !== CORE_ROOM_ID && (
+            r => r && !ORCHESTRATOR_ROOM_IDS.includes(r.id) && (
               ((r.userCreatedEmpty === true || r.id === currentRoomId) && (r.isNewSession === true || !r.sessionId) && (!r.messages || r.messages.length === 0)) ||
               (r.byOrchestrator === true && (!r.messages || r.messages.length === 0))
             )
@@ -4614,7 +4614,7 @@
             const sSessionId = String(sRoom.sessionId || '').trim();
             if (!sId) continue;
 
-            const canonId = sId === CORE_ROOM_ID ? CORE_ROOM_ID : (sId || sSessionId);
+            const canonId = ORCHESTRATOR_ROOM_IDS.includes(sId) ? sId : (sId || sSessionId);
             if (seenCanonicalIds.has(canonId)) continue;
             seenCanonicalIds.add(canonId);
 
@@ -4629,7 +4629,10 @@
               prevMeta && prevMeta.historyLoaded && msgs.length >= serverMsgCount
             );
 
-            const title = canonId === CORE_ROOM_ID ? '마스터 에이전트' : (sRoom.title || '새 대화');
+            let title = sRoom.title || '새 대화';
+            if (canonId === CORE_ROOM_ID) title = CORE_ROOM_TITLE;
+            else if (canonId === EXPERT_VAULT_ROOM_ID) title = EXPERT_VAULT_TITLE;
+            else if (canonId === EXPERT_CODING_ROOM_ID) title = EXPERT_CODING_TITLE;
             newChatRooms.push({
               id: canonId,
               roomId: canonId,
@@ -4979,6 +4982,10 @@
 
     async function deleteRoom(e, roomId) {
       if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      if (!roomId || ORCHESTRATOR_ROOM_IDS.includes(roomId)) {
+        showToast('전문가/마스터 에이전트 대화방은 삭제할 수 없습니다.');
+        return;
+      }
       const roomToDelete = chatRooms.find(r => r.id === roomId);
       const title = roomToDelete ? roomToDelete.title : '대화방';
       const isEmpty = !roomToDelete || ((!roomToDelete.messages || roomToDelete.messages.length === 0) && !(roomToDelete.messageCount > 0));
@@ -4996,6 +5003,9 @@
 
     async function executeBatchDeleteRooms(targetRoomIds) {
       const idSet = new Set((targetRoomIds || []).map(x => String(x || '').trim()).filter(Boolean));
+      for (const orchId of ORCHESTRATOR_ROOM_IDS) {
+        idSet.delete(orchId);
+      }
       if (idSet.size === 0) return;
 
       const roomsToDelete = chatRooms.filter(r => r && (idSet.has(String(r.id)) || (r.sessionId && idSet.has(String(r.sessionId)))));
@@ -5138,8 +5148,9 @@
       for (const r of chatRooms) {
         if (!r) continue;
         const rid = String(r.id || '').trim();
-        if (rid === CORE_ROOM_ID) continue;
+        if (rid === CORE_ROOM_ID || ORCHESTRATOR_ROOM_IDS.includes(rid)) continue;
         let sid = String(r.sessionId || '').trim();
+        if (sid && ORCHESTRATOR_ROOM_IDS.includes(sid)) continue;
         if (sid === rid) sid = '';
 
         if ((rid && seenIds.has(rid)) || (sid && seenIds.has(sid))) continue;
@@ -5424,7 +5435,7 @@
     }
 
     async function toggleArchiveRoom(roomId, forceState = null) {
-      if (!roomId || roomId === CORE_ROOM_ID) return;
+      if (!roomId || ORCHESTRATOR_ROOM_IDS.includes(roomId)) return;
       const targetRoom = getRoomById(roomId);
       const nextState = forceState !== null ? Boolean(forceState) : !Boolean(targetRoom && targetRoom.isArchived);
       try {
@@ -6157,7 +6168,7 @@
 
     // ─── 빈 새 대화방 정리 유틸 ───
     function isUnusedEmptyRoom(room) {
-      if (!room || !room.id || room.id === CORE_ROOM_ID) return false;
+      if (!room || !room.id || ORCHESTRATOR_ROOM_IDS.includes(room.id)) return false;
       if ((room.messageCount || 0) > 0) return false;
       if (room.byOrchestrator || room.isOrchestratorChild) return false;
       const msgs = Array.isArray(room.messages) ? room.messages : [];
@@ -6185,7 +6196,7 @@
       chatRooms = chatRooms.filter(r => {
         if (!r) return false;
         if (activeRoomId && r.id === activeRoomId) return true;
-        if (r.id === CORE_ROOM_ID) return true;
+        if (ORCHESTRATOR_ROOM_IDS.includes(r.id)) return true;
         return !isUnusedEmptyRoom(r);
       });
       if (chatRooms.length !== beforeLen) {
