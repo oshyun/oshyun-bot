@@ -5568,6 +5568,68 @@
       }
     }
 
+    function formatAgyRelativeTime(ts, cachedAtStr) {
+      if (!ts && !cachedAtStr) return '확인 불가';
+      let timeMs = 0;
+      if (typeof ts === 'number') {
+        timeMs = ts > 1e11 ? ts : ts * 1000;
+      } else if (cachedAtStr) {
+        timeMs = new Date(cachedAtStr).getTime();
+      }
+      if (!timeMs || isNaN(timeMs)) return cachedAtStr || '확인 불가';
+
+      const now = Date.now();
+      const diffSec = Math.max(0, Math.floor((now - timeMs) / 1000));
+
+      let rel = '';
+      if (diffSec < 5) {
+        rel = '방금 전';
+      } else if (diffSec < 60) {
+        rel = `${diffSec}초 전`;
+      } else if (diffSec < 3600) {
+        const m = Math.floor(diffSec / 60);
+        const s = diffSec % 60;
+        rel = s > 0 ? `${m}분 ${s}초 전` : `${m}분 전`;
+      } else {
+        const h = Math.floor(diffSec / 3600);
+        const m = Math.floor((diffSec % 3600) / 60);
+        rel = m > 0 ? `${h}시간 ${m}분 전` : `${h}시간 전`;
+      }
+
+      const d = new Date(timeMs);
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const secs = String(d.getSeconds()).padStart(2, '0');
+      const timeStr = `${hours}:${mins}:${secs}`;
+
+      return `${rel} (${timeStr})`;
+    }
+
+    let lastAgyUsageData = null;
+
+    function buildAgyUsageTooltip(usage) {
+      if (!usage) return 'AGY 쿼터 잔여량';
+      const tooltipLines = ['[AGY 쿼터 잔여량]'];
+
+      if (usage.five_hour && typeof usage.five_hour.pct === 'number') {
+        const resetDesc = formatAgyResetTooltip(usage.five_hour.reset_time);
+        tooltipLines.push(`• 5시간: ${usage.five_hour.pct}%${resetDesc ? ' (리셋: ' + resetDesc + ')' : ''}`);
+      }
+
+      if (usage.weekly && typeof usage.weekly.pct === 'number') {
+        const resetDesc = formatAgyResetTooltip(usage.weekly.reset_time);
+        tooltipLines.push(`• 주간: ${usage.weekly.pct}%${resetDesc ? ' (리셋: ' + resetDesc + ')' : ''}`);
+      }
+
+      const relTime = formatAgyRelativeTime(usage.timestamp, usage.cached_at);
+      tooltipLines.push(`• 갱신: ${relTime}`);
+
+      const source = usage.source || 'agy CLI (/usage 캐시)';
+      tooltipLines.push(`• 출처: ${source}`);
+
+      return tooltipLines.join('\n');
+    }
+
     function updateAvatarUsageBadge(usage) {
       const badge = document.getElementById('avatar-usage-badge');
       if (!badge) return;
@@ -5575,6 +5637,8 @@
         badge.style.display = 'none';
         return;
       }
+
+      lastAgyUsageData = usage;
 
       // 헬퍼: 잔여율에 따른 상태 클래스 분기 (안전 / 주의 / 위험)
       const getStatusClass = (pct) => {
@@ -5584,16 +5648,14 @@
       };
 
       const items = [];
-      const tooltipLines = ['[AGY 쿼터 잔여량]'];
 
       // 5시간 세션 쿼터 (미니 슬림 바 + 퍼센트)
+      // 자식 요소에 title 속성을 넣으면 상위 요소의 상세 툴팁이 가려지므로 상위 툴팁 단일화
       if (usage.five_hour && typeof usage.five_hour.pct === 'number') {
         const pct = Math.max(0, Math.min(100, Math.round(usage.five_hour.pct)));
         const cls = getStatusClass(pct);
-        const resetDesc = formatAgyResetTooltip(usage.five_hour.reset_time);
-        tooltipLines.push(`• 5시간: ${usage.five_hour.pct}%${resetDesc ? ' (리셋: ' + resetDesc + ')' : ''}`);
         items.push(
-          `<div class="quota-pill" title="5시간 세션: ${pct}%">` +
+          `<div class="quota-pill">` +
             `<span class="quota-tag">5h</span>` +
             `<span class="quota-track"><span class="quota-fill ${cls}" style="width:${pct}%"></span></span>` +
             `<span class="quota-num ${cls}">${pct}%</span>` +
@@ -5605,10 +5667,8 @@
       if (usage.weekly && typeof usage.weekly.pct === 'number') {
         const pct = Math.max(0, Math.min(100, Math.round(usage.weekly.pct)));
         const cls = getStatusClass(pct);
-        const resetDesc = formatAgyResetTooltip(usage.weekly.reset_time);
-        tooltipLines.push(`• 주간: ${usage.weekly.pct}%${resetDesc ? ' (리셋: ' + resetDesc + ')' : ''}`);
         items.push(
-          `<div class="quota-pill" title="주간: ${pct}%">` +
+          `<div class="quota-pill">` +
             `<span class="quota-tag">W</span>` +
             `<span class="quota-track"><span class="quota-fill ${cls}" style="width:${pct}%"></span></span>` +
             `<span class="quota-num ${cls}">${pct}%</span>` +
@@ -5628,7 +5688,17 @@
 
       badge.innerHTML = items.join('');
       badge.style.display = 'inline-flex';
-      badge.title = tooltipLines.join('\n');
+      badge.title = buildAgyUsageTooltip(usage);
+
+      // 마우스 호버 시 실시간 상대 시간 재계산 (1회 등록)
+      if (!badge.dataset.hoverBound) {
+        badge.dataset.hoverBound = 'true';
+        badge.addEventListener('mouseenter', () => {
+          if (lastAgyUsageData) {
+            badge.title = buildAgyUsageTooltip(lastAgyUsageData);
+          }
+        });
+      }
     }
 
     let usagePollingTimer = null;

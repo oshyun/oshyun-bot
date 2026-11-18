@@ -296,7 +296,12 @@ def _load_cached_quota_file(cache_file: str | None = None) -> dict[str, Any] | N
         return None
 
 
-def parse_quota_data_to_usage(data: dict[str, Any] | None, timestamp: float | None = None) -> dict[str, Any] | None:
+def parse_quota_data_to_usage(
+    data: dict[str, Any] | None,
+    timestamp: float | None = None,
+    cached_at: str | None = None,
+    source: str = "agy CLI (/usage 캐시)",
+) -> dict[str, Any] | None:
     """파싱된 쿼터 데이터({group: {bucket: {pct, window, reset_time}}})를 프론트엔드/상태 API용 객체로 변환한다."""
     if not isinstance(data, dict):
         return None
@@ -354,6 +359,8 @@ def parse_quota_data_to_usage(data: dict[str, Any] | None, timestamp: float | No
         "weekly": weekly,
         "badge_text": badge_text,
         "timestamp": timestamp or time.time(),
+        "cached_at": cached_at,
+        "source": source,
     }
 
 
@@ -474,11 +481,13 @@ def get_cached_agy_usage(
     cache = _load_cached_quota_file(target_file)
     data = None
     timestamp = None
+    cached_at = None
     is_expired = True
 
     if isinstance(cache, dict):
         timestamp = cache.get("timestamp")
         data = cache.get("data")
+        cached_at = cache.get("cached_at")
         if isinstance(timestamp, (int, float)):
             elapsed = time.time() - timestamp
             if 0 <= elapsed < AGY_QUOTA_CACHE_TTL_SECONDS:
@@ -488,7 +497,12 @@ def get_cached_agy_usage(
         trigger_agy_quota_refresh_background(cache_file=target_file)
 
     if data is not None:
-        return parse_quota_data_to_usage(data, timestamp=timestamp)
+        return parse_quota_data_to_usage(
+            data,
+            timestamp=timestamp,
+            cached_at=cached_at,
+            source="agy CLI (/usage 캐시)",
+        )
 
     return None
 
