@@ -279,30 +279,58 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 2px;
+      margin-bottom: 0;
+      position: relative;
     }
+    /* 📂 마스터 직속 브랜치 (직속 하위 채팅 + 전문가 에이전트 통합 브랜치) */
     .sb-master-branch {
       position: relative;
-      margin: 4px 0 6px 14px;
-      padding-left: 12px;
-      border-left: 1.5px solid rgba(59, 130, 246, 0.35);
+      margin: 0 0 6px 14px;
+      padding-left: 14px;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
+    /* 전문가 에이전트 노드 래퍼 */
     .expert-agent-node {
       position: relative;
       display: flex;
       flex-direction: column;
     }
-    .expert-agent-node::before {
+    /* 세컨브레인 (마지막이 아닌 전문가 노드): 가로 가지선 + 세로 관통선 */
+    .expert-agent-node:not(:last-child)::before {
       content: '';
       position: absolute;
-      left: -12px;
+      left: -14px;
       top: 17px;
-      width: 10px;
+      width: 12px;
       height: 1.5px;
-      background: rgba(59, 130, 246, 0.35);
+      background: rgba(59, 130, 246, 0.4);
+    }
+    .expert-agent-node:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: -6px;
+      bottom: -6px;
+      width: 1.5px;
+      background: rgba(59, 130, 246, 0.4);
+    }
+    /* 봇개발 (마지막 전문가 노드): 위에서 내려와 카드 중앙(17px)에서 깔끔한 L자(└─)로 종료 */
+    .expert-agent-node:last-child::before {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: -6px;
+      height: 23px;
+      width: 12px;
+      border-left: 1.5px solid rgba(59, 130, 246, 0.4);
+      border-bottom: 1.5px solid rgba(59, 130, 246, 0.4);
+      border-bottom-left-radius: 4px;
+      background: transparent;
+    }
+    .expert-agent-node:last-child::after {
+      display: none;
     }
     .sb-expert-row {
       display: flex;
@@ -377,60 +405,105 @@
       border-color: rgba(59, 130, 246, 0.45);
     }
     .core-agent-reset-btn svg.i { width: 14px; height: 14px; }
+    /* 💬 하위 서브태스크 트리 (공통/특화) */
     .sb-core-tree {
       position: relative;
-      margin: 2px 0 6px 15px;
-      padding-left: 14px;
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
-    .sb-core-tree.master-direct-tree {
-      margin: 4px 0 6px 14px;
-      padding-left: 12px;
-      border-left: 1.5px solid rgba(59, 130, 246, 0.35);
-    }
-    .sb-core-tree.master-direct-tree::before { display: none; }
     .sb-core-tree:empty { display: none; }
-    .sb-core-tree::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: -2px;
-      bottom: 14px;
-      width: 1.5px;
-      background: rgba(59, 130, 246, 0.35);
+
+    /* 1) 마스터 직속 하위 채팅 트리 */
+    .sb-core-tree.master-direct-tree {
+      margin: 2px 0 2px 0;
+      padding-left: 0;
     }
-    .sb-tree-item {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: calc(12.5px * var(--ui-scale, 1));
-      color: var(--text-2);
-      transition: background .12s, color .12s;
-      min-width: 0;
-    }
-    .sb-tree-item::before {
+    .master-direct-tree .sb-tree-item::before {
       content: '';
       position: absolute;
       left: -14px;
       top: 50%;
       width: 12px;
       height: 1.5px;
-      background: rgba(59, 130, 246, 0.35);
+      background: rgba(59, 130, 246, 0.4);
     }
-    .sb-tree-item:last-child::after {
+    .master-direct-tree .sb-tree-item::after {
       content: '';
       position: absolute;
-      left: -15px;
+      left: -14px;
+      top: -2px;
+      bottom: -2px;
+      width: 1.5px;
+      background: rgba(59, 130, 246, 0.4);
+    }
+    .master-direct-tree .sb-tree-item:first-child::after {
+      top: -6px;
+    }
+    .master-direct-tree .sb-tree-item:last-child::after {
+      bottom: -6px;
+    }
+
+    /* 2) 전문가 직속 하위 채팅 트리 (2차 인덴트) */
+    .expert-agent-node .sb-core-tree {
+      margin: 3px 0 4px 14px;
+      padding-left: 14px;
+    }
+    .expert-agent-node .sb-core-tree .sb-tree-item::before {
+      content: '';
+      position: absolute;
+      left: -14px;
       top: 50%;
-      bottom: -8px;
-      width: 4px;
-      background: var(--bg-sidebar);
+      width: 12px;
+      height: 1.5px;
+      background: rgba(59, 130, 246, 0.4);
+    }
+    .expert-agent-node .sb-core-tree .sb-tree-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: -2px;
+      bottom: -2px;
+      width: 1.5px;
+      background: rgba(59, 130, 246, 0.4);
+    }
+    .expert-agent-node .sb-core-tree .sb-tree-item:first-child:not(:last-child)::after {
+      top: -5px;
+    }
+    /* 전문가 하위 트리의 마지막 아이템: 깔끔한 L자(└─) 종료 */
+    .expert-agent-node .sb-core-tree .sb-tree-item:last-child::before {
+      content: '';
+      position: absolute;
+      left: -14px;
+      top: -2px;
+      height: calc(50% + 2px);
+      width: 12px;
+      border-left: 1.5px solid rgba(59, 130, 246, 0.4);
+      border-bottom: 1.5px solid rgba(59, 130, 246, 0.4);
+      border-bottom-left-radius: 4px;
+      background: transparent;
+    }
+    .expert-agent-node .sb-core-tree .sb-tree-item:only-child::before {
+      top: -5px;
+      height: calc(50% + 5px);
+    }
+    .expert-agent-node .sb-core-tree .sb-tree-item:last-child::after {
+      display: none;
+    }
+
+    /* 서브태스크 아이템 공통 스타일 */
+    .sb-tree-item {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: calc(12.5px * var(--ui-scale, 1));
+      color: var(--text-2);
+      transition: background .12s, color .12s;
+      min-width: 0;
     }
     .sb-tree-item:hover {
       background: var(--bg-hover);
@@ -3154,11 +3227,11 @@
           </button>
         </div>
 
-        <!-- 💬 1. 마스터 직속 하위 채팅 트리 -->
-        <div class="sb-core-tree sb-subtask-tree master-direct-tree" id="master-subtask-tree"></div>
-
-        <!-- 📂 2. 마스터 직속 전문가 에이전트 및 하위 브랜치 -->
+        <!-- 📂 마스터 직속 하위 브랜치 (직속 채팅 + 전문가 에이전트) -->
         <div class="sb-master-branch">
+          <!-- 💬 1. 마스터 직속 하위 채팅 트리 -->
+          <div class="sb-core-tree sb-subtask-tree master-direct-tree" id="master-subtask-tree"></div>
+
           <!-- 🧠 세컨브레인 전문가 에이전트 -->
           <div class="expert-agent-node">
             <div class="sb-expert-row">
