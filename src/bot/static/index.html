@@ -1995,6 +1995,9 @@
     .md .md-link-chip.is-vault:hover {
       background: var(--accent-glow); border-color: var(--accent);
     }
+    .md .md-link-chip.is-file {
+      font-family: inherit;
+    }
     .md .md-link-chip svg.i {
       width: 13px; height: 13px; flex-shrink: 0; color: var(--accent-text);
     }
@@ -5873,9 +5876,11 @@
       toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
     }
 
-    function copyToClipboard(text, label) {
+    function copyToClipboard(text, label, raw = false) {
       if (!text || text === '조회 중...') return;
-      const cleanText = String(text).replace(/\s*\(.*?\)\s*/g, '').trim();
+      const cleanText = raw
+        ? String(text).trim()
+        : String(text).replace(/\s*\(.*?\)\s*/g, '').trim();
       if (!cleanText) return;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cleanText).then(() => {
@@ -5884,6 +5889,11 @@
       } else {
         fallbackCopyText(cleanText, label);
       }
+    }
+
+    function copyFileLinkPath(btn) {
+      const path = btn && btn.getAttribute('data-path');
+      if (path) copyToClipboard(path, '파일 경로가', true);
     }
 
     function fallbackCopyText(text, label) {
@@ -8050,7 +8060,10 @@
       const cleanUrl = String(rawUrl || '').trim()
         .replace(/&amp;/g, '&')
         .replace(/ /g, '%20');
-      if (!/^https?:\/\//i.test(cleanUrl)) {
+      const isHttp = /^https?:\/\//i.test(cleanUrl);
+      const isFile = /^file:\/\//i.test(cleanUrl);
+      const isObsidian = /^obsidian:\/\//i.test(cleanUrl);
+      if (!isHttp && !isFile && !isObsidian) {
         return escapeHtml(explicitLabel || rawUrl);
       }
 
@@ -8072,7 +8085,32 @@
       try {
         parsedUrl = new URL(cleanUrl);
       } catch (_) {
-        return renderChip(ICONS.link, cleanExplicit || cleanUrl, '', cleanUrl);
+        return isFile
+          ? escapeHtml(cleanExplicit || rawUrl)
+          : renderChip(ICONS.link, cleanExplicit || cleanUrl, '', cleanUrl);
+      }
+
+      if (isFile) {
+        const decodedPath = decodeSafeUrlPart(parsedUrl.pathname || cleanUrl.replace(/^file:\/\//i, ''));
+        const hashLabel = String(parsedUrl.hash || '').replace(/^#/, '').trim();
+        const pathParts = decodedPath.split('/').filter(Boolean);
+        const fileName = pathParts.length ? pathParts[pathParts.length - 1] : decodedPath;
+        const parentDir = pathParts.length > 1 ? pathParts[pathParts.length - 2] : '';
+        const isGenericFileLabel = !cleanExplicit || /^file:\/\//i.test(cleanExplicit);
+        const displayLabel = isGenericFileLabel ? (fileName || decodedPath) : cleanExplicit;
+        const metaText = hashLabel || (parentDir && !displayLabel.includes(parentDir) ? parentDir : '');
+        const fullPathWithLine = hashLabel ? `${decodedPath}#${hashLabel}` : decodedPath;
+        const metaHtml = metaText
+          ? `<span class="md-link-meta">· ${escapeHtml(metaText)}</span>`
+          : '';
+        return `<button type="button" class="md-link-chip is-file" data-path="${escapeHtml(fullPathWithLine)}" onclick="copyFileLinkPath(this)" title="${escapeHtml(fullPathWithLine)} (클릭하여 경로 복사)">${ICONS.file}<span class="md-link-label">${escapeHtml(displayLabel)}</span>${metaHtml}</button>`;
+      }
+
+      if (isObsidian) {
+        const fileParam = parsedUrl.searchParams.get('file') || '';
+        const decodedFile = decodeSafeUrlPart(fileParam).replace(/^\/+|\/+$/g, '');
+        const displayLabel = cleanExplicit || decodedFile || 'Obsidian 노트';
+        return renderChip(ICONS.file, displayLabel, '', decodedFile || cleanUrl, 'is-vault');
       }
 
       const hostLower = parsedUrl.hostname.toLowerCase();
@@ -8156,22 +8194,22 @@
 
       // 1. 백틱으로 감싸진 마크다운 링크나 obsid.net 공유 링크는 일반 링크로 풀어서 렌더링
       let s = String(str)
-        .replace(/`\[([^\]]+)\]\((https?:\/\/[^`\n]+)\)`/g, '[$1]($2)')
+        .replace(/`\[([^\]]+)\]\(((?:https?|file|obsidian):\/\/[^`\n]+)\)`/g, '[$1]($2)')
         .replace(/`(https?:\/\/obsid\.net\/[^\s`]+)`/g, '$1');
 
       // 2. 마크다운 링크 ([label](url)) 우선 추출 및 프리티 링크 칩 변환
-      s = s.replace(/\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^\s()]*\))+|https?:\/\/[^)\n]+)\)/g, (_, label, url) => {
+      s = s.replace(/\[([^\]]+)\]\(((?:https?|file|obsidian):\/\/(?:[^\s()]|\([^\s()]*\))+|(?:https?|file|obsidian):\/\/[^)\n]+)\)/g, (_, label, url) => {
         return stashToken(buildPrettyLinkHtml(url, label));
       });
 
       // 3. 남은 인라인 코드 보호
       s = s.replace(/`([^`\n]+)`/g, (_, c) => stashToken(`<code>${escapeHtml(c)}</code>`));
 
-      // 4. 꺾쇠 자동 링크 (<https://...>)
-      s = s.replace(/<(https?:\/\/[^\s<>]+)>/g, (_, url) => stashToken(buildPrettyLinkHtml(url, '')));
+      // 4. 꺾쇠 자동 링크 (<https://...>, <file:///...>)
+      s = s.replace(/<((?:https?|file|obsidian):\/\/[^\s<>]+)>/g, (_, url) => stashToken(buildPrettyLinkHtml(url, '')));
 
-      // 5. 평문 Bare URL (https://...) 자동 추출 및 프리티 링크 칩 변환
-      s = s.replace(/(?<![\w/])(https?:\/\/[^\s<>"]+)/g, match => {
+      // 5. 평문 Bare URL (https://..., file:///...) 자동 추출 및 프리티 링크 칩 변환
+      s = s.replace(/(?<![\w/])((?:https?|file):\/\/[^\s<>"]+)/g, match => {
         let url = match;
         let trailing = '';
         while (url.length > 0) {
@@ -8194,7 +8232,7 @@
           }
           break;
         }
-        if (!/^https?:\/\/[^/\s]+/i.test(url)) {
+        if (!/^(?:https?:\/\/[^/\s]+|file:\/\/\/[^\s]+)/i.test(url)) {
           return match;
         }
         return stashToken(buildPrettyLinkHtml(url, '')) + trailing;
@@ -8257,7 +8295,7 @@
       const blocks = [];
       const normalized = String(text)
         .replace(/\r\n/g, '\n')
-        .replace(/\[([^\]]+)\]\s*\n\s*\((https?:\/\/[^)\n]+)\)/g, '[$1]($2)');
+        .replace(/\[([^\]]+)\]\s*\n\s*\(((?:https?|file|obsidian):\/\/[^)\n]+)\)/g, '[$1]($2)');
       const src = normalized.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)(?:```|$)/g, (_, lang, code) => {
         const idx = blocks.length;
         const clean = escapeHtml(code.replace(/\n$/, ''));
