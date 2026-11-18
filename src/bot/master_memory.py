@@ -79,6 +79,49 @@ TIER_LABELS: dict[str, str] = {
     "freeze": "FREEZE · 동결",
 }
 
+VALID_AGENT_IDS: tuple[str, ...] = ("master", "second_brain", "bot_dev")
+AGENT_LABELS: dict[str, str] = {
+    "master": "마스터 에이전트",
+    "second_brain": "세컨브레인 에이전트",
+    "bot_dev": "봇개발 에이전트",
+}
+AGENT_DOMAIN_TAGS: dict[str, str] = {
+    "master": "[마스터]",
+    "second_brain": "[세컨브레인]",
+    "bot_dev": "[봇개발]",
+}
+_AGENT_ALIASES: dict[str, str] = {
+    "": "master",
+    "master": "master",
+    "__core__": "master",
+    "core": "master",
+    "second_brain": "second_brain",
+    "__expert_vault__": "second_brain",
+    "expert_vault": "second_brain",
+    "vault": "second_brain",
+    "bot_dev": "bot_dev",
+    "__expert_coding__": "bot_dev",
+    "expert_coding": "bot_dev",
+    "coding": "bot_dev",
+}
+
+
+def normalize_agent_id(agent_id: str | None = None) -> str:
+    """에이전트 식별자(또는 룸 ID)를 정규 메모리 스코프('master', 'second_brain', 'bot_dev')로 변환한다."""
+    raw = str(agent_id or "").strip().lower()
+    if raw in _AGENT_ALIASES:
+        return _AGENT_ALIASES[raw]
+    raise ValueError(f"지원하지 않는 에이전트 메모리 식별자입니다: {agent_id}")
+
+
+def _get_memory_file(agent_id: str = "master") -> str:
+    """에이전트 스코프별 4계층 메모리 JSON 파일 경로를 반환한다."""
+    norm = normalize_agent_id(agent_id)
+    if norm == "master":
+        return MASTER_MEMORY_FILE
+    base, ext = os.path.splitext(MASTER_MEMORY_FILE)
+    return f"{base}_{norm}{ext or '.json'}"
+
 DEFAULT_TIER_LIMITS: dict[str, dict[str, int]] = {
     "hot": {"maxChars": 1500, "maxItems": 8, "itemMaxChars": 220},
     "warm": {"maxChars": 3000, "maxItems": 16, "itemMaxChars": 180},
@@ -1018,7 +1061,13 @@ _RE_DEV_ACTION_OR_STATE = re.compile(
 )
 
 
-def is_internal_system_noise(text: str, *, title: str = "", kind: str = "note") -> tuple[bool, str]:
+def is_internal_system_noise(
+    text: str,
+    *,
+    title: str = "",
+    kind: str = "note",
+    agent_id: str = "master",
+) -> tuple[bool, str]:
     """시스템 내부 개발·버그픽스·UI 변경·테스트·스케줄 패스 등 재참조 가치가 없는 잡음인지 판별한다."""
     combined = f"{title} {text}".strip()
     if not combined:
@@ -1028,26 +1077,36 @@ def is_internal_system_noise(text: str, *, title: str = "", kind: str = "note") 
     if _RE_META_SCHEDULER_NOISE.search(combined):
         return True, "meta_scheduler_noise"
 
-    # 2. 사용자의 명시적 선호/지시/규칙은 보존
+    # 2. 봇개발 에이전트(bot_dev) 및 마스터 상향 보고 태그([봇개발]/[세컨브레인])는 개발 컨텍스트를 보존
+    norm_agent = normalize_agent_id(agent_id)
+    if norm_agent == "bot_dev" or combined.startswith(("[봇개발]", "[세컨브레인]")):
+        return False, ""
+
+    # 3. 사용자의 명시적 선호/지시/규칙은 보존
     if _RE_VALUABLE_USER_RULE.search(combined):
         return False, ""
 
-    # 3. 옵시디언 볼트 지식 및 개인 기록(가계부, 건강, 차량, 금융 등)은 보존
+    # 4. 옵시디언 볼트 지식 및 개인 기록(가계부, 건강, 차량, 금융 등)은 보존
     if _RE_VALUABLE_VAULT_DOMAIN.search(combined):
         return False, ""
 
-    # 4. 현재 진행 중/미완결/후속 검증 필요 작업은 보존
+    # 5. 현재 진행 중/미완결/후속 검증 필요 작업은 보존
     if _RE_ACTIVE_TASK_HINT.search(combined):
         return False, ""
 
-    # 5. 내부 개발·코드·UI·테스트·프레임워크 변경 히스토리는 잡음으로 배제
+    # 6. 내부 개발·코드·UI·테스트·프레임워크 변경 히스토리는 잡음으로 배제
     if _RE_DEV_CODE_SIGNAL.search(combined) and _RE_DEV_ACTION_OR_STATE.search(combined):
         return True, "internal_dev_history"
 
     return False, ""
 
 
-def _compact_and_dedup_unlocked(data: dict[str, Any], *, now: float | None = None) -> dict[str, int]:
+def _compact_and_dedup_unlocked(
+    data: dict[str, Any],
+    *,
+    now: float | None = None,
+    agent_id: str = "master",
+) -> dict[str, int]:
     """모든 계층의 비대 항목을 정제·요약하고 동일 작업/유사 중복 항목을 병합한다."""
     ts = float(now if now is not None else _now())
     limits = data["limits"]
@@ -1120,7 +1179,7 @@ def _compact_and_dedup_unlocked(data: dict[str, Any], *, now: float | None = Non
                 cleaned += 1
                 continue
 
-            is_noise, _ = is_internal_system_noise(new_text, title=new_title, kind=kind)
+            is_noise, _ = is_internal_system_noise(new_text, title=new_title, kind=kind, agent_id=agent_id)
             if is_noise:
                 purged += 1
                 cleaned += 1
@@ -1198,8 +1257,9 @@ def _compact_and_dedup_unlocked(data: dict[str, Any], *, now: float | None = Non
     return {"compacted": compacted, "merged": merged, "cleaned": cleaned, "purged": purged}
 
 
-def _normalize_data(raw: Any) -> tuple[dict[str, Any], bool]:
+def _normalize_data(raw: Any, *, agent_id: str = "master") -> tuple[dict[str, Any], bool]:
     """디스크 JSON을 정규화하고 v1 레거시 포맷이면 자동 압축 마이그레이션 여부를 반환한다."""
+    norm_agent = normalize_agent_id(agent_id)
     data: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
     raw_version = int(data.get("version") or 0) if isinstance(raw, dict) and raw else CURRENT_VERSION
     is_legacy = bool(isinstance(raw, dict) and raw and raw_version < CURRENT_VERSION)
@@ -1224,27 +1284,32 @@ def _normalize_data(raw: Any) -> tuple[dict[str, Any], bool]:
         "lastCascadeAt": raw_stats.get("lastCascadeAt"),
     }
     data["version"] = CURRENT_VERSION
+    data["agentId"] = norm_agent
 
     migrated = False
     if is_legacy and any(tiers[t] for t in TIERS):
-        _compact_and_dedup_unlocked(data)
+        _compact_and_dedup_unlocked(data, agent_id=norm_agent)
         _cascade_overflow_unlocked(data)
         migrated = True
 
     return data, migrated
 
 
-def _load_unlocked() -> dict[str, Any]:
-    raw = read_json(MASTER_MEMORY_FILE, {}, expect_type=dict)
-    data, migrated = _normalize_data(raw)
+def _load_unlocked(agent_id: str = "master") -> dict[str, Any]:
+    norm_agent = normalize_agent_id(agent_id)
+    mem_file = _get_memory_file(norm_agent)
+    raw = read_json(mem_file, {}, expect_type=dict)
+    data, migrated = _normalize_data(raw, agent_id=norm_agent)
     if migrated:
-        _save_unlocked(data)
+        _save_unlocked(data, agent_id=norm_agent)
     return data
 
 
-def _save_unlocked(data: dict[str, Any], *, now: float | None = None) -> None:
+def _save_unlocked(data: dict[str, Any], *, now: float | None = None, agent_id: str = "master") -> None:
+    norm_agent = normalize_agent_id(agent_id or data.get("agentId"))
+    data["agentId"] = norm_agent
     data["updatedAt"] = float(now if now is not None else _now())
-    write_json_atomic(MASTER_MEMORY_FILE, data)
+    write_json_atomic(_get_memory_file(norm_agent), data)
 
 
 def _tier_chars(items: list[dict[str, Any]]) -> int:
@@ -1318,6 +1383,7 @@ def _snapshot_unlocked(
     *,
     tier: str | None = None,
     limit_per_tier: int = 50,
+    agent_id: str = "master",
 ) -> dict[str, Any]:
     target_tiers = (tier,) if tier in TIERS else TIERS
     limits = data["limits"]
@@ -1351,8 +1417,11 @@ def _snapshot_unlocked(
             "items": recent_items,
         }
 
+    norm_agent = normalize_agent_id(data.get("agentId") or agent_id)
     return {
         "version": CURRENT_VERSION,
+        "agentId": norm_agent,
+        "agentLabel": AGENT_LABELS.get(norm_agent, norm_agent),
         "tierOrder": list(TIERS),
         "tiers": tiers_out,
         "limits": copy.deepcopy(limits),
@@ -1507,15 +1576,17 @@ def update_memory_item_text(
     new_text: str,
     *,
     llm_summarized: bool = True,
+    agent_id: str = "master",
 ) -> bool:
     """저장된 메모리 항목의 본문을 비동기 LLM 요약본으로 제자리 갱신한다."""
     target_id = str(item_id or "").strip()
     cleaned = _smart_clip(new_text, AUTO_SUMMARY_MAX_CHARS)
     if not target_id or not cleaned:
         return False
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         for t in TIERS:
             for it in data["tiers"][t]:
                 if it.get("id") == target_id:
@@ -1523,7 +1594,7 @@ def update_memory_item_text(
                     it["chars"] = len(cleaned)
                     if llm_summarized:
                         it["llmSummarized"] = True
-                    _save_unlocked(data, now=now)
+                    _save_unlocked(data, now=now, agent_id=norm_agent)
                     return True
     return False
 
@@ -1535,6 +1606,7 @@ async def _refine_memory_item_bg(
     kind: str,
     title: str,
     existing_text: str,
+    agent_id: str = "master",
 ) -> None:
     try:
         summarized = await _run_flash_low_summary(raw_text, kind=kind, title=title)
@@ -1542,7 +1614,7 @@ async def _refine_memory_item_bg(
             return
         short_tag, _ = _compact_prompt_tag(existing_text)
         final_text = f"{short_tag} {summarized}".strip() if (short_tag and not summarized.startswith("[")) else summarized
-        update_memory_item_text(item_id, final_text, llm_summarized=True)
+        update_memory_item_text(item_id, final_text, llm_summarized=True, agent_id=agent_id)
     except Exception as exc:
         logger.debug("[master_memory] LLM 백그라운드 요약 생략 (id=%s): %s", item_id, exc)
 
@@ -1554,6 +1626,7 @@ def _schedule_llm_refine(
     kind: str,
     title: str,
     existing_text: str,
+    agent_id: str = "master",
 ) -> None:
     if not LLM_SUMMARY_ENABLED or kind not in AUTO_SUMMARY_KINDS:
         return
@@ -1572,6 +1645,7 @@ def _schedule_llm_refine(
             kind=kind,
             title=title,
             existing_text=existing_text,
+            agent_id=agent_id,
         )
     )
     _bg_refine_tasks.add(task)
@@ -1590,15 +1664,17 @@ def add_memory(
     summarize: bool | None = None,
     raw_text_for_llm: str | None = None,
     filter_noise: bool | None = None,
+    agent_id: str = "master",
 ) -> dict[str, Any]:
     """새 기억 항목을 지정 계층(기본 hot)에 추가하고 초과분을 하위 캐시로 연쇄 이동한다."""
     target_tier = str(tier or "hot").strip().lower()
     if target_tier not in TIERS:
         raise ValueError(f"지원하지 않는 메모리 계층입니다: {tier}")
+    norm_agent = normalize_agent_id(agent_id)
 
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         if limits_override:
             for t_name, patch_vals in limits_override.items():
                 if t_name in TIERS and isinstance(patch_vals, dict):
@@ -1632,7 +1708,9 @@ def add_memory(
 
         should_filter = should_summarize if filter_noise is None else bool(filter_noise)
         if should_filter:
-            is_noise, noise_reason = is_internal_system_noise(clean_text, title=clean_title, kind=clean_kind)
+            is_noise, noise_reason = is_internal_system_noise(
+                clean_text, title=clean_title, kind=clean_kind, agent_id=norm_agent
+            )
             if is_noise:
                 removed_disp = False
                 if clean_task and clean_kind in ("notify", "task_event"):
@@ -1640,8 +1718,8 @@ def add_memory(
                         data, clean_task=clean_task, clean_room=clean_room
                     ) is not None
                 if removed_disp:
-                    _save_unlocked(data, now=now)
-                snap = _snapshot_unlocked(data)
+                    _save_unlocked(data, now=now, agent_id=norm_agent)
+                snap = _snapshot_unlocked(data, agent_id=norm_agent)
                 snap["addedItem"] = None
                 snap["lastOperation"] = {
                     "action": "skip",
@@ -1665,8 +1743,8 @@ def add_memory(
         )
         if merged_item is not None:
             cascade_info = _cascade_overflow_unlocked(data, now=now)
-            _save_unlocked(data, now=now)
-            snap = _snapshot_unlocked(data)
+            _save_unlocked(data, now=now, agent_id=norm_agent)
+            snap = _snapshot_unlocked(data, agent_id=norm_agent)
             snap["addedItem"] = dict(merged_item)
             snap["lastOperation"] = {"action": "add", "tier": target_tier, "merged": True, **cascade_info}
             return snap
@@ -1707,8 +1785,8 @@ def add_memory(
             data["stats"]["totalAdded"] = int(data["stats"].get("totalAdded") or 0) + 1
             cascade_info = _cascade_overflow_unlocked(data, now=now)
 
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["addedItem"] = item
         snap["lastOperation"] = {"action": "add", "tier": target_tier, **cascade_info}
 
@@ -1720,6 +1798,7 @@ def add_memory(
             kind=clean_kind,
             title=clean_title,
             existing_text=clean_text,
+            agent_id=norm_agent,
         )
     return snap
 
@@ -1731,17 +1810,46 @@ def record_orchestrator_turn_memory(
     channel: str = "web",
     task_id: str = "",
     room_id: str = "__core__",
+    agent_id: str | None = None,
+    upward_report_to_master: bool = True,
 ) -> dict[str, Any] | None:
-    """마스터 에이전트(`__core__`) 턴 결과를 맥락에 맞게 정제·병합하여 메모리에 저장한다."""
+    """마스터 또는 전문가 에이전트 턴 결과를 맥락에 맞게 정제·병합하여 메모리에 저장한다."""
     reply_clean = str(reply_text or "").strip()
     if not reply_clean or reply_clean.startswith("⚠️"):
         return None
 
+    resolved_agent = normalize_agent_id(agent_id or room_id)
     user_str = str(user_text or "").strip()
     ch = str(channel or "web").strip()
 
+    def _maybe_upward_report(summary_text: str, title_str: str) -> None:
+        """하위 전문가 에이전트의 중요 결과를 마스터 메모리 WARM 티어로 1줄 상향 보고한다."""
+        if not upward_report_to_master or resolved_agent == "master":
+            return
+        tag = AGENT_DOMAIN_TAGS.get(resolved_agent, f"[{resolved_agent}]")
+        upward_text = f"{tag} {summary_text}".strip()
+        try:
+            add_memory(
+                upward_text,
+                title=f"{tag} {title_str}".strip(),
+                kind="turn",
+                room_id=room_id,
+                task_id=task_id,
+                tier="warm",
+                summarize=True,
+                filter_noise=False,
+                agent_id="master",
+            )
+        except Exception as exc:
+            logger.debug("[master_memory] 마스터 상향 보고 생략: %s", exc)
+
     def _return_if_added(snap: dict[str, Any]) -> dict[str, Any] | None:
-        return None if snap.get("addedItem") is None else snap
+        if snap.get("addedItem") is None:
+            return None
+        added = snap["addedItem"]
+        if ch == "task_report" or user_str.startswith(("[하위 작업 완료 보고]", "[하위 작업 중단/오류 보고]")):
+            _maybe_upward_report(str(added.get("text") or ""), str(added.get("title") or ""))
+        return snap
 
     # 1. 정기 점검 턴: 시스템 프롬프트 대신 핵심 이상 징후/조치 결과만 기록
     if ch == "master_patrol" or user_str.startswith("[마스터 에이전트 정기 점검"):
@@ -1755,6 +1863,7 @@ def record_orchestrator_turn_memory(
             room_id=room_id,
             task_id=task_id,
             summarize=True,
+            agent_id=resolved_agent,
         ))
 
     # 1-2. 정기 스케줄 트리거 턴: 프롬프트 템플릿 제거 + 스케줄 실행 요약만 기록
@@ -1770,6 +1879,7 @@ def record_orchestrator_turn_memory(
             room_id=room_id,
             task_id=task_id,
             summarize=True,
+            agent_id=resolved_agent,
         ))
 
     # 2. 하위 작업 완료 보고 응답 턴: 보고 템플릿 제거 + 기존 notify 항목과 taskId 기준 병합
@@ -1788,6 +1898,7 @@ def record_orchestrator_turn_memory(
             room_id=resolved_rid or room_id,
             task_id=resolved_tid,
             summarize=True,
+            agent_id=resolved_agent,
         ))
 
     # 3. 일반 사용자 Q&A 턴
@@ -1798,7 +1909,7 @@ def record_orchestrator_turn_memory(
     if (delegated_rid or delegated_desc) and not has_extra_answer:
         now = _now()
         with _lock:
-            data = _load_unlocked()
+            data = _load_unlocked(resolved_agent)
             hot_items = data["tiers"]["hot"]
             recent_dispatches = [
                 it
@@ -1834,8 +1945,8 @@ def record_orchestrator_turn_memory(
                     matched_cand["text"] = merged_txt
                     matched_cand["chars"] = len(merged_txt)
                 matched_cand["updatedAt"] = now
-                _save_unlocked(data, now=now)
-                snap = _snapshot_unlocked(data)
+                _save_unlocked(data, now=now, agent_id=resolved_agent)
+                snap = _snapshot_unlocked(data, agent_id=resolved_agent)
                 snap["addedItem"] = dict(matched_cand)
                 snap["lastOperation"] = {"action": "add", "tier": "hot", "merged": True, "cascaded": 0, "dropped": 0}
                 return snap
@@ -1851,30 +1962,32 @@ def record_orchestrator_turn_memory(
     turn_text = f"Q: {q_summary} → A: {a_summary}" if q_summary else a_summary
     snap = add_memory(
         turn_text,
-        title=q_summary[:AUTO_SUMMARY_TITLE_CHARS] if q_summary else "마스터 응답",
+        title=q_summary[:AUTO_SUMMARY_TITLE_CHARS] if q_summary else f"{AGENT_LABELS.get(resolved_agent, '에이전트')} 응답",
         kind="turn",
         room_id=room_id,
         task_id=task_id,
         summarize=True,
         raw_text_for_llm=reply_clean,
+        agent_id=resolved_agent,
     )
     if snap.get("addedItem") is None:
         return None
     return snap
 
 
-def demote_tier(from_tier: str = "hot") -> dict[str, Any]:
+def demote_tier(from_tier: str = "hot", *, agent_id: str = "master") -> dict[str, Any]:
     """지정 계층의 모든 항목을 즉시 하위 계층으로 내리고 초과분을 연쇄 이동한다."""
     src_tier = str(from_tier or "hot").strip().lower()
     if src_tier not in TIERS:
         raise ValueError(f"지원하지 않는 메모리 계층입니다: {from_tier}")
+    norm_agent = normalize_agent_id(agent_id)
     dst_tier = NEXT_TIER[src_tier]
     now = _now()
 
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         if dst_tier is None:
-            snap = _snapshot_unlocked(data)
+            snap = _snapshot_unlocked(data, agent_id=norm_agent)
             snap["lastOperation"] = {"action": "demote", "fromTier": src_tier, "movedCount": 0, "cascaded": 0, "dropped": 0}
             return snap
 
@@ -1898,8 +2011,8 @@ def demote_tier(from_tier: str = "hot") -> dict[str, Any]:
             data["stats"]["lastCascadeAt"] = now
 
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "demote",
             "fromTier": src_tier,
@@ -1911,7 +2024,7 @@ def demote_tier(from_tier: str = "hot") -> dict[str, Any]:
         return snap
 
 
-def promote_tier(from_tier: str = "warm") -> dict[str, Any]:
+def promote_tier(from_tier: str = "warm", *, agent_id: str = "master") -> dict[str, Any]:
     """지정 계층의 모든 항목을 즉시 상위 계층으로 올리고 초과분을 연쇄 정리한다."""
     src_tier = str(from_tier or "warm").strip().lower()
     if src_tier not in TIERS:
@@ -1919,9 +2032,10 @@ def promote_tier(from_tier: str = "warm") -> dict[str, Any]:
     dst_tier = PREV_TIER[src_tier]
     if dst_tier is None:
         raise ValueError(f"{src_tier} 계층은 최상위 계층이므로 상위로 이동할 수 없습니다.")
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         src_items = data["tiers"][src_tier]
         moved_count = 0
         if src_items:
@@ -1941,8 +2055,8 @@ def promote_tier(from_tier: str = "warm") -> dict[str, Any]:
                     data["tiers"][dst_tier].append(promoted)
                     moved_count += 1
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "promote",
             "fromTier": src_tier,
@@ -1954,7 +2068,7 @@ def promote_tier(from_tier: str = "warm") -> dict[str, Any]:
         return snap
 
 
-def move_memory_item(item_id: str, to_tier: str) -> dict[str, Any]:
+def move_memory_item(item_id: str, to_tier: str, *, agent_id: str = "master") -> dict[str, Any]:
     """특정 메모리 항목(item_id)을 원하는 대상 계층(to_tier)으로 자유롭게 이동한다."""
     target_id = str(item_id or "").strip()
     dst_tier = str(to_tier or "hot").strip().lower()
@@ -1962,9 +2076,10 @@ def move_memory_item(item_id: str, to_tier: str) -> dict[str, Any]:
         raise ValueError("item_id 가 필요합니다.")
     if dst_tier not in TIERS:
         raise ValueError(f"지원하지 않는 메모리 계층입니다: {to_tier}")
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         found_item: dict[str, Any] | None = None
         src_tier: str | None = None
         for t in TIERS:
@@ -1996,8 +2111,8 @@ def move_memory_item(item_id: str, to_tier: str) -> dict[str, Any]:
         if clipped:
             data["tiers"][dst_tier].append(moved)
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["movedItem"] = moved
         snap["lastOperation"] = {
             "action": "move",
@@ -2009,14 +2124,15 @@ def move_memory_item(item_id: str, to_tier: str) -> dict[str, Any]:
         return snap
 
 
-def delete_memory_item(item_id: str) -> dict[str, Any]:
+def delete_memory_item(item_id: str, *, agent_id: str = "master") -> dict[str, Any]:
     """특정 메모리 항목(item_id)을 삭제한다."""
     target_id = str(item_id or "").strip()
     if not target_id:
         raise ValueError("item_id 가 필요합니다.")
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         deleted = False
         src_tier = None
         for t in TIERS:
@@ -2030,8 +2146,8 @@ def delete_memory_item(item_id: str) -> dict[str, Any]:
                 break
         if not deleted:
             raise ValueError(f"해당 메모리 항목을 찾을 수 없습니다: {item_id}")
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "delete",
             "itemId": target_id,
@@ -2040,15 +2156,16 @@ def delete_memory_item(item_id: str) -> dict[str, Any]:
         return snap
 
 
-def compact_memory() -> dict[str, Any]:
+def compact_memory(*, agent_id: str = "master") -> dict[str, Any]:
     """기존 4계층 메모리의 비대한 항목을 일괄 요약 정제하고 중복 보고를 병합한다."""
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
-        compact_info = _compact_and_dedup_unlocked(data, now=now)
+        data = _load_unlocked(norm_agent)
+        compact_info = _compact_and_dedup_unlocked(data, now=now, agent_id=norm_agent)
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "compact",
             **compact_info,
@@ -2058,15 +2175,16 @@ def compact_memory() -> dict[str, Any]:
         return snap
 
 
-def rebalance_memory() -> dict[str, Any]:
+def rebalance_memory(*, agent_id: str = "master") -> dict[str, Any]:
     """전체 4계층 메모리의 요약 압축·중복 병합·용량 한도 리밸런싱을 수행한다."""
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
-        compact_info = _compact_and_dedup_unlocked(data, now=now)
+        data = _load_unlocked(norm_agent)
+        compact_info = _compact_and_dedup_unlocked(data, now=now, agent_id=norm_agent)
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "rebalance",
             "purged": compact_info.get("purged", 0),
@@ -2167,13 +2285,14 @@ async def _run_flash_low_rebalance_batch(
     return decisions
 
 
-async def rebalance_memory_with_llm() -> dict[str, Any]:
+async def rebalance_memory_with_llm(*, agent_id: str = "master") -> dict[str, Any]:
     """flash low 요약 + 계층 승격/강등 판단을 수행한 뒤 중복 병합 및 용량 리밸런싱을 완료한다."""
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     candidates: list[dict[str, Any]] = []
     if LLM_SUMMARY_ENABLED:
         with _lock:
-            data = _load_unlocked()
+            data = _load_unlocked(norm_agent)
             # hot, warm, cold 전체 + freeze 최신 12건을 합쳐 최대 60건 평가
             pool: list[dict[str, Any]] = []
             for t in ("hot", "warm", "cold"):
@@ -2196,7 +2315,7 @@ async def rebalance_memory_with_llm() -> dict[str, Any]:
     purged_cnt = 0
 
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         if decisions:
             id_to_item: dict[str, tuple[str, dict[str, Any]]] = {}
             for t in TIERS:
@@ -2246,10 +2365,10 @@ async def rebalance_memory_with_llm() -> dict[str, Any]:
                         else:
                             demoted_cnt += 1
 
-        compact_info = _compact_and_dedup_unlocked(data, now=now)
+        compact_info = _compact_and_dedup_unlocked(data, now=now, agent_id=norm_agent)
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "rebalance",
             "purged": purged_cnt + compact_info.get("purged", 0),
@@ -2265,17 +2384,18 @@ async def rebalance_memory_with_llm() -> dict[str, Any]:
         return snap
 
 
-def apply_memory_batch(operations: list[dict[str, Any]]) -> dict[str, Any]:
-    """마스터 에이전트(memory-rebalance 스킬 등)가 전달한 delete/update/move 배치 작업을 원자적으로 적용한다."""
+def apply_memory_batch(operations: list[dict[str, Any]], *, agent_id: str = "master") -> dict[str, Any]:
+    """마스터 또는 전문가 에이전트가 전달한 delete/update/move 배치 작업을 원자적으로 적용한다."""
     if not isinstance(operations, list):
         raise ValueError("operations 리스트가 필요합니다.")
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     deleted_cnt = 0
     updated_cnt = 0
     moved_cnt = 0
 
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
 
         def _locate(target_id: str) -> tuple[str, int, dict[str, Any]] | None:
             for t in TIERS:
@@ -2325,8 +2445,8 @@ def apply_memory_batch(operations: list[dict[str, Any]]) -> dict[str, Any]:
                 moved_cnt += 1
 
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {
             "action": "batch",
             "deleted": deleted_cnt,
@@ -2338,12 +2458,13 @@ def apply_memory_batch(operations: list[dict[str, Any]]) -> dict[str, Any]:
         return snap
 
 
-def clear_memory(tier: str | None = None) -> dict[str, Any]:
+def clear_memory(tier: str | None = None, *, agent_id: str = "master") -> dict[str, Any]:
     """특정 계층 또는 4계층 메모리 전체를 초기화한다."""
     raw_tier = str(tier or "all").strip().lower()
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         removed_count = 0
         if raw_tier in ("", "all"):
             for t in TIERS:
@@ -2360,19 +2481,20 @@ def clear_memory(tier: str | None = None) -> dict[str, Any]:
         else:
             raise ValueError(f"지원하지 않는 메모리 계층입니다: {tier}")
 
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {"action": "clear", "tier": raw_tier or "all", "removedCount": removed_count}
         return snap
 
 
-def update_tier_limits(limits_patch: dict[str, Any]) -> dict[str, Any]:
+def update_tier_limits(limits_patch: dict[str, Any], *, agent_id: str = "master") -> dict[str, Any]:
     """계층별 길이 제한을 변경하고 즉시 하위 캐시 캐스케이드를 재실행한다."""
     if not isinstance(limits_patch, dict):
         raise ValueError("limits 객체가 필요합니다.")
+    norm_agent = normalize_agent_id(agent_id)
     now = _now()
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         for tier in TIERS:
             patch_vals = limits_patch.get(tier)
             if not isinstance(patch_vals, dict):
@@ -2384,20 +2506,21 @@ def update_tier_limits(limits_patch: dict[str, Any]) -> dict[str, Any]:
                         raise ValueError(f"{tier}.{key} 는 1 이상이어야 합니다.")
                     data["limits"][tier][key] = val
         cascade_info = _cascade_overflow_unlocked(data, now=now)
-        _save_unlocked(data, now=now)
-        snap = _snapshot_unlocked(data)
+        _save_unlocked(data, now=now, agent_id=norm_agent)
+        snap = _snapshot_unlocked(data, agent_id=norm_agent)
         snap["lastOperation"] = {"action": "set_limits", **cascade_info}
         return snap
 
 
-def get_memory_snapshot(*, tier: str | None = None, limit_per_tier: int = 50) -> dict[str, Any]:
+def get_memory_snapshot(*, tier: str | None = None, limit_per_tier: int = 50, agent_id: str = "master") -> dict[str, Any]:
     """현재 4계층 메모리 스냅샷(각 계층 사용량, 항목 목록, 통계)을 반환한다."""
     target_tier = str(tier).strip().lower() if tier and str(tier).strip().lower() != "all" else None
     if target_tier is not None and target_tier not in TIERS:
         raise ValueError(f"지원하지 않는 메모리 계층입니다: {tier}")
+    norm_agent = normalize_agent_id(agent_id)
     with _lock:
-        data = _load_unlocked()
-        return _snapshot_unlocked(data, tier=target_tier, limit_per_tier=limit_per_tier)
+        data = _load_unlocked(norm_agent)
+        return _snapshot_unlocked(data, tier=target_tier, limit_per_tier=limit_per_tier, agent_id=norm_agent)
 
 
 _RE_PROMPT_TAG = re.compile(
@@ -2488,13 +2611,14 @@ def _item_fingerprint(item: dict[str, Any]) -> tuple[float, str]:
     return (float(item.get("updatedAt") or 0), str(item.get("text") or ""))
 
 
-def commit_memory_prompt_checkpoint(session_key: str | None, *, max_hot: int = 6) -> None:
+def commit_memory_prompt_checkpoint(session_key: str | None, *, max_hot: int = 6, agent_id: str = "master") -> None:
     """해당 세션에 현재 HOT 컨텍스트가 주입·반영되었음을 기록해 다음 턴부터 변경분만 주입하게 한다."""
     skey = str(session_key or "").strip()
     if not skey:
         return
+    norm_agent = normalize_agent_id(agent_id)
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         hot_items = data["tiers"]["hot"][-max(0, int(max_hot)) :]
         snap = {
             str(it.get("id") or ""): _item_fingerprint(it)
@@ -2513,11 +2637,13 @@ def build_memory_prompt_context(
     max_hot: int = 6,
     max_warm: int = 3,
     session_key: str | None = None,
+    agent_id: str = "master",
 ) -> str:
-    """마스터 에이전트 턴 프롬프트에 주입할 컴팩트 4계층 메모리 컨텍스트(또는 세션 내 HOT 변경분)를 생성한다."""
+    """마스터 또는 전문가 에이전트 턴 프롬프트에 주입할 컴팩트 4계층 메모리 컨텍스트를 생성한다."""
     skey = str(session_key or "").strip()
+    norm_agent = normalize_agent_id(agent_id)
     with _lock:
-        data = _load_unlocked()
+        data = _load_unlocked(norm_agent)
         seen_hot = _prompt_checkpoints.get(skey) if skey else None
 
     tiers = data["tiers"]
@@ -2529,6 +2655,8 @@ def build_memory_prompt_context(
     if not any(tiers[t] for t in TIERS):
         return ""
 
+    label = AGENT_LABELS.get(norm_agent, "에이전트")
+
     # 이미 같은 세션에 초기 컨텍스트를 주입한 적이 있으면 HOT 변경분만 주입 (변경 없으면 빈 문자열)
     if seen_hot is not None:
         changed_hot = [
@@ -2538,7 +2666,7 @@ def build_memory_prompt_context(
         ]
         if not changed_hot:
             return ""
-        delta_lines = ["[마스터 메모리 갱신 (HOT 변경분)]"]
+        delta_lines = [f"[{label} 메모리 갱신 (HOT 변경분)]"]
         for it in changed_hot:
             line = _format_prompt_memory_line(it, max_text_chars=115, max_title_chars=28)
             if line:
@@ -2546,7 +2674,7 @@ def build_memory_prompt_context(
         return "\n".join(delta_lines) if len(delta_lines) > 1 else ""
 
     lines = [
-        "[마스터 4계층 메모리]",
+        f"[{label} 4계층 메모리]",
         f"• 현황: HOT {len(tiers['hot'])} | WARM {len(tiers['warm'])} | COLD {cold_count} | FREEZE {freeze_count}",
     ]
     if hot_items:
@@ -2562,5 +2690,5 @@ def build_memory_prompt_context(
             if line:
                 lines.append(line)
     if cold_count or freeze_count:
-        lines.append("• 장기(`cold`/`freeze`) 조회: `session-ctl memory --tier cold` 또는 `--tier freeze`")
+        lines.append(f"• 장기(`cold`/`freeze`) 조회: `session-ctl memory --agent {norm_agent} --tier cold` 또는 `--tier freeze`")
     return "\n".join(lines)

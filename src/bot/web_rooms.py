@@ -22,6 +22,11 @@ from paths import ATTACHED_FILES_DIR, CHATS_DIR, CODEDIR, STATE_DIR, WORKDIR
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_VAULT_ROOM_ID = "__expert_vault__"
+EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
+EXPERT_CODING_ROOM_ID = "__expert_coding__"
+EXPERT_CODING_TITLE = "봇개발 에이전트"
+ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
@@ -243,8 +248,9 @@ def _load_chat_rooms_index() -> list[dict]:
         find(primary_k)
         if rid and sid:
             union(rid, sid)
-        if rid == CORE_ORCHESTRATOR_ROOM_ID or sid == CORE_ORCHESTRATOR_ROOM_ID:
-            union(primary_k, CORE_ORCHESTRATOR_ROOM_ID)
+        for orch_id in ORCHESTRATOR_ROOM_IDS:
+            if rid == orch_id or sid == orch_id:
+                union(primary_k, orch_id)
 
         parsed_records.append((r, rid, sid))
 
@@ -262,8 +268,14 @@ def _load_chat_rooms_index() -> list[dict]:
         group_rids = {r[1] for r in recs if r[1]}
         group_sids = {r[2] for r in recs if r[2]}
 
-        if CORE_ORCHESTRATOR_ROOM_ID in group_rids or CORE_ORCHESTRATOR_ROOM_ID in group_sids:
-            canonical_id = CORE_ORCHESTRATOR_ROOM_ID
+        orch_match = None
+        for orch_id in ORCHESTRATOR_ROOM_IDS:
+            if orch_id in group_rids or orch_id in group_sids:
+                orch_match = orch_id
+                break
+
+        if orch_match:
+            canonical_id = orch_match
         else:
             room_prefix_ids = [k for k in group_rids if k.startswith("room-")]
             if room_prefix_ids:
@@ -282,7 +294,7 @@ def _load_chat_rooms_index() -> list[dict]:
             non_room_sids = [s for s in group_sids if s and not s.startswith("room-")]
             if non_room_sids:
                 canonical_sid = non_room_sids[0]
-            elif canonical_id != CORE_ORCHESTRATOR_ROOM_ID and not canonical_id.startswith("room-"):
+            elif canonical_id not in ORCHESTRATOR_ROOM_IDS and not canonical_id.startswith("room-"):
                 canonical_sid = canonical_id
             else:
                 canonical_sid = None
@@ -299,6 +311,7 @@ def _load_chat_rooms_index() -> list[dict]:
             "isNewSession": not bool(canonical_sid),
             "isArchived": False,
             "isOrchestratorChild": False,
+            "parentAgentId": None,
             "lastChannel": "",
             "model": None,
             "effort": None,
@@ -307,10 +320,16 @@ def _load_chat_rooms_index() -> list[dict]:
 
         if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
             merged["title"] = CORE_ORCHESTRATOR_TITLE
+        elif canonical_id == EXPERT_VAULT_ROOM_ID:
+            merged["title"] = EXPERT_VAULT_TITLE
+        elif canonical_id == EXPERT_CODING_ROOM_ID:
+            merged["title"] = EXPERT_CODING_TITLE
 
         for r, _, _ in recs:
             if r.get("isArchived"):
                 merged["isArchived"] = True
+            if r.get("parentAgentId") and not merged.get("parentAgentId"):
+                merged["parentAgentId"] = str(r["parentAgentId"]).strip()
             if r.get("isOrchestratorChild") or r.get("lastChannel") == "orchestrator":
                 merged["isOrchestratorChild"] = True
             if r.get("lastChannel") and not merged.get("lastChannel"):
@@ -323,8 +342,8 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["workdir"] = str(r["workdir"]).strip()
             rtitle = str(r.get("title") or "").strip()
             if rtitle and rtitle not in ("새 대화", "대화방"):
-                if not merged["title"] or merged["title"] in ("새 대화", "대화방") or canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
-                    if canonical_id != CORE_ORCHESTRATOR_ROOM_ID:
+                if not merged["title"] or merged["title"] in ("새 대화", "대화방") or canonical_id in ORCHESTRATOR_ROOM_IDS:
+                    if canonical_id not in ORCHESTRATOR_ROOM_IDS:
                         merged["title"] = rtitle
 
             rpreview = str(r.get("preview") or "").strip()
@@ -344,14 +363,26 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["updatedAt"] = ru
 
         if not merged["title"]:
-            merged["title"] = CORE_ORCHESTRATOR_TITLE if canonical_id == CORE_ORCHESTRATOR_ROOM_ID else "새 대화"
+            if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
+                merged["title"] = CORE_ORCHESTRATOR_TITLE
+            elif canonical_id == EXPERT_VAULT_ROOM_ID:
+                merged["title"] = EXPERT_VAULT_TITLE
+            elif canonical_id == EXPERT_CODING_ROOM_ID:
+                merged["title"] = EXPERT_CODING_TITLE
+            else:
+                merged["title"] = "새 대화"
 
         if not merged.get("workdir"):
-            if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
+            if canonical_id == EXPERT_CODING_ROOM_ID:
+                merged["workdir"] = CODEDIR or WORKDIR
+            elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
                 merged["workdir"] = WORKDIR
             else:
                 is_coding = get_coding_mode()
                 merged["workdir"] = (CODEDIR or WORKDIR) if is_coding else WORKDIR
+
+        if merged.get("isOrchestratorChild") and not merged.get("parentAgentId"):
+            merged["parentAgentId"] = CORE_ORCHESTRATOR_ROOM_ID
 
         if merged["messages"] and len(merged["messages"]) > merged["messageCount"]:
             merged["messageCount"] = len(merged["messages"])
