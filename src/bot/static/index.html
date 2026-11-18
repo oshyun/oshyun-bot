@@ -2014,6 +2014,77 @@
     .md .md-link-chip.is-vault .md-link-meta {
       color: var(--accent-text); opacity: 0.75;
     }
+    .md .md-link-chip.is-room {
+      background: rgba(99, 102, 241, 0.12);
+      border-color: rgba(99, 102, 241, 0.28);
+      color: #c7d2fe;
+      font-family: inherit;
+    }
+    .md .md-link-chip.is-room:hover {
+      background: rgba(99, 102, 241, 0.22);
+      border-color: rgba(129, 140, 248, 0.55);
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    .md .md-link-chip.is-room:active {
+      transform: translateY(0);
+    }
+    .md .md-link-chip.is-room svg.i {
+      color: #818cf8;
+    }
+    .md .md-link-chip.is-room .md-link-meta {
+      color: #a5b4fc;
+      opacity: 0.8;
+    }
+    .md .md-link-chip.is-room.is-core {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.32);
+      color: #fde68a;
+    }
+    .md .md-link-chip.is-room.is-core:hover {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: rgba(251, 191, 36, 0.6);
+      color: #ffffff;
+    }
+    .md .md-link-chip.is-room.is-core svg.i {
+      color: #fbbf24;
+    }
+    .md .md-link-chip.is-room.is-core .md-link-meta {
+      color: #fcd34d;
+    }
+    .md .md-link-chip.is-room.is-expert-vault {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.32);
+      color: #a7f3d0;
+    }
+    .md .md-link-chip.is-room.is-expert-vault:hover {
+      background: rgba(16, 185, 129, 0.22);
+      border-color: rgba(52, 211, 153, 0.6);
+      color: #ffffff;
+    }
+    .md .md-link-chip.is-room.is-expert-vault svg.i {
+      color: #34d399;
+    }
+    .md .md-link-chip.is-room.is-expert-vault .md-link-meta {
+      color: #6ee7b7;
+    }
+    .md .md-link-chip.is-room.is-expert-coding {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.32);
+      color: #bfdbfe;
+    }
+    .md .md-link-chip.is-room.is-expert-coding:hover {
+      background: rgba(59, 130, 246, 0.22);
+      border-color: rgba(96, 165, 250, 0.6);
+      color: #ffffff;
+    }
+    .md .md-link-chip.is-room.is-expert-coding svg.i {
+      color: #60a5fa;
+    }
+    .md .md-link-chip.is-room.is-expert-coding .md-link-meta {
+      color: #93c5fd;
+    }
     .md strong { font-weight: 650; }
 
     /* 작업 과정 (도구 실행 단계) */
@@ -4149,7 +4220,8 @@
       close: '<svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
       refresh: '<svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
       brain: '<svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>',
-      spark: '<svg class="i" viewBox="0 0 16 16" stroke-width="1.5"><circle cx="8" cy="2" r="0.8"/><line x1="8" y1="2.9" x2="8" y2="5"/><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><circle cx="6" cy="9" r="0.8"/><circle cx="10" cy="9" r="0.8"/><line x1="5.5" y1="13.5" x2="5.5" y2="15"/><line x1="10.5" y1="13.5" x2="10.5" y2="15"/></svg>'
+      spark: '<svg class="i" viewBox="0 0 16 16" stroke-width="1.5"><circle cx="8" cy="2" r="0.8"/><line x1="8" y1="2.9" x2="8" y2="5"/><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><circle cx="6" cy="9" r="0.8"/><circle cx="10" cy="9" r="0.8"/><line x1="5.5" y1="13.5" x2="5.5" y2="15"/><line x1="10.5" y1="13.5" x2="10.5" y2="15"/></svg>',
+      chat: '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
     };
 
     const CORE_ROOM_ID = '__core__';
@@ -7094,6 +7166,157 @@
       return chatRooms.find(r => r && (r.id === roomId || r.sessionId === roomId)) || null;
     }
 
+    function findChatRoom(query) {
+      if (!query) return null;
+      const raw = String(query).trim();
+      if (!raw || raw.length < 2) return null;
+
+      // 1. 접두사(#, room:, chat: 등) 정리
+      const clean = raw.replace(/^(?:#|room:\/\/|chat:\/\/|room:|chat:)/i, '').trim();
+      if (!clean) return null;
+      const lower = clean.toLowerCase();
+
+      // 2. 특수/고정 오케스트레이터 및 전문가 룸 별칭 매칭
+      if (/^(?:마스터|마스터\s*에이전트|마스터\s*오케스트레이터|__core__)$/i.test(lower)) {
+        ensureCoreRoom();
+        return getRoomById(CORE_ROOM_ID);
+      }
+      if (/^(?:세컨브레인|세컨브레인\s*에이전트|세컨브레인\s*전문가|__expert_vault__)$/i.test(lower)) {
+        ensureCoreRoom();
+        return getRoomById(EXPERT_VAULT_ROOM_ID);
+      }
+      if (/^(?:봇개발|봇개발\s*에이전트|봇개발\s*전문가|__expert_coding__)$/i.test(lower)) {
+        ensureCoreRoom();
+        return getRoomById(EXPERT_CODING_ROOM_ID);
+      }
+
+      // 3. ID 또는 sessionId 정확 일치
+      let matched = chatRooms.find(r => r && (r.id === clean || (r.sessionId && r.sessionId === clean)));
+      if (matched) return matched;
+
+      // 4. 제목 완전 일치 (공백/따옴표/특수문자 트림)
+      const stripTitle = s => String(s || '')
+        .trim()
+        .replace(/^["'`\[\]]|["'`\[\]]$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+      const cleanNorm = stripTitle(clean);
+      if (!cleanNorm) return null;
+
+      matched = chatRooms.find(r => r && r.title && stripTitle(r.title) === cleanNorm);
+      if (matched) return matched;
+
+      // 4-1. ' 세션', ' 작업', ' 채팅방', ' 대화방' 등의 접미사 제거 후 일치 시도
+      const strippedSuffix = cleanNorm.replace(/\s*(?:세션|작업|채팅방|대화방|방)$/, '').trim();
+      if (strippedSuffix && strippedSuffix.length >= 2 && strippedSuffix !== cleanNorm) {
+        matched = chatRooms.find(r => r && r.title && stripTitle(r.title) === strippedSuffix);
+        if (matched) return matched;
+      }
+
+      // 5. 제목 포함 관계 (단, 단어 길이가 4자 이상일 때만 서브스트링 매칭하여 오매칭 방지)
+      if (cleanNorm.length >= 4) {
+        matched = chatRooms.find(r => {
+          if (!r || !r.title) return false;
+          const rNorm = stripTitle(r.title);
+          if (rNorm.length < 3) return false;
+          return rNorm.includes(cleanNorm) || (cleanNorm.length >= 6 && cleanNorm.includes(rNorm));
+        });
+        if (matched) return matched;
+      }
+
+      // 6. serverStatus.activeRuns 검사
+      if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns)) {
+        const active = serverStatus.activeRuns.find(run => {
+          if (!run) return false;
+          const rId = String(run.roomId || '').trim();
+          const rTitle = stripTitle(run.title || run.userText || '');
+          return rId === clean || (rTitle && (rTitle === cleanNorm || (cleanNorm.length >= 4 && rTitle.includes(cleanNorm))));
+        });
+        if (active) {
+          return {
+            id: active.roomId,
+            title: active.title || clean,
+            isTemporary: true
+          };
+        }
+      }
+
+      return null;
+    }
+
+    function navigateToChatRoom(roomIdOrTitle) {
+      const query = String(roomIdOrTitle || '').trim();
+      if (!query) return;
+
+      const room = findChatRoom(query);
+      if (room && room.id) {
+        selectRoom(room.id);
+        showToast(`'${room.title || query}' 채팅방으로 이동했습니다.`);
+        return;
+      }
+
+      // 만약 아직 chatRooms 에 동기화되지 않은 신규 세션일 수 있으므로 서버 동기화 후 재시도
+      if (typeof syncRoomsWithServer === 'function') {
+        syncRoomsWithServer().then(() => {
+          const reRoom = findChatRoom(query);
+          if (reRoom && reRoom.id) {
+            selectRoom(reRoom.id);
+            showToast(`'${reRoom.title || query}' 채팅방으로 이동했습니다.`);
+          } else if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+            selectRoom(query);
+            showToast(`대화방(${query})으로 이동했습니다.`);
+          } else {
+            showToast(`'${query}' 대화방을 찾을 수 없습니다.`);
+          }
+        }).catch(() => {
+          if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+            selectRoom(query);
+          } else {
+            showToast(`'${query}' 대화방을 찾을 수 없습니다.`);
+          }
+        });
+      } else if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+        selectRoom(query);
+      }
+    }
+
+    function buildChatRoomChipHtml(room, explicitLabel = '') {
+      const roomId = room ? (room.id || '') : '';
+      const roomTitle = room ? (room.title || '') : '';
+      const display = String(explicitLabel || roomTitle || roomId || '채팅방').trim();
+      const titleAttr = roomTitle
+        ? `${roomTitle} (클릭 시 해당 채팅방으로 이동)`
+        : `${display} (클릭 시 해당 채팅방으로 이동)`;
+
+      let iconSvg = ICONS.chat || '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+      let roleClass = 'is-room';
+      let metaText = '';
+
+      if (roomId === CORE_ROOM_ID) {
+        iconSvg = ICONS.spark;
+        roleClass += ' is-core';
+        metaText = '마스터';
+      } else if (roomId === EXPERT_VAULT_ROOM_ID) {
+        iconSvg = ICONS.brain;
+        roleClass += ' is-expert-vault';
+        metaText = '세컨브레인';
+      } else if (roomId === EXPERT_CODING_ROOM_ID) {
+        iconSvg = ICONS.terminal;
+        roleClass += ' is-expert-coding';
+        metaText = '봇개발';
+      } else if (display.length < 18) {
+        metaText = '채팅';
+      }
+
+      const jsEscaped = String(roomId || display).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const metaHtml = metaText
+        ? `<span class="md-link-meta">· ${escapeHtml(metaText)}</span>`
+        : '';
+
+      return `<button type="button" class="md-link-chip ${roleClass}" onclick="navigateToChatRoom('${escapeHtml(jsEscaped)}')" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+    }
+
     function ensureRoomLiveState(roomId) {
       if (!roomLiveStates[roomId]) {
         roomLiveStates[roomId] = { isRunning: false, jobId: '', feed: '', steps: [], streamText: '', startedAt: 0, queueCount: 0 };
@@ -8063,6 +8286,12 @@
       const isHttp = /^https?:\/\//i.test(cleanUrl);
       const isFile = /^file:\/\//i.test(cleanUrl);
       const isObsidian = /^obsidian:\/\//i.test(cleanUrl);
+      const isRoom = /^(?:room|chat):/i.test(cleanUrl);
+      if (isRoom) {
+        const target = cleanUrl.replace(/^(?:room|chat):\/\/?/i, '').trim();
+        const matched = findChatRoom(target) || findChatRoom(explicitLabel);
+        return buildChatRoomChipHtml(matched, explicitLabel || (matched ? matched.title : target));
+      }
       if (!isHttp && !isFile && !isObsidian) {
         return escapeHtml(explicitLabel || rawUrl);
       }
@@ -8198,7 +8427,7 @@
         .replace(/`(https?:\/\/obsid\.net\/[^\s`]+)`/g, '$1');
 
       // 2. 마크다운 링크 ([label](url)) 우선 추출 및 프리티 링크 칩 변환
-      s = s.replace(/\[([^\]]+)\]\(((?:https?|file|obsidian):\/\/(?:[^\s()]|\([^\s()]*\))+|(?:https?|file|obsidian):\/\/[^)\n]+)\)/g, (_, label, url) => {
+      s = s.replace(/\[([^\]]+)\]\(((?:https?|file|obsidian|room|chat):\/\/(?:[^\s()]|\([^\s()]*\))+|(?:https?|file|obsidian|room|chat):[^)\s\n]+)\)/gi, (_, label, url) => {
         return stashToken(buildPrettyLinkHtml(url, label));
       });
 
@@ -8243,6 +8472,47 @@
         const cleanTarget = String(target || '').split('#')[0].trim();
         const jsEscaped = cleanTarget.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return stashToken(`<span class="wikilink" onclick="onWikilinkClick('${escapeHtml(jsEscaped)}')">${escapeHtml(alias || target)}</span>`);
+      });
+
+      // 6.25. 대괄호 대화방/채팅 세션 참조 ([방제목] 또는 [room:roomId]) 칩 변환
+      s = s.replace(/(?<!\[)\[([^\[\]\r\n]{2,100})\](?!\])/g, (fullMatch, candidate) => {
+        const trimmed = String(candidate || '').trim();
+        if (!trimmed) return fullMatch;
+
+        // 시스템/마크다운 예약 태그, 체크박스, 각주, 일반 상태 태그 필터링
+        if (/^(?:[ xX\^_]|\d+|!?(?:NOTE|TIP|IMPORTANT|WARNING|WARN|CAUTION|TODO|DONE|PASS|FAIL|ERROR|INFO)|하위 작업 완료 보고|하위 작업 중단\/오류 보고|System Event.*)$/i.test(trimmed)) {
+          return fullMatch;
+        }
+
+        // 명시적 접두사 room: 또는 chat: 형태 ([room:room-xxx])
+        if (/^(?:room|chat):/i.test(trimmed)) {
+          const idOrName = trimmed.replace(/^(?:room|chat):\/\/?/i, '').trim();
+          const matched = findChatRoom(idOrName);
+          return stashToken(buildChatRoomChipHtml(matched, matched ? matched.title : idOrName));
+        }
+
+        // 방 ID 형태 (room-...)
+        if (/^room-[a-zA-Z0-9_\-]+$/i.test(trimmed)) {
+          const matched = findChatRoom(trimmed);
+          return stashToken(buildChatRoomChipHtml(matched, matched ? matched.title : trimmed));
+        }
+
+        // [방제목 (Room ID: room-xxx)] 또는 [방제목 (ID: room-xxx)] 패턴
+        const idPatternMatch = trimmed.match(/^(.*?)\s*\((?:Room\s+)?ID:\s*(room-[a-zA-Z0-9_\-]+)\)$/i);
+        if (idPatternMatch) {
+          const titlePart = idPatternMatch[1].trim();
+          const idPart = idPatternMatch[2].trim();
+          const matched = findChatRoom(idPart) || findChatRoom(titlePart);
+          return stashToken(buildChatRoomChipHtml(matched || { id: idPart, title: titlePart }, titlePart || idPart));
+        }
+
+        // 대화방 검색 (제목/ID/별칭 매칭)
+        const matchedRoom = findChatRoom(trimmed);
+        if (matchedRoom) {
+          return stashToken(buildChatRoomChipHtml(matchedRoom, trimmed));
+        }
+
+        return fullMatch;
       });
 
       // 6.5. 허용된 인라인 <span ...> / </span> 및 <br> 줄바꿈 태그 보호
@@ -10473,8 +10743,10 @@
         head.className = 'assistant-head';
         const avatarErrCls = parsed.statusKind === 'error' ? ' is-error' : '';
         const tagTitleAttr = parsed.badgeTitle ? ` title="${escapeHtml(parsed.badgeTitle)}"` : '';
-        const roomChipHtml = parsed.roomId
-          ? `<button type="button" class="sub-agent-room-btn" onclick="selectRoom('${escapeHtml(parsed.roomId)}')" title="해당 세션으로 이동">${escapeHtml(parsed.roomTitle || parsed.roomId)}</button>`
+        const matchedSubRoom = parsed.roomId ? getRoomById(parsed.roomId) : (parsed.roomTitle ? findChatRoom(parsed.roomTitle) : null);
+        const navSubTarget = (matchedSubRoom && matchedSubRoom.id) || parsed.roomId || (matchedSubRoom ? matchedSubRoom.title : (findChatRoom(parsed.roomTitle) ? parsed.roomTitle : ''));
+        const roomChipHtml = navSubTarget
+          ? `<button type="button" class="sub-agent-room-btn" onclick="navigateToChatRoom('${escapeHtml(navSubTarget)}')" title="해당 세션으로 이동">${escapeHtml(parsed.roomTitle || (matchedSubRoom && matchedSubRoom.title) || navSubTarget)}</button>`
           : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || '하위 에이전트')}</span>`;
         head.innerHTML = `<span class="assistant-avatar sub-agent-avatar${avatarErrCls}">${ICONS.spark}</span>${roomChipHtml}<span class="model-tag sub-agent-tag is-${parsed.statusKind}"${tagTitleAttr}>${escapeHtml(parsed.metaBadge)}</span>${buildMsgTimeHtml(m.createdAt)}`;
         row.appendChild(head);

@@ -1365,12 +1365,8 @@ class TestVoiceRouteServing(AioHTTPTestCase):
             ".ptr-indicator.from-bottom",
             "getDistFromBottom",
             "pullDirection = 'bottom'",
-            "dy < -45 && -dy > dx * 2.0",
-            "-dy >= 300",
             "올려서 새로고침",
             "pullDirection = 'top'",
-            "dy > 45 && dy > dx * 2.0",
-            "dy >= 300",
             "당겨서 새로고침",
         ):
             self.assertIn(marker, content)

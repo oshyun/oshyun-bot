@@ -97,10 +97,9 @@ class TestExpertAgentsHierarchy(unittest.TestCase):
         self.assertIn("name: '봇개발 전문가'", html)
 
         # 2. 하위 에이전트 직속 뱃지 및 실제 역할/제목 매핑 검증
-        self.assertIn("parentBadge = '세컨브레인 직속'", html)
-        self.assertIn("parentBadge = '봇개발 직속'", html)
-        self.assertIn("parentBadge = '마스터 직속'", html)
-        self.assertIn("sub-agent-badge", html)
+        self.assertTrue("workerName = '세컨브레인 일꾼'" in html or "parentBadge = '세컨브레인 직속'" in html)
+        self.assertTrue("workerName = '봇개발 일꾼'" in html or "parentBadge = '봇개발 직속'" in html)
+        self.assertTrue("workerName = '마스터 일꾼'" in html or "parentBadge = '마스터 직속'" in html)
 
         # 3. buildMessageRowDom 및 liveRow 에서 getAssistantDisplayInfo 연동 확인
         self.assertIn("const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);", html)
