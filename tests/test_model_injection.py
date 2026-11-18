@@ -401,6 +401,58 @@ class TestModelInjection(unittest.TestCase):
         )
         self.assertEqual(agent_engine.get_model(), agent_engine.AGY_DEFAULT_MODEL)
 
+    def test_dispatch_spawn_passes_parent_and_skill_flags(self):
+        """spawn 시 parent='__core__'와 rawPrompt/slashCommands/orchestrator 옵션이 전달되는지 검증."""
+        async def run_test():
+            mock_request = MagicMock()
+            mock_request.json = AsyncMock(return_value={
+                "action": "spawn",
+                "parent": "__core__",
+                "title": "메모리 리밸런싱",
+                "prompt": "/memory-rebalance",
+                "model": "gemini-3.8-flash",
+                "effort": "low",
+                "forceNew": True,
+                "rawPrompt": True,
+                "slashCommands": True,
+                "orchestrator": True,
+                "wait": False,
+            })
+
+            with patch("web_server.chat_db.get_or_create_room") as mock_create_room, \
+                 patch("web_server.chat_db.add_message", return_value=701), \
+                 patch("master_tasks.create_task", return_value={"id": "mt-rebalance"}), \
+                 patch("web_server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
+                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
+                mock_enqueue.return_value = (False, 0)
+                resp = await web_server.handle_orchestrator_dispatch(mock_request)
+                self.assertEqual(resp.status, 200)
+
+                self.assertGreaterEqual(mock_create_room.call_count, 1)
+                _, room_kwargs = mock_create_room.call_args_list[0]
+                self.assertEqual(room_kwargs.get("parent_agent_id"), "__core__")
+
+                mock_enqueue.assert_called_once()
+                _, enqueue_kwargs = mock_enqueue.call_args
+                self.assertEqual(enqueue_kwargs.get("channel"), "orchestrator")
+                self.assertTrue(enqueue_kwargs.get("raw_prompt"))
+                self.assertTrue(enqueue_kwargs.get("slash_commands"))
+                self.assertTrue(enqueue_kwargs.get("orchestrator"))
+                self.assertEqual(enqueue_kwargs.get("model"), "gemini-3.8-flash")
+                self.assertEqual(enqueue_kwargs.get("effort"), "low")
+
+                broadcast_types = [c.args[0].get("type") for c in mock_broadcast.call_args_list]
+                self.assertIn("room_created", broadcast_types)
+                self.assertIn("orchestrator_dispatch", broadcast_types)
+                for call in mock_broadcast.call_args_list:
+                    evt = call.args[0]
+                    if evt.get("type") == "room_created":
+                        self.assertEqual(evt["room"].get("parentAgentId"), "__core__")
+                    elif evt.get("type") == "orchestrator_dispatch":
+                        self.assertEqual(evt.get("parentAgentId"), "__core__")
+
+        asyncio.run(run_test())
+
 
 if __name__ == "__main__":
     unittest.main()
