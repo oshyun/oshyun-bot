@@ -725,6 +725,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_get("/api/schedules", handle_schedules_list)
     web_app.router.add_post("/api/schedules", handle_schedules_create)
     web_app.router.add_patch("/api/schedules/{id}", handle_schedules_update)
+    web_app.router.add_put("/api/schedules/{id}", handle_schedules_update)
     web_app.router.add_delete("/api/schedules/{id}", handle_schedules_delete)
     web_app.router.add_post("/api/schedules/{id}/run", handle_schedules_run)
     web_app.router.add_get("/api/burn/status", handle_burn_status)
