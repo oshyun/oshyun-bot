@@ -12,16 +12,13 @@
   - 단순 인사, 이미 알고 있는 일반 아키텍처 질문
   - `session-ctl list`, `session-ctl summaries`, `session-ctl read` 등 오케스트레이션 상태 조회 1회
 
-## 2. 하위 코딩 세션 스폰 규격 (필수)
+## 2. 하위 코딩 세션 스폰 규격 (간소화)
 - **스폰 명령어** (기본 비동기, `--wait` 절대 금지):
-  `session-ctl spawn "<작업제목>" "<요구사항 및 아래 5대 필수 원칙>" --parent __expert_coding__ --model <모델> --effort <레벨>`
+  `session-ctl spawn "<작업제목>" "<핵심 작업 요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`
   - 모델/effort 선택: 일반 기능·UI·버그 수정은 `--model gemini-3.8-flash --effort medium`, 복잡한 백엔드/아키텍처/다중 파일 수정은 `--model gemini-4-hydrogen --effort medium` (또는 `high`).
-- **하위 코딩 워커 프롬프트에 반드시 포함할 5대 원칙**:
-  1. **⛔ 워크트리 격리**: `main` 직접 수정 금지, 반드시 `git worktree add -b feat/<작업명> /Users/user/repos/oshyun-bot-wt-<작업명> HEAD` 에서 작업.
-  2. **단위 테스트 검증**: 작업 후 `PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests` 100% 통과 확인.
-  3. **코드 정리**: 코딩 완료 후 워크트리 내 `/simplify` 정리 반영.
-  4. **병합 및 배포**: `main`에 merge → `git worktree remove` → `./scripts/restart.sh` 재시작 → `git push origin main`.
-  5. **완료 보고**: 변경 파일 목록, 테스트 결과, 재시작 상태를 요약 보고.
+- **프롬프트 전달 원칙 (간결화)**:
+  - 하위 코딩 워커는 리포지토리 루트의 `AGENTS.md`(워크트리 필수 격리, 단위 테스트, `/simplify`, merge, 재시작, 푸시 등)를 세션 시작 시 자동으로 로드한다.
+  - 따라서 5대 원칙 전문을 매번 프롬프트에 중복 기재하지 말고, **핵심 작업 요구사항(구현할 기능, 버그 증상, 대상 파일 등)**만 명확하고 간결하게 전달한다.
 
 ## 3. 스폰 직후 응답 & 완료 보고 검수
 - **스폰 직후**: *"하위 코딩 워커([작업제목])를 스폰해 작업을 시작했습니다."* 라고 1~2줄만 답하고 즉시 턴 종료.
