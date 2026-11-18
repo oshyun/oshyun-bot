@@ -4663,13 +4663,12 @@
             });
           }
 
-          // 4. 사용자가 명시적으로 만든 신규 빈 방이 있었고 현재 활성화 중인 경우에만 맨 앞에 복원
-          if (
-            freshUnsentRooms.length > 0 &&
-            (freshUnsentRooms[0].id === currentRoomId || freshUnsentRooms[0].byOrchestrator) &&
-            !newChatRooms.some(r => r.id === freshUnsentRooms[0].id)
-          ) {
-            newChatRooms.unshift(freshUnsentRooms[0]);
+          // 4. 사용자가 명시적으로 만든 신규 빈 방(현재 활성화 중이거나 오케스트레이터가 생성한 방) 복원
+          const freshToRestore = freshUnsentRooms.filter(
+            r => r && (r.id === currentRoomId || r.byOrchestrator) && !newChatRooms.some(nr => nr && nr.id === r.id)
+          );
+          if (freshToRestore.length > 0) {
+            newChatRooms.unshift(...freshToRestore);
           }
 
           // 5. 방이 하나도 없으면 기본 빈 방 1개 생성
@@ -4690,19 +4689,23 @@
           }
 
           chatRooms = newChatRooms;
-          if (currentRoomId === CORE_ROOM_ID && !autoSelectFirst) {
-            ensureCoreRoom();
-          }
+          // 마스터 및 전문가 에이전트(ORCHESTRATOR_ROOM_IDS) 방은 항상 chatRooms에 상시 보장
+          ensureCoreRoom();
           sortChatRooms();
           saveChatRoomsToStorage(true);
 
+          const isOrchRoom = Boolean(currentRoomId && (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' ? ORCHESTRATOR_ROOM_IDS : [CORE_ROOM_ID]).includes(currentRoomId));
           if (
             !currentRoomId ||
-            (currentRoomId !== CORE_ROOM_ID && !chatRooms.some(r => r.id === currentRoomId || (r.sessionId && r.sessionId === currentRoomId))) ||
+            (currentRoomId !== CORE_ROOM_ID && !isOrchRoom && !chatRooms.some(r => r.id === currentRoomId || (r.sessionId && r.sessionId === currentRoomId))) ||
             autoSelectFirst
           ) {
-            if (chatRooms.length > 0) currentRoomId = chatRooms[0].id;
-          } else if (currentRoomId !== CORE_ROOM_ID) {
+            if (isOrchRoom && !autoSelectFirst) {
+              // 오케스트레이터(마스터/전문가) 룸 컨텍스트는 임의로 첫 방으로 fallback되지 않고 완벽 보존
+            } else if (chatRooms.length > 0) {
+              currentRoomId = chatRooms[0].id;
+            }
+          } else if (currentRoomId !== CORE_ROOM_ID && !isOrchRoom) {
             const matchedCur = chatRooms.find(r => r.id === currentRoomId || (r.sessionId && r.sessionId === currentRoomId));
             if (matchedCur) currentRoomId = matchedCur.id;
           }
@@ -6197,17 +6200,21 @@
     }
 
     function cleanUnusedEmptyRooms(activeRoomId = null) {
+      if (typeof isFilePickerActive !== 'undefined' && isFilePickerActive) return;
       if (!Array.isArray(chatRooms)) return;
+      const orchIds = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && Array.isArray(ORCHESTRATOR_ROOM_IDS))
+        ? ORCHESTRATOR_ROOM_IDS
+        : [CORE_ROOM_ID, '__expert_vault__', '__expert_coding__'];
       const beforeLen = chatRooms.length;
       chatRooms = chatRooms.filter(r => {
         if (!r) return false;
         if (activeRoomId && r.id === activeRoomId) return true;
-        if (ORCHESTRATOR_ROOM_IDS.includes(r.id)) return true;
+        if (orchIds.includes(r.id)) return true;
         return !isUnusedEmptyRoom(r);
       });
       if (chatRooms.length !== beforeLen) {
         saveChatRoomsToStorage(true);
-        if (!chatRooms.some(r => r.id === currentRoomId)) {
+        if (!orchIds.includes(currentRoomId) && !chatRooms.some(r => r.id === currentRoomId)) {
           currentRoomId = chatRooms.length > 0 ? chatRooms[0].id : CORE_ROOM_ID;
         }
         renderRoomList();
@@ -6215,6 +6222,7 @@
     }
 
     function cleanCurrentIfUnusedEmpty() {
+      if (typeof isFilePickerActive !== 'undefined' && isFilePickerActive) return;
       const cur = getCurrentRoom();
       if (cur && isUnusedEmptyRoom(cur)) {
         cleanUnusedEmptyRooms(null);
@@ -6517,8 +6525,14 @@
 
     function getRoomById(roomId) {
       if (!roomId) return null;
-      if (roomId === CORE_ROOM_ID) return ensureCoreRoom();
-      return chatRooms.find(r => r.id === roomId || r.sessionId === roomId) || null;
+      const orchIds = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && Array.isArray(ORCHESTRATOR_ROOM_IDS))
+        ? ORCHESTRATOR_ROOM_IDS
+        : [CORE_ROOM_ID, '__expert_vault__', '__expert_coding__'];
+      if (orchIds.includes(roomId)) {
+        ensureCoreRoom();
+        return chatRooms.find(r => r && (r.id === roomId || r.sessionId === roomId)) || null;
+      }
+      return chatRooms.find(r => r && (r.id === roomId || r.sessionId === roomId)) || null;
     }
 
     function ensureRoomLiveState(roomId) {
@@ -7795,15 +7809,18 @@
     let pendingLongPastes = []; // [{ text, charCount, lineCount, preview }]
     const LONG_PASTE_CHAR_THRESHOLD = 2500;
 
+    let isFilePickerActive = false;
     function triggerFileInput() {
       const fi = document.getElementById('file-input');
       if (fi) {
+        isFilePickerActive = true;
         fi.value = '';
         fi.click();
       }
     }
 
     function handleFileSelect(e) {
+      isFilePickerActive = false;
       const files = e.target.files;
       if (files && files.length > 0) {
         addAttachmentFiles(files);
@@ -8263,8 +8280,14 @@
 
     // ─── 대화방 & 세션 ───
     function getCurrentRoom() {
-      if (currentRoomId === CORE_ROOM_ID) return ensureCoreRoom();
-      return chatRooms.find(r => r.id === currentRoomId) || chatRooms.find(r => r.id !== CORE_ROOM_ID) || chatRooms[0];
+      const orchIds = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && Array.isArray(ORCHESTRATOR_ROOM_IDS))
+        ? ORCHESTRATOR_ROOM_IDS
+        : [CORE_ROOM_ID, '__expert_vault__', '__expert_coding__'];
+      if (orchIds.includes(currentRoomId)) {
+        ensureCoreRoom();
+        return chatRooms.find(r => r && r.id === currentRoomId) || null;
+      }
+      return chatRooms.find(r => r && r.id === currentRoomId) || chatRooms.find(r => r && !orchIds.includes(r.id)) || chatRooms[0];
     }
 
     function getWorkdirForRoom(room) {
@@ -11440,11 +11463,30 @@
         loadChatRoomsFromStorage();
         loadChatRoomsFromServer(false);
 
-        // 창 포커스 이탈(파일 선택기/사진첩 열기 등) 시에는 현재 새 대화방을 보존하고, 복귀 시에만 다른 비활성 빈 방을 정리
+        const fi = document.getElementById('file-input');
+        if (fi) {
+          fi.addEventListener('cancel', () => {
+            isFilePickerActive = false;
+          });
+        }
+
+        // 창 포커스 이탈(파일 선택기/사진첩 열기 등) 시에는 현재 대화방 컨텍스트를 완벽 보존하고, 복귀 시에만 다른 비활성 빈 방을 정리
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            cleanUnusedEmptyRooms(currentRoomId);
-            loadChatRoomsFromServer(false);
+            const preservedRoomId = currentRoomId;
+            if (!isFilePickerActive) {
+              cleanUnusedEmptyRooms(preservedRoomId);
+            }
+            loadChatRoomsFromServer(false).then(() => {
+              if (preservedRoomId && currentRoomId !== preservedRoomId) {
+                currentRoomId = preservedRoomId;
+                renderRoomList();
+                renderMessagesForCurrentRoom(true);
+              }
+              if (isFilePickerActive) {
+                setTimeout(() => { isFilePickerActive = false; }, 300);
+              }
+            });
           }
         });
 
