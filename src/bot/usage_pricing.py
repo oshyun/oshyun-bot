@@ -8,6 +8,9 @@ from datetime import timedelta as _timedelta, timezone as _timezone
 import json
 import os
 import shutil
+import sys
+import time
+from typing import Any
 
 _HOME = os.path.expanduser("~")
 
@@ -244,3 +247,248 @@ async def get_agy_usage_report(timeout: int = 30) -> str:
     if data is None and raw.startswith(("⚠️", "⏱")):
         return raw
     return _format_agy_usage_json(raw)
+
+
+DEFAULT_AGY_QUOTA_CACHE_FILE = os.getenv(
+    "AGY_QUOTA_CACHE_FILE", os.path.expanduser("~/.cache/agy_quota_cache.json")
+)
+AGY_QUOTA_CACHE_TTL_SECONDS = 300  # 5분 캐시
+
+_quota_refresh_task: asyncio.Task | None = None
+_quota_refresh_lock: asyncio.Lock | None = None
+
+
+def _get_refresh_lock() -> asyncio.Lock:
+    global _quota_refresh_lock
+    if _quota_refresh_lock is None:
+        _quota_refresh_lock = asyncio.Lock()
+    return _quota_refresh_lock
+
+
+def _save_cached_quota(data: dict[str, Any], cache_file: str | None = None) -> None:
+    """AGY 쿼터 데이터를 ~/.cache/agy_quota_cache.json 에 원자적으로 저장한다."""
+    target_file = cache_file or DEFAULT_AGY_QUOTA_CACHE_FILE
+    try:
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
+        payload = {
+            "timestamp": time.time(),
+            "cached_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ttl": AGY_QUOTA_CACHE_TTL_SECONDS,
+            "data": data,
+        }
+        tmp_file = f"{target_file}.tmp.{os.getpid()}"
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_file, target_file)
+    except Exception:
+        pass
+
+
+def _load_cached_quota_file(cache_file: str | None = None) -> dict[str, Any] | None:
+    """캐시 파일을 안전하게 읽어온다."""
+    target_file = cache_file or DEFAULT_AGY_QUOTA_CACHE_FILE
+    if not os.path.exists(target_file):
+        return None
+    try:
+        with open(target_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def parse_quota_data_to_usage(data: dict[str, Any] | None, timestamp: float | None = None) -> dict[str, Any] | None:
+    """파싱된 쿼터 데이터({group: {bucket: {pct, window, reset_time}}})를 프론트엔드/상태 API용 객체로 변환한다."""
+    if not isinstance(data, dict):
+        return None
+
+    # Gemini 그룹 우선 선택, 없으면 첫 번째 유효 그룹
+    target_buckets: dict[str, Any] | None = None
+    for g_name, buckets in data.items():
+        if isinstance(buckets, dict) and "gemini" in g_name.lower():
+            target_buckets = buckets
+            break
+    if target_buckets is None:
+        for g_name, buckets in data.items():
+            if isinstance(buckets, dict):
+                target_buckets = buckets
+                break
+
+    if not isinstance(target_buckets, dict):
+        return None
+
+    five_hour = None
+    weekly = None
+
+    for b_name, b in target_buckets.items():
+        if not isinstance(b, dict):
+            continue
+        w = str(b.get("window", "")).lower()
+        bn = str(b_name).lower()
+        pct = b.get("pct")
+        if pct is None:
+            continue
+        try:
+            pct_val = float(pct)
+        except (ValueError, TypeError):
+            continue
+
+        reset_time = str(b.get("reset_time") or "")
+
+        if "5h" in w or "five" in w or "5h" in bn or "five" in bn or "5 hour" in bn:
+            five_hour = {"pct": round(pct_val, 1), "reset_time": reset_time}
+        elif "weekly" in w or "weekly" in bn or "week" in w or "week" in bn:
+            weekly = {"pct": round(pct_val, 1), "reset_time": reset_time}
+
+    if not five_hour and not weekly:
+        return None
+
+    parts = []
+    if five_hour:
+        parts.append(f"5h {round(five_hour['pct'])}%")
+    if weekly:
+        parts.append(f"W {round(weekly['pct'])}%")
+    badge_text = " · ".join(parts)
+
+    return {
+        "five_hour": five_hour,
+        "weekly": weekly,
+        "badge_text": badge_text,
+        "timestamp": timestamp or time.time(),
+    }
+
+
+async def refresh_agy_quota_cache(
+    timeout: int = 25,
+    cache_file: str | None = None,
+) -> dict[str, Any] | None:
+    """agy -p /usage --output-format json 명령을 비동기 실행하여 캐시 파일을 갱신한다."""
+    target_file = cache_file or DEFAULT_AGY_QUOTA_CACHE_FILE
+    agy_bin = _resolve_agy_bin()
+    if not os.path.exists(agy_bin):
+        return None
+
+    cmd = [
+        agy_bin,
+        "-p",
+        "/usage",
+        "--output-format",
+        "json",
+        "--project",
+        "oshyun-bot",
+    ]
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.CancelledError:
+        if proc:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+        raise
+    except Exception:
+        if proc:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    try:
+        raw_json = json.loads(stdout.decode("utf-8", "replace"))
+        groups = (
+            raw_json.get("command", {}).get("data", {}).get("groups", [])
+            or raw_json.get("groups", [])
+        )
+        result: dict[str, Any] = {}
+        for g in groups:
+            g_name = g.get("name", "Unknown")
+            buckets: dict[str, Any] = {}
+            for b in g.get("buckets", []):
+                b_name = b.get("name", b.get("id", "bucket"))
+                frac = b.get("remaining_fraction")
+                if frac is not None:
+                    pct = round(frac * 100, 1)
+                else:
+                    pct = b.get("pct")
+                buckets[b_name] = {
+                    "pct": pct,
+                    "window": b.get("window", ""),
+                    "reset_time": b.get("reset_time", ""),
+                }
+            result[g_name] = buckets
+
+        if result:
+            _save_cached_quota(result, cache_file=target_file)
+            return result
+    except Exception:
+        pass
+
+    return None
+
+
+def trigger_agy_quota_refresh_background(cache_file: str | None = None) -> None:
+    """이벤트 루프가 활성화되어 있으면 백그라운드로 쿼터 갱신을 트리거한다."""
+    global _quota_refresh_task
+    if "unittest" in sys.modules and os.getenv("ALLOW_AGY_TEST_REFRESH") != "1":
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    if _quota_refresh_task is not None and not _quota_refresh_task.done():
+        return
+
+    target_file = cache_file or DEFAULT_AGY_QUOTA_CACHE_FILE
+
+    async def _runner():
+        lock = _get_refresh_lock()
+        async with lock:
+            await refresh_agy_quota_cache(cache_file=target_file)
+
+    _quota_refresh_task = loop.create_task(_runner())
+
+
+def get_cached_agy_usage(
+    allow_refresh: bool = True,
+    cache_file: str | None = None,
+) -> dict[str, Any] | None:
+    """
+    캐시 파일에서 쿼터 요약 정보를 O(1) 논블로킹으로 읽어 반환한다.
+    캐시가 없거나 TTL(5분)이 만료되었으면 백그라운드 갱신을 트리거한다.
+    Stale-While-Revalidate 패턴: 만료되었더라도 기존 캐시가 있으면 즉시 반환하고 갱신은 뒤에서 돈다.
+    """
+    target_file = cache_file or DEFAULT_AGY_QUOTA_CACHE_FILE
+    cache = _load_cached_quota_file(target_file)
+    data = None
+    timestamp = None
+    is_expired = True
+
+    if isinstance(cache, dict):
+        timestamp = cache.get("timestamp")
+        data = cache.get("data")
+        if isinstance(timestamp, (int, float)):
+            elapsed = time.time() - timestamp
+            if 0 <= elapsed < AGY_QUOTA_CACHE_TTL_SECONDS:
+                is_expired = False
+
+    if (is_expired or data is None) and allow_refresh:
+        trigger_agy_quota_refresh_background(cache_file=target_file)
+
+    if data is not None:
+        return parse_quota_data_to_usage(data, timestamp=timestamp)
+
+    return None
+
