@@ -1,5 +1,5 @@
 // oshyun-bot PWA Service Worker
-const CACHE_NAME = 'oshyun-hub-v4';
+const CACHE_NAME = 'oshyun-hub-v5';
 const CORE_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -60,5 +60,30 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+// 브라우저 및 시스템 알림 클릭 시 대화방으로 포커스/이동
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const rawData = event.notification.data || {};
+  const roomId = rawData.roomId || '';
+  const targetUrl = rawData.url || (roomId ? `/?room=${encodeURIComponent(roomId)}` : '/');
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus().then(() => {
+            if (roomId) {
+              client.postMessage({ type: 'NAVIGATE_ROOM', roomId });
+            }
+          });
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
   );
 });

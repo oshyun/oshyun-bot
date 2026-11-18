@@ -4105,6 +4105,7 @@ function getTtsMode() { return 'off'; }
 function loadChatHistoryFromServer() {}
 function scheduleRoomsRefreshFromEvent() { roomsRefreshCount++; }
 function ensureCoreRoom() { return null; }
+function handleAgentResponseNotification() {}
 
 ${extractFn("mergeToolSteps")}
 ${extractFn("deduplicateMessagesList")}
@@ -4320,6 +4321,44 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
         self.assertIn("rawPrompt: true", rebalance_block)
         self.assertIn("slashCommands: true", rebalance_block)
         self.assertIn("forceNew: true", rebalance_block)
+
+    def test_browser_and_system_notification_on_agent_reply(self):
+        """에이전트 응답 완료 시 브라우저/시스템 레벨 알림 및 PWA/SW 지원 로직 검증."""
+        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        sw_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "sw.js")
+        with open(sw_path, "r", encoding="utf-8") as f:
+            sw_content = f.read()
+
+        # 1. 설정 UI 마크업
+        self.assertIn('id="settings-group-notification"', content)
+        self.assertIn('id="select-notification-mode"', content)
+        self.assertIn('id="select-notification-sound"', content)
+        self.assertIn('id="btn-request-notification"', content)
+        self.assertIn('id="btn-test-notification"', content)
+
+        # 2. 알림 함수 및 핵심 로직
+        self.assertIn("function handleAgentResponseNotification(", content)
+        self.assertIn("function triggerSystemNotification(", content)
+        self.assertIn("function playNotificationChime(", content)
+        self.assertIn("function cleanNotificationText(", content)
+        self.assertIn("function updateNotificationUi(", content)
+        self.assertIn("function maybeRequestNotificationPermission(", content)
+
+        # 3. result 및 error 처리 시 알림 연동
+        self.assertIn("handleAgentResponseNotification(targetRoom, replyText)", content)
+        self.assertIn("handleAgentResponseNotification(targetRoom, errMsg, { isError: true })", content)
+
+        # 4. 사용자 발화(전송) 시 선제 권한 요청 연동
+        send_block = content.split("async function sendUserMessage(")[1].split("lastSentMessageTime = now;")[0]
+        self.assertIn("maybeRequestNotificationPermission();", send_block)
+
+        # 5. Service Worker 알림 클릭 처리
+        self.assertIn("self.addEventListener('notificationclick'", sw_content)
+        self.assertIn("NAVIGATE_ROOM", sw_content)
+        self.assertIn("event.notification.close()", sw_content)
 
 
 if __name__ == "__main__":
