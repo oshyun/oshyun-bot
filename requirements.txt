@@ -1,0 +1,15 @@
+python-dotenv==1.0.1
+# calendar_sync 사이드카 — 비공개 iCal(.ics) 다운로드/파싱/반복일정 전개.
+requests==2.32.3
+icalendar==5.0.13
+recurring-ical-events==2.2.3
+# Google Calendar API (일정 조절/생성/삭제/조회)
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.0.0
+# Flutter Web 및 실시간 음성 대화 API 서버 + 무료 신경망 한국어 TTS
+aiohttp>=3.9.0
+edge-tts>=7.0.0
+# 단위 테스트
+pytest>=7.0.0
+

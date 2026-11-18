@@ -1,0 +1,54 @@
+;; oshyun-bot sandbox profile (macOS Seatbelt / sandbox-exec)
+;; claude 프로세스(및 그 Bash 하위 프로세스)를 작업공간 밖 개인 파일에서 격리한다.
+;; fdc-bot 이 docker 컨테이너에 작업공간만 마운트하는 것과 같은 결과를 네이티브로 재현.
+;;
+;; 파라미터(-D 로 주입):
+;;   WORKDIR        claude 작업 디렉토리 (.env 의 AGENT_WORKDIR)
+;;   HOME           사용자 홈
+;;   AGENT_HOME    claude 설정/세션 디렉토리 (~/.claude)
+;;   AGENT_INSTALL claude 바이너리 설치 경로 (주입 출처: agent_engine._AGENT_INSTALL_DIR)
+;;   AGENT_JSON    ~/.claude.json
+(version 1)
+
+;; 기본 허용 — 프로세스 실행/mach 서비스(Keychain 등)/sysctl/네트워크(API)는 막지 않는다.
+;; 시스템 경로(/usr,/bin,/System,/Library,/opt,/etc 등) 읽기도 그대로 허용된다.
+(allow default)
+
+;; ── 쓰기: 전부 차단 후 작업공간/claude홈/임시만 재허용 ──
+(deny file-write*)
+(allow file-write*
+  (subpath (param "WORKDIR"))
+  (subpath (param "AGENT_HOME"))
+  (literal (param "AGENT_JSON"))
+  ;; 분리 실행 시 claude 의 stdout/stderr 가 이 디렉토리의 파일(상속 fd)로 향한다 —
+  ;; Bun WriteStream 이 그 fd 에 fstat·write 하므로 읽기/쓰기 모두 허용해야 한다.
+  (subpath (param "JOBS_DIR"))
+  ;; claude 스크래치(AGENT_CODE_TMPDIR) — claude 가 직접 만들고 쓰는 곳.
+  (subpath (param "AGENT_TMP_DIR"))
+  (subpath "/private/tmp")
+  (subpath "/private/var/tmp")
+  (subpath "/private/var/folders"))
+(allow file-write-data
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/dtracehelper")
+  (regex #"^/dev/tty"))
+
+;; ── 읽기: 사용자 홈 전체 차단 후 작업공간/claude설정/claude바이너리만 재허용 ──
+;; (홈 밖 시스템 경로는 위의 (allow default) 로 계속 읽힘)
+(deny file-read* (subpath (param "HOME")))
+(allow file-read*
+  (subpath (param "WORKDIR"))
+  (subpath (param "AGENT_HOME"))
+  (subpath (param "AGENT_INSTALL"))
+  (literal (param "AGENT_JSON"))
+  ;; 텔레그램으로 받은 첨부 파일 임시 폴더(봇이 내려받아 claude 가 읽음).
+  (subpath (param "ATTACHED_FILES_DIR"))
+  ;; 분리 실행 출력 파일(stdout/stderr) — Bun WriteStream 의 fstat(read-metadata) 허용.
+  (subpath (param "JOBS_DIR"))
+  ;; claude 스크래치(AGENT_CODE_TMPDIR).
+  (subpath (param "AGENT_TMP_DIR"))
+  ;; 인증: macOS Keychain DB(암호화·securityd ACL 보호) + 프레임워크가 읽는 prefs.
+  ;; claude 의 OAuth 토큰이 로그인 Keychain 에 저장되므로 read 가 필요하다.
+  (subpath (param "LIB_KEYCHAINS"))
+  (subpath (param "LIB_PREFS")))

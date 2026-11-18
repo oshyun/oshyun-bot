@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Obsidian 크래시 시 자동 재시작 LaunchAgent
+     설치:
+       sudo cp scripts/obsidian-keepalive.plist ~/Library/LaunchAgents/com.user.obsidian-keepalive.plist
+       sudo chown user ~/Library/LaunchAgents/com.user.obsidian-keepalive.plist
+       launchctl load ~/Library/LaunchAgents/com.user.obsidian-keepalive.plist
+     제거:
+       launchctl unload ~/Library/LaunchAgents/com.user.obsidian-keepalive.plist
+       rm ~/Library/LaunchAgents/com.user.obsidian-keepalive.plist
+     로그: /tmp/obsidian-keepalive.log
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.obsidian-keepalive</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Obsidian.app/Contents/MacOS/Obsidian</string>
+    </array>
+    <key>KeepAlive</key>
+    <dict>
+        <!-- 크래시·비정상 종료 시에만 재시작. 사용자가 직접 종료(Cmd+Q)하면 재시작 안 함. -->
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/obsidian-keepalive.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/obsidian-keepalive.log</string>
+</dict>
+</plist>
