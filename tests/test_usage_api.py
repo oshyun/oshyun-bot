@@ -38,7 +38,12 @@ class TestUsagePricingHelpers(unittest.TestCase):
                 },
             }
         }
-        res = usage_pricing.parse_quota_data_to_usage(sample_data, timestamp=1000.0)
+        res = usage_pricing.parse_quota_data_to_usage(
+            sample_data,
+            timestamp=1000.0,
+            cached_at="2026-11-18 21:30:00",
+            source="agy CLI (/usage 캐시)",
+        )
         self.assertIsNotNone(res)
         self.assertEqual(res["badge_text"], "5h 75% · W 47%")
         self.assertEqual(res["five_hour"]["pct"], 75.1)
@@ -46,6 +51,8 @@ class TestUsagePricingHelpers(unittest.TestCase):
         self.assertEqual(res["weekly"]["pct"], 47.0)
         self.assertEqual(res["weekly"]["reset_time"], "2026-11-25T00:00:06Z")
         self.assertEqual(res["timestamp"], 1000.0)
+        self.assertEqual(res["cached_at"], "2026-11-18 21:30:00")
+        self.assertEqual(res["source"], "agy CLI (/usage 캐시)")
 
     def test_parse_quota_data_single_bucket(self):
         sample_data = {
@@ -156,10 +163,13 @@ class TestUsageHtmlUi(unittest.TestCase):
             ".avatar-usage-badge.warning",
             ".avatar-usage-badge.danger",
             "function updateAvatarUsageBadge(",
+            "function buildAgyUsageTooltip(",
+            "function formatAgyRelativeTime(",
             "function fetchAgyUsage(",
             "function initUsagePolling(",
             "initUsagePolling();",
             "/api/usage",
+            "mouseenter",
         ):
             self.assertIn(marker, content, f"HTML에 필수 마커 '{marker}'가 누락되었습니다.")
 
