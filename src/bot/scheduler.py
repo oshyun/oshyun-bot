@@ -41,6 +41,7 @@ def build_master_schedule_prompt(
     cron_expr = str(schedule_entry.get("cron") or "").strip() or "-"
     prompt = str(schedule_entry.get("prompt") or "").strip()
     model = str(schedule_entry.get("model") or "").strip()
+    effort = str(schedule_entry.get("effort") or "").strip()
     trigger_label = "수동 즉시 실행" if trigger_source == "manual" else "정기 도래(cron)"
 
     lines = [
@@ -50,10 +51,14 @@ def build_master_schedule_prompt(
         f"- 실행 주기(cron): {cron_expr}",
         f"- 트리거 유형: {trigger_label}",
         f"- 지정 모델: {model or '(기본 정책)'}",
+    ]
+    if effort:
+        lines.append(f"- 추론 강도(effort): {effort}")
+    lines.extend([
         "",
         "[수행할 작업 지시]",
         prompt or desc,
-    ]
+    ])
     if usage_report is not None:
         lines.extend(["", "[사전 조회된 AGY 사용량 리포트]", usage_report])
 
@@ -67,6 +72,8 @@ def build_master_schedule_prompt(
     ])
     if model:
         lines.append(f"- 지정 모델(`{model}`)이 있으므로 하위 위임 시 해당 모델을 우선 적용하세요.")
+    if effort:
+        lines.append(f"- 지정 추론 강도(`{effort}`)를 우선 적용하세요.")
     return "\n".join(lines)
 
 

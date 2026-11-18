@@ -24,6 +24,7 @@ def add(
     prompt: str,
     description: str,
     model: str | None = None,
+    effort: str | None = None,
     *,
     kind: str = "prompt",
 ) -> dict:
@@ -41,6 +42,8 @@ def add(
     }
     if model:
         entry["model"] = model
+    if effort:
+        entry["effort"] = effort
     items.append(entry)
     write_json_atomic(SCHEDULES_FILE, items, indent=2)
     return entry
@@ -56,15 +59,37 @@ def remove(sched_id: str) -> bool:
     return True
 
 
-def set_enabled(sched_id: str, enabled: bool) -> dict | None:
-    """id 로 작업의 활성화 상태를 변경하고 수정된 항목을 반환한다."""
+_UPDATABLE_STR_FIELDS = ("cron", "prompt", "description")
+_OPTIONAL_STR_FIELDS = ("model", "effort")
+
+
+def update_schedule(sched_id: str, **fields) -> dict | None:
+    """id 로 작업의 필드(cron, prompt, description, model, effort, enabled)를 수정하고 반환한다."""
     items = list_all()
     for entry in items:
-        if entry.get("id") == sched_id:
-            entry["enabled"] = bool(enabled)
-            write_json_atomic(SCHEDULES_FILE, items, indent=2)
-            return entry
+        if entry.get("id") != sched_id:
+            continue
+        for key in _UPDATABLE_STR_FIELDS:
+            if key in fields and fields[key] is not None:
+                entry[key] = str(fields[key]).strip()
+        for key in _OPTIONAL_STR_FIELDS:
+            if key in fields:
+                val = str(fields[key] or "").strip()
+                if val:
+                    entry[key] = val
+                else:
+                    entry.pop(key, None)
+        if "enabled" in fields and fields["enabled"] is not None:
+            entry["enabled"] = bool(fields["enabled"])
+        entry["updated"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        write_json_atomic(SCHEDULES_FILE, items, indent=2)
+        return entry
     return None
+
+
+def set_enabled(sched_id: str, enabled: bool) -> dict | None:
+    """id 로 작업의 활성화 상태를 변경하고 수정된 항목을 반환한다."""
+    return update_schedule(sched_id, enabled=bool(enabled))
 
 
 def ensure_default_burn_schedule() -> dict | None:
