@@ -1637,23 +1637,6 @@
       flex-direction: column;
       gap: 6px;
     }
-    .sub-agent-chips-label {
-      font-size: calc(11px * var(--ui-scale, 1));
-      font-weight: 600;
-      color: var(--text-3);
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      user-select: none;
-    }
-    .sub-agent-chips-label .chips-label-icon {
-      display: inline-flex;
-      color: var(--accent);
-    }
-    .sub-agent-chips-label .chips-label-icon svg {
-      width: 12px;
-      height: 12px;
-    }
     .sub-agent-chips-list {
       display: flex;
       flex-wrap: wrap;
@@ -10511,30 +10494,15 @@
       if (!Array.isArray(delegatedRooms) || delegatedRooms.length === 0) return null;
 
       const pId = String(parentRoomId || currentRoomId || '').trim();
-      let labelIcon = ICONS.spark;
-      let labelText = '위임된 하위 에이전트';
       let chipIcon = ICONS.spark;
       if (pId === EXPERT_VAULT_ROOM_ID) {
-        labelIcon = ICONS.brain;
-        labelText = '위임된 세컨브레인 하위 에이전트';
         chipIcon = ICONS.brain;
       } else if (pId === EXPERT_CODING_ROOM_ID) {
-        labelIcon = ICONS.terminal;
-        labelText = '위임된 봇개발 하위 에이전트';
         chipIcon = ICONS.terminal;
-      } else if (pId === CORE_ROOM_ID) {
-        labelIcon = ICONS.spark;
-        labelText = '위임된 마스터 하위 에이전트';
-        chipIcon = ICONS.spark;
       }
 
       const wrap = document.createElement('div');
       wrap.className = 'sub-agent-chips-wrap';
-
-      const labelEl = document.createElement('div');
-      labelEl.className = 'sub-agent-chips-label';
-      labelEl.innerHTML = `<span class="chips-label-icon">${labelIcon}</span><span>${escapeHtml(labelText)}</span>`;
-      wrap.appendChild(labelEl);
 
       const listEl = document.createElement('div');
       listEl.className = 'sub-agent-chips-list';
