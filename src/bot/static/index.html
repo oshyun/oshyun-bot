@@ -268,13 +268,6 @@
     .sb-core-section {
       margin-bottom: 4px;
     }
-    .sb-core-label {
-      font-size: calc(11px * var(--ui-scale, 1));
-      font-weight: 600;
-      color: var(--text-3);
-      padding: 2px 6px 6px;
-      letter-spacing: 0.01em;
-    }
     .sb-core-row {
       display: flex;
       align-items: center;
@@ -3447,8 +3440,6 @@
 
       <!-- 상단 고정: 에이전트 계층 트리 (Master Agent -> Expert Agents -> Subtasks) -->
       <div class="sb-core-section" id="sb-core-section">
-        <!-- 👑 마스터 에이전트 (루트) -->
-        <div class="sb-core-label">👑 마스터 에이전트</div>
         <div class="sb-core-row">
           <div class="core-agent-slot master-root-slot" id="core-agent-slot" onclick="selectRoom('__core__')" title="모든 하위 에이전트 및 채팅방을 총괄 조율하는 마스터 에이전트">
             <div class="core-agent-icon">
