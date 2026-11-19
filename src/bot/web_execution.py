@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from typing import Any
 import uuid
 
@@ -654,6 +656,118 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
     return was_running
 
 
+_recent_reported_rooms: dict[str, float] = {}
+
+
+def mark_room_completion_reported(room_id: str | None) -> None:
+    """서버 완료 훅이 해당 대화방의 완료 보고를 전송했음을 기록(중복 보고 방지용)."""
+    rid = str(room_id or "").strip()
+    if not rid:
+        return
+    now = time.monotonic()
+    _recent_reported_rooms[rid] = now
+    if len(_recent_reported_rooms) > 256:
+        expired = [k for k, ts in _recent_reported_rooms.items() if now - ts > 300.0]
+        for k in expired:
+            _recent_reported_rooms.pop(k, None)
+
+
+def is_room_completion_recently_reported(room_id: str | None, ttl: float = 120.0) -> bool:
+    """최근 TTL 이내에 서버 완료 훅이 해당 방을 이미 보고했는지 확인한다."""
+    rid = str(room_id or "").strip()
+    if not rid:
+        return False
+    ts = _recent_reported_rooms.get(rid)
+    if ts is None:
+        return False
+    if time.monotonic() - ts <= ttl:
+        return True
+    _recent_reported_rooms.pop(rid, None)
+    return False
+
+
+async def _invoke_on_complete_hook(
+    on_complete: Callable[[dict[str, Any]], Any] | None,
+    event: dict[str, Any],
+) -> None:
+    """턴 종료 시 전달된 on_complete 콜백을 안전하게 비동기/동기 실행한다."""
+    if on_complete is None:
+        return
+    try:
+        maybe_coro = on_complete(event)
+        if inspect.isawaitable(maybe_coro):
+            await maybe_coro
+    except Exception as exc:
+        logger.warning(
+            "[web_execution] on_complete 훅 실행 오류 (room=%s, task=%s): %s",
+            event.get("roomId"),
+            event.get("taskId"),
+            exc,
+        )
+
+
+async def _finalize_orchestrator_completion(
+    *,
+    room_id: str,
+    task_id: str | None,
+    channel: str,
+    is_orchestrator: bool,
+    is_success: bool,
+    result_text: str,
+    status: str,
+    resolved_session_id: str | None = None,
+    elapsed_seconds: int = 0,
+    error_text: str | None = None,
+    on_complete: Callable[[dict[str, Any]], Any] | None = None,
+) -> None:
+    """턴 종료 시 작업 원장 갱신, 사용자 정의 on_complete 훅 호출, 부모 에이전트 자동 보고를 일원화한다."""
+    is_wait = False
+    if task_id:
+        _rec = master_tasks.get_task(task_id) or {}
+        is_wait = bool(_rec.get("wait"))
+        _now_done = time.time()
+        if status == "done":
+            done_fields: dict[str, Any] = {
+                "status": "done",
+                "finishedAt": _now_done,
+                "resultPreview": result_text[:400],
+                "sessionId": resolved_session_id,
+                "feed": "완료",
+            }
+            if is_wait:
+                done_fields["reportedAt"] = _now_done
+                done_fields["reviewed"] = True
+                done_fields["reviewedAt"] = _now_done
+            master_tasks.update_task(task_id, **done_fields)
+        else:
+            master_tasks.update_task(
+                task_id,
+                status=status,
+                finishedAt=_now_done,
+                error=(error_text or result_text)[:400],
+            )
+
+    await _invoke_on_complete_hook(
+        on_complete,
+        {
+            "ok": is_success,
+            "status": status,
+            "roomId": room_id,
+            "taskId": task_id,
+            "channel": channel,
+            "sessionId": resolved_session_id,
+            "reply": result_text,
+            "elapsedSeconds": elapsed_seconds,
+            "error": error_text,
+        },
+    )
+
+    # 비동기 위임(--async)은 마스터가 응답을 기다리지 않으므로 서버 내장 완료 훅이 직접 보고 턴을 건다.
+    if channel == "orchestrator" and not is_wait and not is_orchestrator:
+        notify_fn = _get_mod_attr("_notify_master_agent", _notify_master_agent)
+        await notify_fn(room_id, task_id, result_text, is_success=is_success)
+
+
 async def _notify_master_agent(room_id: str, task_id: str | None, result_text: str, is_success: bool = True) -> None:
     """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가)에게 결과를 알리고 후속 턴을 트리거한다."""
     if room_id in ORCHESTRATOR_ROOM_IDS:
@@ -742,6 +856,7 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
             channel="task_report",
             task_id=task_id,
         )
+        mark_room_completion_reported(room_id)
         logger.info("[web_jobs] %s 에이전트(%s)에게 완료 보고 전달 완료 (task_id=%s, room=%s)", parent_label, target_parent_id, task_id, room_id)
     except Exception as exc:
         logger.error("[web_jobs] %s 에이전트 완료 보고 전달 실패: %s", parent_label, exc)
@@ -1271,13 +1386,17 @@ async def _watch_and_finish_web_job(
         is_user_cancel = (room_id in _user_cancelled_rooms) and not _shutting_down
         _user_cancelled_rooms.discard(room_id)
         if is_user_cancel:
-            if task_id:
-                master_tasks.update_task(
-                    task_id,
-                    status="cancelled",
-                    finishedAt=time.time(),
-                    error="작업이 취소되었습니다.",
-                )
+            await _finalize_orchestrator_completion(
+                room_id=room_id,
+                task_id=task_id,
+                channel=rec.get("channel", "web"),
+                is_orchestrator=is_orchestrator,
+                is_success=False,
+                result_text="작업이 취소되었습니다.",
+                status="cancelled",
+                error_text="작업이 취소되었습니다.",
+                on_complete=None,
+            )
             if _master_supervisor:
                 _master_supervisor.poke()
             try:
@@ -1562,6 +1681,7 @@ async def execute_chat_turn(
     raw_prompt: bool = False,
     slash_commands: bool = False,
     orchestrator: bool | None = None,
+    on_complete: Callable[[dict[str, Any]], Any] | None = None,
 ) -> dict[str, Any]:
     """단일 대화방(AGY 세션)의 1턴 질의응답을 실행하고 실시간 스트림을 브로드캐스트한다."""
     room_key = room_id or "__default__"
@@ -1875,15 +1995,17 @@ async def execute_chat_turn(
         _remove_web_job(job_id)
         _room_live_feeds.pop(room_key, None)
         _room_live_snapshots.pop(room_key, None)
-        if task_id:
-            master_tasks.update_task(
-                task_id,
-                status="failed",
-                finishedAt=err_ts,
-                error=str(exc)[:400],
-            )
-            if channel == "orchestrator" and not (master_tasks.get_task(task_id) or {}).get("wait"):
-                await _notify_master_agent(room_id, task_id, f"에이전트 기동 실패: {exc}", is_success=False)
+        await _finalize_orchestrator_completion(
+            room_id=room_key,
+            task_id=task_id,
+            channel=channel,
+            is_orchestrator=is_orchestrator,
+            is_success=False,
+            result_text=f"에이전트 기동 실패: {exc}",
+            status="failed",
+            error_text=str(exc),
+            on_complete=on_complete,
+        )
         if _master_supervisor:
             _master_supervisor.poke()
         await current_broadcast(
@@ -1994,13 +2116,17 @@ async def execute_chat_turn(
         _room_live_feeds.pop(room_key, None)
         _room_live_snapshots.pop(room_key, None)
         if is_user_cancel:
-            if task_id:
-                master_tasks.update_task(
-                    task_id,
-                    status="cancelled",
-                    finishedAt=time.time(),
-                    error="작업이 취소되었습니다.",
-                )
+            await _finalize_orchestrator_completion(
+                room_id=room_key,
+                task_id=task_id,
+                channel=channel,
+                is_orchestrator=is_orchestrator,
+                is_success=False,
+                result_text="작업이 취소되었습니다.",
+                status="cancelled",
+                error_text="작업이 취소되었습니다.",
+                on_complete=on_complete,
+            )
             if _master_supervisor:
                 _master_supervisor.poke()
             await current_broadcast({"type": "cancelled", "jobId": job_id, "roomId": room_id})
@@ -2263,24 +2389,21 @@ async def execute_chat_turn(
         f"{user_text} → {oneline_summary[:300]}{fmt_cost(agent_output.get('cost'))}",
     )
 
-    if task_id:
-        _rec = master_tasks.get_task(task_id) or {}
-        _now_done = time.time()
-        done_fields: dict[str, Any] = {
-            "status": "done",
-            "finishedAt": _now_done,
-            "resultPreview": reply_text[:400],
-            "sessionId": resolved_session_id,
-            "feed": "완료",
-        }
-        if _rec.get("wait"):
-            done_fields["reportedAt"] = _now_done
-            done_fields["reviewed"] = True
-            done_fields["reviewedAt"] = _now_done
-        master_tasks.update_task(task_id, **done_fields)
-        # 비동기 위임(--async)은 마스터가 응답을 기다리지 않으므로 서버가 직접 완료 보고 턴을 건다.
-        if channel == "orchestrator" and not _rec.get("wait"):
-            await _notify_master_agent(room_id, task_id, reply_text, is_success=bool(reply_text))
+    is_interrupted = bool(agent_output.get("interrupted"))
+    is_turn_success = bool(reply_text) and not is_interrupted
+    await _finalize_orchestrator_completion(
+        room_id=room_key,
+        task_id=task_id,
+        channel=channel,
+        is_orchestrator=is_orchestrator,
+        is_success=is_turn_success,
+        result_text=reply_text,
+        status=("failed" if is_interrupted else "done"),
+        resolved_session_id=resolved_session_id,
+        elapsed_seconds=elapsed_seconds,
+        error_text=(reply_text if is_interrupted else None),
+        on_complete=on_complete,
+    )
     if is_orchestrator and reply_text and not reply_text.startswith("⚠️"):
         try:
             orch_agent = master_memory.normalize_agent_id(room_key)
@@ -2373,6 +2496,7 @@ async def run_room_worker(r_key: str) -> None:
                         raw_prompt=bool(item.get("raw_prompt", False)),
                         slash_commands=bool(item.get("slash_commands", False)),
                         orchestrator=item.get("orchestrator"),
+                        on_complete=item.get("on_complete"),
                     )
                 )
                 _active_watch_tasks[r_key] = turn_task
@@ -2431,6 +2555,7 @@ async def enqueue_room_turn(
     raw_prompt: bool = False,
     slash_commands: bool = False,
     orchestrator: bool | None = None,
+    on_complete: Callable[[dict[str, Any]], Any] | None = None,
 ) -> tuple[bool, int]:
     """대화방 큐에 새 턴을 적재하고 워커가 없으면 기동한다. (이미 실행 중이었는지 여부, 큐 크기) 반환."""
     room_key = room_id or "__default__"
@@ -2489,6 +2614,7 @@ async def enqueue_room_turn(
         "raw_prompt": bool(raw_prompt),
         "slash_commands": bool(slash_commands),
         "orchestrator": orchestrator,
+        "on_complete": on_complete,
     }
     await q.put(queue_item)
 

@@ -8,12 +8,15 @@ session_id를 돌려준다. 비동기(subprocess)라 이벤트 루프를 막지 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
 import signal
 import subprocess
 import time
+from collections.abc import Callable
+from typing import Any
 
 from engine_drivers import (
     AGY_DEFAULT_MODEL,
@@ -296,11 +299,21 @@ async def watch_agent(
     start_ts: float,
     timeout: int = 0,
     on_progress: ProgressCb | None = None,
+    on_complete: Callable[[dict[str, Any]], Any] | None = None,
     err_file: str | None = None,
     proc: subprocess.Popen | None = None,
     session_id: str | None = None,
 ) -> dict:
     """분리 실행된 에이전트의 출력 파일(out_file)을 tail 하며 진행 피드를 흘리고 결과를 파싱."""
+    async def _emit_complete(result: dict[str, Any]) -> dict[str, Any]:
+        if on_complete is not None:
+            try:
+                maybe_coro = on_complete(result)
+                if inspect.isawaitable(maybe_coro):
+                    await maybe_coro
+            except Exception as exc:
+                logger.warning("[agent_engine] on_complete 훅 실행 실패: %s", exc)
+        return result
     out_lines: list[str] = []
     feed: list[str] = []
     last_emit = 0.0
@@ -374,13 +387,13 @@ async def watch_agent(
 
     await _reap(proc)
     if timed_out:
-        return {
+        return await _emit_complete({
             "result": f"⏱ 시간 초과({timeout}s)로 중단했습니다.",
             "session_id": None,
             "cost": None,
             "model": None,
             "interrupted": False,
-        }
+        })
 
     out = "\n".join(out_lines)
     if not done:
@@ -398,7 +411,7 @@ async def watch_agent(
             _NO_RESULT_TEXT,
         ):
             parsed["interrupted"] = True
-            return parsed
+            return await _emit_complete(parsed)
         err = ""
         if err_file:
             try:
@@ -407,19 +420,19 @@ async def watch_agent(
             except OSError:
                 pass
         msg = f"⚠️ {get_engine()} 오류:\n{err}" if err else "⚠️ 응답이 중단되었습니다."
-        return {
+        return await _emit_complete({
             "result": msg,
             "session_id": (parsed or {}).get("session_id"),
             "cost": None,
             "model": None,
             "interrupted": True,
-        }
+        })
 
     parsed = _parse_stream(
         out, fallback_session_id=session_id, fallback_model=get_model
     )
     parsed["interrupted"] = False
-    return parsed
+    return await _emit_complete(parsed)
 
 
 async def run_agent(

@@ -1010,6 +1010,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             "parentAgentId": parent_agent_id,
             "title": room_title,
             "queuePosition": q_size,
+            "serverOnComplete": True,
         }
         if matched_similarity is not None:
             resp_body["matchedSimilarity"] = matched_similarity
@@ -1287,21 +1288,33 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     room_id = str(payload.get("roomId") or payload.get("room_id") or "").strip() or None
     channel = str(payload.get("channel") or "task_report").strip()
 
-    # 서버 완료 훅/안전망이 이미 보고한 작업이면 클라이언트 감시자의 중복 보고는 무시한다.
+    from web_execution import (
+        _room_session_ids,
+        broadcast_ws_json,
+        enqueue_room_turn,
+        is_room_completion_recently_reported,
+    )
+
+    # 서버 완료 훅/안전망이 이미 보고한 작업이면 클라이언트 감시자(session-ctl watch/notify)의 중복 보고는 무시한다.
     if task_id and channel == "task_report" and master_tasks.get_task(task_id) and not master_tasks.claim_report(task_id):
         return web.json_response({"ok": True, "status": "duplicate", "taskId": task_id})
+    if not task_id and channel == "task_report" and room_id and is_room_completion_recently_reported(room_id):
+        return web.json_response({"ok": True, "status": "duplicate", "roomId": room_id})
 
-    from web_execution import enqueue_room_turn, _room_session_ids, broadcast_ws_json
     current_enqueue = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
 
-    core_sid = _room_session_ids.get(CORE_ORCHESTRATOR_ROOM_ID) or get_session(ns="core_")
+    parent_ns = (
+        "core_" if parent_agent_id == CORE_ORCHESTRATOR_ROOM_ID
+        else ("vault_" if parent_agent_id == EXPERT_VAULT_ROOM_ID else "coding_")
+    )
+    target_sid = _room_session_ids.get(parent_agent_id) or get_session(ns=parent_ns)
 
     is_already_running, q_size = await current_enqueue(
-        room_id=CORE_ORCHESTRATOR_ROOM_ID,
+        room_id=parent_agent_id,
         user_text=message,
         is_voice_mode=False,
-        client_session_id=core_sid,
+        client_session_id=target_sid,
         is_new_session=False,
         channel=channel,
         task_id=task_id,
@@ -1332,24 +1345,25 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
             room_id=room_id or "",
             task_id=task_id or "",
             summarize=True,
+            agent_id=master_memory.normalize_agent_id(parent_agent_id),
         )
     except Exception:
         pass
 
     await current_broadcast({
         "type": "orchestrator_notify",
-        "roomId": CORE_ORCHESTRATOR_ROOM_ID,
+        "roomId": parent_agent_id,
         "taskId": task_id,
         "sourceRoomId": room_id,
         "text": message[:120],
         "queueSize": q_size,
     })
 
-    logger.info("[orchestrator] 마스터 완료보고 턴 적재 (taskId=%s, sourceRoom=%s, q_size=%s)", task_id, room_id, q_size)
+    logger.info("[orchestrator] 부모 에이전트(%s) 완료보고 턴 적재 (taskId=%s, sourceRoom=%s, q_size=%s)", parent_agent_id, task_id, room_id, q_size)
     return web.json_response({
         "ok": True,
         "status": "queued" if is_already_running else "started",
-        "target": CORE_ORCHESTRATOR_ROOM_ID,
+        "target": parent_agent_id,
         "taskId": task_id,
         "sourceRoomId": room_id,
         "queuePosition": q_size,
