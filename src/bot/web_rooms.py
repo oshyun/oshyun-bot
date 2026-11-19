@@ -888,6 +888,24 @@ async def handle_chat_rooms(_request: web.Request) -> web.Response:
     })
 
 
+async def handle_search_chat_rooms(request: web.Request) -> web.Response:
+    """GET /api/chat/rooms/search?q=... — 대화방 제목·메시지 본문 전체 검색."""
+    query = (request.query.get("q") or "").strip()
+    if not query:
+        return web.json_response({"ok": True, "rooms": [], "query": ""})
+    try:
+        limit = min(max(int(request.query.get("limit", "100")), 1), 200)
+    except ValueError:
+        limit = 100
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    rooms = current_chat_db.search_rooms(query, limit=limit)
+    return web.json_response({
+        "ok": True,
+        "rooms": rooms,
+        "query": query,
+    })
+
+
 async def handle_chat_history(request: web.Request) -> web.Response:
     """GET /api/chat/history?roomId=...&sessionId=... — 특정 대화방의 대화 내역 전체를 반환한다."""
     room_id = request.query.get("roomId", "").strip() or request.query.get("sessionId", "").strip()

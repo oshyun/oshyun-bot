@@ -513,6 +513,31 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
         self.assertAlmostEqual(msgs[0]["createdAt"], t_done, places=3)
 
+    def test_search_rooms_by_title_and_message_content(self):
+        """search_rooms가 제목뿐만 아니라 과거 메시지 본문(대소문자 무시)까지 검색하고 스니펫을 추출하는지 검증한다."""
+        chat_db.get_or_create_room("room-a", title="일반 대화", db_path=self.db_path)
+        chat_db.add_message("room-a", "user", "오늘 점심 메뉴 추천해줘", db_path=self.db_path)
+        chat_db.add_message("room-a", "assistant", "김치찌개와 돈까스를 추천합니다.", db_path=self.db_path)
+
+        chat_db.get_or_create_room("room-b", title="프로젝트 회의", db_path=self.db_path)
+        chat_db.add_message("room-b", "user", "SQLite FTS 말고 INSTR로 본문 검색 구현하기", db_path=self.db_path)
+        chat_db.add_message("room-b", "assistant", "네, 완료했습니다.", db_path=self.db_path)
+
+        # 1. preview에 없는 과거 메시지 본문 검색 ("김치찌개"는 preview가 아닌 직전 메시지가 아니라 room-a 마지막 메시지에 있음;
+        #    room-b의 경우 마지막 메시지가 "네, 완료했습니다."이므로 preview에 "INSTR"이 없음)
+        res_instr = chat_db.search_rooms("instr", db_path=self.db_path)
+        self.assertEqual([r["id"] for r in res_instr], ["room-b"])
+        self.assertIn("INSTR", res_instr[0]["matchSnippet"])
+
+        # 2. 제목 검색
+        res_title = chat_db.search_rooms("회의", db_path=self.db_path)
+        self.assertEqual([r["id"] for r in res_title], ["room-b"])
+
+        # 3. 한글 본문 검색
+        res_kr = chat_db.search_rooms("돈까스", db_path=self.db_path)
+        self.assertEqual([r["id"] for r in res_kr], ["room-a"])
+        self.assertIn("돈까스", res_kr[0]["matchSnippet"])
+
 
 if __name__ == "__main__":
     unittest.main()

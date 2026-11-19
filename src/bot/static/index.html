@@ -199,15 +199,18 @@
     /* ─── 사이드바 ─── */
     .sidebar {
       width: var(--sidebar-w);
+      height: 100%;
+      min-height: 0;
       flex-shrink: 0;
       background: var(--bg-sidebar);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
+      overflow: hidden;
       padding: 12px 10px 10px;
       padding-top: max(12px, env(safe-area-inset-top));
       z-index: 50;
     }
-    .sb-top { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px 6px; }
+    .sb-top { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px 6px; flex-shrink: 0; }
     .brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
     .brand-logo {
       width: 30px; height: 30px; border-radius: 9px;
@@ -247,6 +250,7 @@
       margin: 10px 0 8px; padding: 3px;
       background: var(--bg-subtle); border: 1px solid var(--border);
       border-radius: 10px;
+      flex-shrink: 0;
     }
     .nav-item {
       display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px;
@@ -665,7 +669,8 @@
     /* ─── 사이드바 대화방 검색 & 다중 선택 툴바 ─── */
     .sb-rooms-toolbar {
       display: flex; align-items: center; gap: 6px;
-      padding: 4px 2px 6px;
+      padding: 2px 2px 8px;
+      flex-shrink: 0;
     }
     .sb-search-box {
       flex: 1; min-width: 0;
@@ -742,7 +747,25 @@
     }
     .sb-select-bar button:hover { background: var(--bg-hover); }
 
-    .sb-rooms { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px 8px; overscroll-behavior: contain; }
+    .sb-scroll-area {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      margin: 0 -4px;
+      padding: 0 4px 8px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sb-rooms { flex: none; overflow: visible; margin: 0; padding: 0; }
+    .room-search-snippet {
+      font-size: calc(11.5px * var(--ui-scale, 1));
+      color: var(--text-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
     .sb-group-label {
       display: flex; align-items: center; justify-content: space-between;
       font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 650; color: var(--text-3);
@@ -934,6 +957,7 @@
       margin-top: 6px; padding: 8px 6px 8px 10px;
       border-radius: 10px;
       border-top: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .sb-footer-text { min-width: 0; flex: 1; line-height: 1.3; }
     .sb-agent-row {
@@ -3381,7 +3405,7 @@
 
     /* 좌측 사이드바 보관된 대화 (Archive) 아코디언 */
     .sb-archived-section {
-      margin-top: auto;
+      margin-top: 0;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
     }
@@ -3445,7 +3469,28 @@
         </button>
       </nav>
 
-      <!-- 상단 고정: 에이전트 계층 트리 (Master Agent -> Expert Agents -> Subtasks) -->
+      <!-- 상단 고정: 대화 검색 & 다중 선택 툴바 -->
+      <div class="sb-rooms-toolbar">
+        <div class="sb-search-box">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="room-search-input" placeholder="대화 제목·내용 검색…" oninput="onRoomSearchInput()" autocomplete="off">
+          <button type="button" class="sb-search-clear" id="btn-clear-room-search" onclick="clearRoomSearch()" title="검색 지우기">✕</button>
+        </div>
+        <button type="button" class="sb-select-btn" id="btn-sync-rooms" onclick="syncRoomsWithServer()" title="서버와 대화 목록 새로고침 및 동기화">
+          <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button type="button" class="sb-select-btn" id="btn-room-select-mode" onclick="toggleRoomSelectionMode()" title="대화방 다중 선택 (길게 눌러도 진입)">선택</button>
+      </div>
+
+      <div class="sb-select-bar" id="room-select-bar">
+        <button type="button" id="btn-select-all-rooms" onclick="toggleSelectAllRooms()">전체 선택</button>
+        <span id="room-selected-count">0개 선택됨</span>
+        <button type="button" onclick="exitRoomSelectionMode()">완료</button>
+      </div>
+
+      <!-- 중간 독립 스크롤 영역: 에이전트 계층 트리 + 일반 대화방 목록 -->
+      <div class="sb-scroll-area" id="sb-scroll-area">
+      <!-- 에이전트 계층 트리 (Master Agent -> Expert Agents -> Subtasks) -->
       <div class="sb-core-section" id="sb-core-section">
         <!-- 👑 마스터 에이전트 (루트) -->
         <div class="sb-core-label">👑 마스터 에이전트</div>
@@ -3518,25 +3563,8 @@
         <div class="sb-core-divider"></div>
       </div>
 
-      <div class="sb-rooms-toolbar">
-        <div class="sb-search-box">
-          <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="room-search-input" placeholder="대화 검색…" oninput="onRoomSearchInput()" autocomplete="off">
-          <button type="button" class="sb-search-clear" id="btn-clear-room-search" onclick="clearRoomSearch()" title="검색 지우기">✕</button>
-        </div>
-        <button type="button" class="sb-select-btn" id="btn-sync-rooms" onclick="syncRoomsWithServer()" title="서버와 대화 목록 새로고침 및 동기화">
-          <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </button>
-        <button type="button" class="sb-select-btn" id="btn-room-select-mode" onclick="toggleRoomSelectionMode()" title="대화방 다중 선택 (길게 눌러도 진입)">선택</button>
-      </div>
-
-      <div class="sb-select-bar" id="room-select-bar">
-        <button type="button" id="btn-select-all-rooms" onclick="toggleSelectAllRooms()">전체 선택</button>
-        <span id="room-selected-count">0개 선택됨</span>
-        <button type="button" onclick="exitRoomSelectionMode()">완료</button>
-      </div>
-
       <div class="sb-rooms" id="room-list-pc"></div>
+      </div>
 
       <!-- 보관된 대화 (아카이브) 섹션 -->
       <div class="sb-archived-section" id="sb-archived-section" style="display:none;">
@@ -4425,6 +4453,9 @@
     let isRoomSelectionMode = false;
     const selectedRoomIds = new Set();
     let roomSearchQuery = '';
+    let roomServerSearchResults = null;
+    let roomSearchDebounceTimer = null;
+    let roomSearchSeq = 0;
     let renamingRoomId = null;
     let confirmModalCallback = null;
     let activeSheetMsgIndex = -1;
@@ -5539,6 +5570,19 @@
       if (!syncRoomSelectionDom()) renderRoomList();
     }
 
+    function extractLocalMatchSnippet(text, query, radius = 32) {
+      const clean = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!clean) return '';
+      const idx = clean.toLowerCase().indexOf(query.toLowerCase());
+      if (idx < 0) return clean.slice(0, 80);
+      const start = Math.max(0, idx - radius);
+      const end = Math.min(clean.length, idx + query.length + radius);
+      let snippet = clean.slice(start, end);
+      if (start > 0) snippet = '…' + snippet;
+      if (end < clean.length) snippet = snippet + '…';
+      return snippet;
+    }
+
     function getFilteredUniqueRooms() {
       sortChatRooms();
       const seenIds = new Set();
@@ -5556,13 +5600,60 @@
         if (rid) seenIds.add(rid);
         if (sid) seenIds.add(sid);
 
+        r._searchSnippet = '';
         if (q) {
           const titleMatch = (r.title || '').toLowerCase().includes(q);
           const previewMatch = (r.preview || '').toLowerCase().includes(q);
-          const msgMatch = Array.isArray(r.messages) && r.messages.some(m => (m.text || '').toLowerCase().includes(q));
-          if (!titleMatch && !previewMatch && !msgMatch) continue;
+          const matchedLocalMsg = Array.isArray(r.messages)
+            ? r.messages.find(m => (m.text || '').toLowerCase().includes(q))
+            : null;
+          const serverMatch = roomServerSearchResults
+            ? (roomServerSearchResults.get(rid) || (sid ? roomServerSearchResults.get(sid) : null))
+            : null;
+          if (!titleMatch && !previewMatch && !matchedLocalMsg && !serverMatch) continue;
+          if (serverMatch && serverMatch.matchSnippet) {
+            r._searchSnippet = serverMatch.matchSnippet;
+          } else if (matchedLocalMsg) {
+            r._searchSnippet = extractLocalMatchSnippet(matchedLocalMsg.text, q);
+          } else if (previewMatch && !titleMatch) {
+            r._searchSnippet = extractLocalMatchSnippet(r.preview, q);
+          }
         }
         uniqueRooms.push(r);
+      }
+
+      // 초기 목록(최근 50개)에 없던 과거 대화방도 서버 본문 검색 결과에 있으면 포함
+      if (q && roomServerSearchResults) {
+        for (const sRoom of roomServerSearchResults.values()) {
+          if (!sRoom) continue;
+          const rid = String(sRoom.id || sRoom.roomId || '').trim();
+          if (!rid || rid === CORE_ROOM_ID || ORCHESTRATOR_ROOM_IDS.includes(rid)) continue;
+          let sid = String(sRoom.sessionId || '').trim();
+          if (sid && ORCHESTRATOR_ROOM_IDS.includes(sid)) continue;
+          if (sid === rid) sid = '';
+          if (seenIds.has(rid) || (sid && seenIds.has(sid))) continue;
+          seenIds.add(rid);
+          if (sid) seenIds.add(sid);
+          uniqueRooms.push({
+            id: rid,
+            roomId: rid,
+            title: sRoom.title || '새 대화',
+            preview: sRoom.preview || '',
+            sessionId: sid,
+            createdAt: sRoom.createdAt,
+            updatedAt: sRoom.updatedAt,
+            lastChannel: sRoom.lastChannel || 'web',
+            isArchived: Boolean(sRoom.isArchived),
+            isOrchestratorChild: Boolean(sRoom.isOrchestratorChild),
+            parentAgentId: sRoom.parentAgentId || null,
+            model: sRoom.model || null,
+            effort: sRoom.effort || null,
+            workdir: sRoom.workdir || null,
+            messageCount: sRoom.messageCount || 0,
+            messages: [],
+            _searchSnippet: sRoom.matchSnippet || '',
+          });
+        }
       }
       return uniqueRooms;
     }
@@ -5698,16 +5789,61 @@
     function onRoomSearchInput() {
       const input = document.getElementById('room-search-input');
       roomSearchQuery = input ? input.value : '';
+      const trimmed = roomSearchQuery.trim();
       const clearBtn = document.getElementById('btn-clear-room-search');
-      if (clearBtn) clearBtn.classList.toggle('show', Boolean(roomSearchQuery.trim()));
+      if (clearBtn) clearBtn.classList.toggle('show', Boolean(trimmed));
+
+      if (roomSearchDebounceTimer) {
+        clearTimeout(roomSearchDebounceTimer);
+        roomSearchDebounceTimer = null;
+      }
+      roomSearchSeq += 1;
+      const mySeq = roomSearchSeq;
+
+      if (!trimmed) {
+        roomServerSearchResults = null;
+        renderRoomList();
+        if (isRoomSelectionMode) updateRoomSelectionUi();
+        return;
+      }
+
+      // 1차: 로컬 캐시 기준 즉시 필터링
       renderRoomList();
       if (isRoomSelectionMode) updateRoomSelectionUi();
+
+      // 2차: 서버 SQLite 전체 메시지 본문 검색 (디바운스)
+      roomSearchDebounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/chat/rooms/search?q=' + encodeURIComponent(trimmed));
+          const data = await res.json();
+          if (mySeq !== roomSearchSeq || roomSearchQuery.trim() !== trimmed) return;
+          if (data && data.ok && Array.isArray(data.rooms)) {
+            const map = new Map();
+            for (const r of data.rooms) {
+              if (!r) continue;
+              const rid = String(r.id || r.roomId || '').trim();
+              const sid = String(r.sessionId || '').trim();
+              if (rid) map.set(rid, r);
+              if (sid && sid !== rid) map.set(sid, r);
+            }
+            roomServerSearchResults = map;
+            renderRoomList();
+            if (isRoomSelectionMode) updateRoomSelectionUi();
+          }
+        } catch (_) {}
+      }, 180);
     }
 
     function clearRoomSearch() {
       const input = document.getElementById('room-search-input');
       if (input) input.value = '';
       roomSearchQuery = '';
+      roomServerSearchResults = null;
+      roomSearchSeq += 1;
+      if (roomSearchDebounceTimer) {
+        clearTimeout(roomSearchDebounceTimer);
+        roomSearchDebounceTimer = null;
+      }
       document.getElementById('btn-clear-room-search')?.classList.remove('show');
       renderRoomList();
       if (isRoomSelectionMode) updateRoomSelectionUi();
@@ -9771,6 +9907,7 @@
                       ${queuedInRoom > 0 ? `<span class="room-queue-badge">대기 ${queuedInRoom}</span>` : ''}
                       ${relTime ? `<span class="room-time">${escapeHtml(relTime)}</span>` : ''}
                     </div>
+                    ${r._searchSnippet ? `<div class="room-search-snippet">${escapeHtml(r._searchSnippet)}</div>` : ''}
                   </div>
                   <div class="room-actions-inline">
                     <button type="button" class="room-del" onclick="event.stopPropagation();toggleArchiveRoom('${safeId}', true)" title="대화 보관"><svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></button>
