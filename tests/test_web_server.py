@@ -4378,6 +4378,61 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
         self.assertIn("NAVIGATE_ROOM", sw_content)
         self.assertIn("event.notification.close()", sw_content)
 
+    def test_sidebar_layout_search_toolbar_position_and_content_search(self):
+        """사이드바 flex 고정/스크롤 구조, 검색창 상단 배치, 본문 검색 연동 검증."""
+        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 1. 사이드바 flex + overflow: hidden 및 독립 스크롤 컨테이너 CSS 검증
+        sidebar_css = content.split(".sidebar {")[1].split("}")[0]
+        self.assertIn("flex-direction: column", sidebar_css)
+        self.assertIn("overflow: hidden", sidebar_css)
+        self.assertIn("height: 100%", sidebar_css)
+
+        scroll_css = content.split(".sb-scroll-area {")[1].split("}")[0]
+        self.assertIn("flex: 1", scroll_css)
+        self.assertIn("min-height: 0", scroll_css)
+        self.assertIn("overflow-y: auto", scroll_css)
+
+        footer_css = content.split("\n    .sb-footer {")[1].split("}")[0]
+        self.assertIn("flex-shrink: 0", footer_css)
+
+        # 2. HTML 배치 순서: sb-nav -> sb-rooms-toolbar(검색창) -> sb-scroll-area(sb-core-section + room-list-pc) -> sb-footer
+        nav_pos = content.find('<nav class="sb-nav">')
+        toolbar_pos = content.find('<div class="sb-rooms-toolbar">')
+        scroll_pos = content.find('<div class="sb-scroll-area" id="sb-scroll-area">')
+        core_pos = content.find('<div class="sb-core-section" id="sb-core-section">')
+        rooms_pos = content.find('<div class="sb-rooms" id="room-list-pc">')
+        footer_pos = content.find('<div class="sb-footer">')
+
+        self.assertGreater(toolbar_pos, nav_pos)
+        self.assertGreater(scroll_pos, toolbar_pos)
+        self.assertGreater(core_pos, scroll_pos)
+        self.assertGreater(rooms_pos, core_pos)
+        self.assertGreater(footer_pos, rooms_pos)
+
+        # 3. 본문 검색 API 연동 및 스니펫 렌더링 검증
+        self.assertIn("/api/chat/rooms/search?q=", content)
+        self.assertIn("roomServerSearchResults", content)
+        self.assertIn("room-search-snippet", content)
+
+    def test_api_chat_rooms_search_endpoint(self):
+        """GET /api/chat/rooms/search 엔드포인트가 chat_db.search_rooms 결과를 반환하는지 검증."""
+        import json as _json
+        from aiohttp.test_utils import make_mocked_request
+
+        fake_rooms = [{"id": "room-1", "title": "테스트", "matchSnippet": "…매칭 본문…"}]
+        with unittest.mock.patch.object(web_server.chat_db, "search_rooms", return_value=fake_rooms) as mock_search:
+            req = make_mocked_request("GET", "/api/chat/rooms/search?q=%EB%B3%B8%EB%AC%B8")
+            resp = asyncio.run(web_server.handle_search_chat_rooms(req))
+            self.assertEqual(resp.status, 200)
+            body = _json.loads(resp.text)
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["query"], "본문")
+            self.assertEqual(body["rooms"], fake_rooms)
+            mock_search.assert_called_once_with("본문", limit=100)
+
 
 if __name__ == "__main__":
     unittest.main()

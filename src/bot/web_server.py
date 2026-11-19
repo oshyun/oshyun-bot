@@ -222,6 +222,7 @@ from web_rooms import (
     handle_chat_rooms_backup_save,
     handle_get_attachment,
     handle_archive_chat_room,
+    handle_search_chat_rooms,
 )
 
 import web_orchestrator
@@ -715,6 +716,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
 
     # 대화방 및 메시지 히스토리 / 백업
     web_app.router.add_get("/api/chat/rooms", handle_chat_rooms)
+    web_app.router.add_get("/api/chat/rooms/search", handle_search_chat_rooms)
     web_app.router.add_post("/api/chat/rooms/archive", handle_archive_chat_room)
     web_app.router.add_post("/api/chat/rooms/{room_id}/archive", handle_archive_chat_room)
     web_app.router.add_get("/api/chat/rooms/backup", handle_chat_rooms_backup)
