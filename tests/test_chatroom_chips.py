@@ -7,11 +7,25 @@ import unittest
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "static")
 
 
+def read_static_bundle(static_dir: str) -> str:
+    parts = []
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.isfile(index_file):
+        with open(index_file, "r", encoding="utf-8") as f:
+            parts.append(f.read())
+    for sub in ("css", "js"):
+        dir_path = os.path.join(static_dir, sub)
+        if os.path.isdir(dir_path):
+            for fname in sorted(os.listdir(dir_path)):
+                if fname.endswith((".css", ".js")):
+                    with open(os.path.join(dir_path, fname), "r", encoding="utf-8") as f:
+                        parts.append(f.read())
+    return "\n".join(parts)
+
+
 class TestChatroomChips(unittest.TestCase):
     def setUp(self):
-        index_path = os.path.join(STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            self.html = f.read()
+        self.html = read_static_bundle(STATIC_DIR)
 
     def test_chatroom_chip_css_styles_exist(self):
         """대화방 칩 스타일(.md-link-chip.is-room) 및 역할별 테마가 존재하는지 검증."""

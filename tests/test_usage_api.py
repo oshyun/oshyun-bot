@@ -151,10 +151,20 @@ class TestUsageHtmlUi(unittest.TestCase):
     """index.html 내 배지 엘리먼트 및 클라이언트 스크립트 존재 검증."""
 
     def test_html_ui_markers(self):
-        html_path = os.path.join(_SRC_DIR, "static", "index.html")
+        static_dir = os.path.join(_SRC_DIR, "static")
+        html_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.isfile(html_path))
+        parts = []
         with open(html_path, "r", encoding="utf-8") as f:
-            content = f.read()
+            parts.append(f.read())
+        for sub in ("css", "js"):
+            sub_dir = os.path.join(static_dir, sub)
+            if os.path.isdir(sub_dir):
+                for fname in sorted(os.listdir(sub_dir)):
+                    if fname.endswith((".css", ".js")):
+                        with open(os.path.join(sub_dir, fname), "r", encoding="utf-8") as f:
+                            parts.append(f.read())
+        content = "\n".join(parts)
 
         for marker in (
             'id="avatar-usage-badge"',

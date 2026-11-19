@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import copy
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -29,6 +31,93 @@ import master_tasks
 import stream_parser
 import web_execution
 import web_server
+
+
+_STATIC_BUNDLE_CACHE: dict[str, str] = {}
+_STATIC_BUNDLE_FILE_CACHE: dict[str, str] = {}
+
+
+def _read_static_bundle(static_dir: str | None = None) -> str:
+    s_dir = static_dir or web_server.INTERNAL_STATIC_DIR
+    if s_dir in _STATIC_BUNDLE_CACHE:
+        return _STATIC_BUNDLE_CACHE[s_dir]
+    index_file = os.path.join(s_dir, "index.html")
+    if not os.path.isfile(index_file):
+        return ""
+    with open(index_file, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    css_files = [
+        "css/base.css",
+        "css/layout.css",
+        "css/chat.css",
+        "css/views-modals.css",
+        "css/responsive.css",
+        "css/master-inspector.css",
+    ]
+    js_files = [
+        "js/core.js",
+        "js/rooms-sync.js",
+        "js/master-memory.js",
+        "js/ws.js",
+        "js/markdown.js",
+        "js/composer.js",
+        "js/rooms-ui.js",
+        "js/messages.js",
+        "js/gestures.js",
+        "js/voice.js",
+        "js/vault.js",
+        "js/settings.js",
+        "js/init.js",
+    ]
+
+    css_parts = []
+    for rel in css_files:
+        p = os.path.join(s_dir, rel)
+        if os.path.isfile(p):
+            with open(p, "r", encoding="utf-8") as f:
+                c = f.read()
+                css_parts.append("\n".join(("    " + line if line else "") for line in c.splitlines()))
+
+    js_parts = []
+    for rel in js_files:
+        p = os.path.join(s_dir, rel)
+        if os.path.isfile(p):
+            with open(p, "r", encoding="utf-8") as f:
+                c = f.read()
+                js_parts.append("\n".join(("    " + line if line else "") for line in c.splitlines()))
+
+    bundled_css = "  <style>\n" + "\n".join(css_parts) + "\n  </style>\n"
+    bundled_js = "  <script>\n" + "\n".join(js_parts) + "\n  </script>\n"
+
+    res = re.sub(r'(?:  <link rel="stylesheet" href="/css/[^"]+">\n?)+', lambda m: bundled_css, html)
+    res = re.sub(r'(?:  <script src="/js/[^"]+"></script>\n?)+', lambda m: bundled_js, res)
+    _STATIC_BUNDLE_CACHE[s_dir] = res
+    return res
+
+
+def _get_static_bundle_path(static_dir: str | None = None) -> str:
+    s_dir = static_dir or web_server.INTERNAL_STATIC_DIR
+    if s_dir in _STATIC_BUNDLE_FILE_CACHE and os.path.exists(_STATIC_BUNDLE_FILE_CACHE[s_dir]):
+        return _STATIC_BUNDLE_FILE_CACHE[s_dir]
+    content = _read_static_bundle(s_dir)
+    fd, path = tempfile.mkstemp(suffix=".html", prefix="static_bundle_")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content)
+    _STATIC_BUNDLE_FILE_CACHE[s_dir] = path
+    return path
+
+
+def _cleanup_bundle_files():
+    for p in _STATIC_BUNDLE_FILE_CACHE.values():
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
+atexit.register(_cleanup_bundle_files)
 
 
 def _install_runtime_isolation(temp_dir: str):
@@ -1175,10 +1264,7 @@ class TestWebServerStandalone(unittest.TestCase):
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        self.assertTrue(os.path.isfile(index_path))
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         # selectRoom 내부에서 이전 메시지 잔상이 남지 않도록 renderMessagesForCurrentRoom 이 즉시 호출되는지 검증
         self.assertRegex(
@@ -1196,9 +1282,7 @@ class TestWebServerStandalone(unittest.TestCase):
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         # 1. 풀스크린 음성 바로가기 오버레이(voice-overlay)가 제거되었는지 검증
         self.assertNotIn('id="voice-overlay"', content)
@@ -1220,9 +1304,7 @@ class TestWebServerStandalone(unittest.TestCase):
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         self.assertIn("sendUserMessage(targetPrompt, false, { skipFocus: true })", content)
         self.assertIn("const skipFocus = Boolean(isVoiceTurn || (options && options.skipFocus));", content)
@@ -1233,9 +1315,7 @@ class TestWebServerStandalone(unittest.TestCase):
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         # abortCurrentSession 함수 내에서 inputEl.value = '' 초기화가 수행되지 않는지 확인
         self.assertNotIn("abortCurrentSession(roomId = currentRoomId) {\n      currentSpeechTranscript = '';\n      hasDispatchedSpeech = true;\n      stopVoiceRecording(true);\n      const inputEl = document.getElementById('chat-input');\n      if (inputEl) { inputEl.value = '';", content)
@@ -1249,9 +1329,7 @@ class TestWebServerStandalone(unittest.TestCase):
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            html = f.read()
+        html = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         # 1. 원클릭 이미지 첨부 버튼 (#btn-attach 및 triggerFileInput 직접 호출)
         self.assertIn('id="btn-attach"', html)
@@ -1313,14 +1391,28 @@ class TestVoiceRouteServing(AioHTTPTestCase):
             self.assertIn('id="chat-input"', html)
             self.assertNotIn('id="voice-overlay"', html)
 
+    async def test_static_css_and_js_modular_routes(self):
+        """분리된 css/*.css 및 js/*.js 모듈 정적 파일이 200 및 올바른 Content-Type으로 서빙되는지 검증."""
+        for css_rel in ("css/base.css", "css/layout.css", "css/chat.css"):
+            res = await self.client.request("GET", f"/{css_rel}?v=1")
+            self.assertEqual(res.status, 200, f"Failed to serve /{css_rel}")
+            self.assertIn("text/css", res.headers.get("Content-Type", ""))
+            body = await res.text()
+            self.assertTrue(len(body) > 0)
+
+        for js_rel in ("js/core.js", "js/ws.js", "js/composer.js"):
+            res = await self.client.request("GET", f"/{js_rel}?v=1")
+            self.assertEqual(res.status, 200, f"Failed to serve /{js_rel}")
+            self.assertIn("javascript", res.headers.get("Content-Type", "").lower())
+            body = await res.text()
+            self.assertTrue(len(body) > 0)
+
     def test_static_index_html_chat_turn_queue(self):
         """index.html 의 대기열(Queue) UI 동작 로직이 올바르게 구현되어 있는지 검증."""
         import os
         from web_server import INTERNAL_STATIC_DIR
 
-        index_path = os.path.join(INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
         # 1. handleWsEvent 에서 data.type === 'queued' 처리 확인
         self.assertIn("data.type === 'queued'", content)
@@ -1356,9 +1448,7 @@ class TestVoiceRouteServing(AioHTTPTestCase):
 
     def test_static_index_html_pull_to_refresh_bottom(self):
         """index.html 의 상단 및 하단 당겨서 새로고침(Pull to Refresh) 로직과 스타일 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 상단 및 하단 당김 스타일 및 로직 검증 (대폭 엄격해진 판정 기준 포함)
         for marker in (
@@ -1373,9 +1463,7 @@ class TestVoiceRouteServing(AioHTTPTestCase):
 
     def test_static_index_html_effort_display(self):
         """index.html 의 응답 모델명 옆 Effort 표시 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         for marker in (
             "metaParts.push(effortVal ? `${m.model} (${effortVal})` : m.model)",
@@ -1713,9 +1801,7 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
 
     def test_static_index_html_mobile_polish_and_long_press_selection(self):
         """index.html 에 대화방 롱프레스 다중 선택, 일괄 삭제/고정/이름변경 및 모바일 최적화 기능이 포함되어 있는지 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 대화방 롱프레스 다중 선택 및 일괄 액션 함수 확인
         for fn_sig in (
@@ -2377,9 +2463,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         )
         self.assertTrue(step_send_title.startswith("session-ctl send:"))
 
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            html = f.read()
+        html = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
         self.assertIn('id="core-agent-slot"', html)
         self.assertIn("CORE_ROOM_ID = '__core__'", html)
         self.assertIn("function ensureCoreRoom(", html)
@@ -2515,9 +2599,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertNotIn("--sandbox", inv_coding["cmd"])
 
         # 4. index.html의 계층형 트리 UI 요소 검증
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            html = f.read()
+        html = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
         self.assertIn("sb-master-branch", html)
         self.assertIn("expert-agent-node", html)
         self.assertIn('id="expert-vault-subtask-tree"', html)
@@ -3537,9 +3619,7 @@ class TestWebCrashRecovery(unittest.TestCase):
 
     def test_static_index_html_ios_ipad_keyboard_layout_protection(self):
         """Mac iPad(iOS) 하드웨어 키보드 및 터치 환경에서 강제 채팅키보드 호출과 레이아웃 깨짐 방지 로직 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 1. isTouchOrMobileDevice 디바이스 감지 함수 및 iPadOS(MacIntel + maxTouchPoints) 판별
         self.assertIn("function isTouchOrMobileDevice()", content)
@@ -3653,15 +3733,7 @@ class TestWebCrashRecovery(unittest.TestCase):
 
     def test_index_html_dynamic_effort_rendering(self):
         """index.html에서 고정된 5개 버튼 대신 모델별 지원 단계가 동적으로 렌더링되는지 검증."""
-        index_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "src",
-            "bot",
-            "static",
-            "index.html",
-        )
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 1. 모델별 동적 effort 추출 함수 및 축약 표시 함수 존재
         self.assertIn("function getSupportedEffortsForModel(", content)
@@ -3675,15 +3747,7 @@ class TestWebCrashRecovery(unittest.TestCase):
 
     def test_master_agent_graph_and_sidebar_features(self):
         """마스터 에이전트 온디맨드 관제 인스펙터, 미니멀 네비/슬롯, 불필요 요소 제거, 아카이브 및 sub-agent 정리 검증."""
-        index_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "src",
-            "bot",
-            "static",
-            "index.html",
-        )
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 1. 온디맨드 메모리 인스펙터 및 메모리 토글 버튼 마크업 (불필요한 모니터/스폰/4계층 섹션 헤더 제거 확인)
         self.assertIn('id="master-sidebar"', content)
@@ -3930,9 +3994,8 @@ class TestWebCrashRecovery(unittest.TestCase):
 
     def test_static_index_html_pretty_link_chips(self):
         """index.html 에 Gemini 스타일 프리티 링크 칩 CSS·렌더링 및 Bare URL/obsid.net 디코딩 로직이 있는지 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
+        bundle_path = _get_static_bundle_path(web_server.INTERNAL_STATIC_DIR)
 
         self.assertIn(".md .md-link-chip", content)
         self.assertIn(".md .md-link-chip.is-vault", content)
@@ -3992,7 +4055,7 @@ if (!out7.includes('<code>&lt;span style=&quot;color:#2e9b3f&quot;&gt;코드&lt;
 }
 """
             res = subprocess.run(
-                [node_bin, "-e", js_script, index_path],
+                [node_bin, "-e", js_script, bundle_path],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -4001,9 +4064,7 @@ if (!out7.includes('<code>&lt;span style=&quot;color:#2e9b3f&quot;&gt;코드&lt;
 
     def test_static_index_html_mobile_paste_and_collapsible_bubble(self):
         """index.html 에 모바일 긴 붙여넣기 최적화(pendingLongPastes, textContent) 및 긴 말풍선 축약/확대 UI가 있는지 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         self.assertIn("let pendingLongPastes = []", content)
         self.assertIn("LONG_PASTE_CHAR_THRESHOLD", content)
@@ -4017,9 +4078,7 @@ if (!out7.includes('<code>&lt;span style=&quot;color:#2e9b3f&quot;&gt;코드&lt;
 
     def test_static_index_html_font_size_setting(self):
         """index.html 에 UI 전체 크기 및 채팅방 본문 폰트 슬라이더, CSS 변수 동적 제어, localStorage 저장 로직이 있는지 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # UI 전체 크기 슬라이더 검증
         self.assertIn('id="range-ui-font-size"', content)
@@ -4067,9 +4126,8 @@ if (!out7.includes('<code>&lt;span style=&quot;color:#2e9b3f&quot;&gt;코드&lt;
 
     def test_static_index_html_ssot_message_upsert_and_no_duplicate_runtime(self):
         """index.html 의 room_created + orchestrator_dispatch 중복 방지 및 큐/방 격리 런타임 동작 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
+        bundle_path = _get_static_bundle_path(web_server.INTERNAL_STATIC_DIR)
 
         self.assertIn("function upsertRoomMessage(", content)
         self.assertIn("if (room && !room.userCreatedEmpty)", content)
@@ -4281,7 +4339,7 @@ assert.strictEqual(taxiRoom.messages.length, 6);
 assert.strictEqual(app.state().roomsRefreshCount, 1);
 """
         res = subprocess.run(
-            [node_bin, "-e", js_script, index_path],
+            [node_bin, "-e", js_script, bundle_path],
             capture_output=True,
             text=True,
             check=False,
@@ -4290,9 +4348,7 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
 
     def test_file_picker_and_visibilitychange_room_context_preservation(self):
         """파일 피커/이미지 첨부 및 visibilitychange 복귀 시 전문가/마스터 에이전트 룸 컨텍스트 유지 방어 로직 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 1. 파일 피커 활성화 플래그 및 핸들러 바인딩
         self.assertIn("let isFilePickerActive = false;", content)
@@ -4324,9 +4380,7 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
 
     def test_memory_rebalance_dynamic_parent_ui_wiring(self):
         """웹 UI 메모리 리밸런싱이 선택 에이전트(master/second_brain/bot_dev)에 따라 동적 parentAgentId로 스폰하는지 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         self.assertIn("const MEMORY_AGENT_PARENT_MAP =", content)
         self.assertIn("master: CORE_ROOM_ID", content)
@@ -4342,9 +4396,7 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
 
     def test_browser_and_system_notification_on_agent_reply(self):
         """에이전트 응답 완료 시 브라우저/시스템 레벨 알림 및 PWA/SW 지원 로직 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         sw_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "sw.js")
         with open(sw_path, "r", encoding="utf-8") as f:
@@ -4380,9 +4432,7 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
 
     def test_sidebar_layout_search_toolbar_position_and_content_search(self):
         """사이드바 flex 고정/스크롤 구조, 검색창 상단 배치, 본문 검색 연동 검증."""
-        index_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "index.html")
-        with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
 
         # 1. 사이드바 flex + overflow: hidden 및 독립 스크롤 컨테이너 CSS 검증
         sidebar_css = content.split(".sidebar {")[1].split("}")[0]
