@@ -93,11 +93,20 @@ class TestPreserveActiveSteps(unittest.TestCase):
         self.assertEqual(runs[0]["steps"][0]["tool"], "grep_search")
 
     def test_frontend_index_html_contains_merge_steps_and_preservation(self):
-        """index.html에 도구 호출 단계 보존을 위한 mergeToolSteps 함수와 스냅샷 보호 로직이 존재하는지 검증."""
-        index_path = os.path.join(SRC_BOT, "static", "index.html")
+        """index.html 및 js 모듈에 도구 호출 단계 보존을 위한 mergeToolSteps 함수와 스냅샷 보호 로직이 존재하는지 검증."""
+        static_dir = os.path.join(SRC_BOT, "static")
+        index_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.exists(index_path))
+        parts = []
         with open(index_path, "r", encoding="utf-8") as f:
-            content = f.read()
+            parts.append(f.read())
+        js_dir = os.path.join(static_dir, "js")
+        if os.path.isdir(js_dir):
+            for fname in sorted(os.listdir(js_dir)):
+                if fname.endswith(".js"):
+                    with open(os.path.join(js_dir, fname), "r", encoding="utf-8") as f:
+                        parts.append(f.read())
+        content = "\n".join(parts)
 
         self.assertIn("function mergeToolSteps", content)
         self.assertIn("liveState.steps = mergeToolSteps(liveState.steps, serverSteps);", content)

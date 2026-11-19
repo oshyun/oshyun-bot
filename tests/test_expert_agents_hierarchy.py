@@ -82,13 +82,23 @@ class TestExpertAgentsHierarchy(unittest.TestCase):
         self.assertTrue(any("[세컨브레인]" in it["text"] for it in warm_items))
 
     def test_bubble_sender_labels_in_frontend(self):
-        """웹 프론트엔드(index.html)에서 각 전문가 및 하위 에이전트의 실제 역할/이름 라벨 매핑 검증."""
+        """웹 프론트엔드(index.html 및 static 번들)에서 각 전문가 및 하위 에이전트의 실제 역할/이름 라벨 매핑 검증."""
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        html_path = os.path.join(repo_root, "src", "bot", "static", "index.html")
+        static_dir = os.path.join(repo_root, "src", "bot", "static")
+        html_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.isfile(html_path))
 
+        parts = []
         with open(html_path, "r", encoding="utf-8") as f:
-            html = f.read()
+            parts.append(f.read())
+        for sub in ("css", "js"):
+            sub_dir = os.path.join(static_dir, sub)
+            if os.path.isdir(sub_dir):
+                for fname in sorted(os.listdir(sub_dir)):
+                    if fname.endswith((".css", ".js")):
+                        with open(os.path.join(sub_dir, fname), "r", encoding="utf-8") as f:
+                            parts.append(f.read())
+        html = "\n".join(parts)
 
         # 1. getAssistantDisplayInfo 함수 존재 및 전문가 이름 매핑 검증
         self.assertIn("function getAssistantDisplayInfo(", html)
