@@ -45,8 +45,8 @@ class TestSessionCtlCli(unittest.TestCase):
         )
 
     @patch("session_ctl._api_request")
-    @patch("session_ctl._launch_background_watcher")
-    def test_cmd_spawn_with_notify_flag(self, mock_watcher, mock_api):
+    @patch("subprocess.Popen")
+    def test_cmd_spawn_with_notify_flag(self, mock_popen, mock_api):
         mock_api.return_value = {
             "ok": True,
             "status": "started",
@@ -54,6 +54,7 @@ class TestSessionCtlCli(unittest.TestCase):
             "roomId": "room-new-123",
             "taskId": "mt-new-456",
             "title": "테스트 세션",
+            "serverOnComplete": True,
         }
         args = argparse.Namespace(
             title="테스트 세션",
@@ -67,12 +68,13 @@ class TestSessionCtlCli(unittest.TestCase):
         )
         ret = session_ctl.cmd_spawn(args)
         self.assertEqual(ret, 0)
-        # 백그라운드 워처가 가동되었는지 검증
-        mock_watcher.assert_called_once_with("room-new-123", "mt-new-456")
+        # 외부 Watcher 프로세스가 실행되지 않고 서버 내장 훅 플래그가 전달되는지 검증
+        mock_popen.assert_not_called()
+        self.assertTrue(mock_api.call_args[1]["payload"].get("notify"))
 
     @patch("session_ctl._api_request")
-    @patch("session_ctl._launch_background_watcher")
-    def test_cmd_spawn_reused_and_force_new(self, mock_watcher, mock_api):
+    @patch("subprocess.Popen")
+    def test_cmd_spawn_reused_and_force_new(self, mock_popen, mock_api):
         import io
         from contextlib import redirect_stdout
 
@@ -84,6 +86,7 @@ class TestSessionCtlCli(unittest.TestCase):
             "roomId": "room-existing-card",
             "taskId": "mt-reused-111",
             "title": "11월 카드 혜택 정리",
+            "serverOnComplete": True,
         }
         args = argparse.Namespace(
             title="카드 혜택 추가 확인",
@@ -102,7 +105,7 @@ class TestSessionCtlCli(unittest.TestCase):
         self.assertIn("유사한 기존 채팅방", buf.getvalue())
         self.assertIn("0.812", buf.getvalue())
         self.assertNotIn("forceNew", mock_api.call_args[1]["payload"])
-        mock_watcher.assert_called_once_with("room-existing-card", "mt-reused-111")
+        mock_popen.assert_not_called()
 
         # --force-new 전달 시 payload에 forceNew=True 포함 검증
         args_forced = argparse.Namespace(
@@ -171,14 +174,15 @@ class TestSessionCtlCli(unittest.TestCase):
         self.assertIn("승격: 1건", out)
 
     @patch("session_ctl._api_request")
-    @patch("session_ctl._launch_background_watcher")
-    def test_cmd_send_with_notify_flag(self, mock_watcher, mock_api):
+    @patch("subprocess.Popen")
+    def test_cmd_send_with_notify_flag(self, mock_popen, mock_api):
         mock_api.return_value = {
             "ok": True,
             "status": "started",
             "roomId": "room-existing",
             "taskId": "mt-task-789",
             "title": "기존 세션",
+            "serverOnComplete": True,
         }
         args = argparse.Namespace(
             target="room-existing",
@@ -191,7 +195,8 @@ class TestSessionCtlCli(unittest.TestCase):
         )
         ret = session_ctl.cmd_send(args)
         self.assertEqual(ret, 0)
-        mock_watcher.assert_called_once_with("room-existing", "mt-task-789")
+        mock_popen.assert_not_called()
+        self.assertTrue(mock_api.call_args[1]["payload"].get("notify"))
 
     @patch("session_ctl._api_request")
     def test_cmd_watch_and_notify_master(self, mock_api):
