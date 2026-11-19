@@ -742,6 +742,59 @@ def update_message(
     return True
 
 
+def _normalize_room_rows(rows: list[sqlite3.Row], limit: int) -> list[dict]:
+    """SQLite rooms 조회 행을 정규화하고 빈 방 및 sessionId/id 중복을 제거한다."""
+    result = []
+    seen_keys = set()
+    for row in rows:
+        d = dict(row)
+        d["isNewSession"] = not bool(d.get("sessionId"))
+        d["isArchived"] = bool(d.get("isArchived"))
+        d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
+        if d["isOrchestratorChild"] and not d.get("parentAgentId"):
+            d["parentAgentId"] = "__core__"
+        sid = (d.get("sessionId") or "").strip()
+        rid = (d.get("id") or "").strip()
+
+        # 메시지 0건이고 제목이 '새 대화'인 빈 방은 제외
+        if d.get("messageCount", 0) == 0 and d.get("title") in ("새 대화", "대화방"):
+            continue
+
+        # sessionId 또는 id 기준 중복 제거
+        if sid and sid in seen_keys:
+            continue
+        if rid and rid in seen_keys:
+            continue
+
+        if sid:
+            seen_keys.add(sid)
+        if rid:
+            seen_keys.add(rid)
+
+        result.append(d)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _extract_match_snippet(text: str, query: str, radius: int = 32) -> str:
+    """검색어 주변 컨텍스트 스니펫을 추출한다."""
+    clean = " ".join((text or "").split())
+    if not clean:
+        return ""
+    idx = clean.lower().find(query.lower())
+    if idx < 0:
+        return clean[:80]
+    start = max(0, idx - radius)
+    end = min(len(clean), idx + len(query) + radius)
+    snippet = clean[start:end]
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(clean):
+        snippet = snippet + "…"
+    return snippet
+
+
 def get_rooms(
     limit: int = 50,
     include_hidden: bool = False,
@@ -785,38 +838,81 @@ def get_rooms(
             LIMIT ?;
         """
         cur.execute(query, (limit * 2,))
-        rows = cur.fetchall()
-        result = []
-        seen_keys = set()
-        for row in rows:
-            d = dict(row)
-            d["isNewSession"] = not bool(d.get("sessionId"))
-            d["isArchived"] = bool(d.get("isArchived"))
-            d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
-            if d["isOrchestratorChild"] and not d.get("parentAgentId"):
-                d["parentAgentId"] = "__core__"
-            sid = (d.get("sessionId") or "").strip()
-            rid = (d.get("id") or "").strip()
+        return _normalize_room_rows(cur.fetchall(), limit)
 
-            # 메시지 0건이고 제목이 '새 대화'인 빈 방은 제외
-            if d.get("messageCount", 0) == 0 and d.get("title") in ("새 대화", "대화방"):
-                continue
 
-            # sessionId 또는 id 기준 중복 제거
-            if sid and sid in seen_keys:
-                continue
-            if rid and rid in seen_keys:
-                continue
+def search_rooms(
+    query_text: str,
+    limit: int = 100,
+    include_hidden: bool = False,
+    include_archived: bool = True,
+    db_path: str | None = None,
+) -> list[dict]:
+    """대화방 제목·미리보기·메시지 본문 전체를 검색해 매칭된 대화방 목록을 반환한다."""
+    q = (query_text or "").strip()
+    if not q:
+        return get_rooms(
+            limit=limit,
+            include_hidden=include_hidden,
+            include_archived=include_archived,
+            db_path=db_path,
+        )
 
-            if sid:
-                seen_keys.add(sid)
-            if rid:
-                seen_keys.add(rid)
+    q_lower = q.lower()
+    with get_connection(db_path) as conn:
+        cur = conn.cursor()
+        where_clauses: list[str] = [
+            "("
+            "INSTR(LOWER(COALESCE(r.title, '')), ?) > 0 "
+            "OR INSTR(LOWER(COALESCE(r.preview, '')), ?) > 0 "
+            "OR EXISTS (SELECT 1 FROM messages m WHERE m.room_id = r.id AND INSTR(LOWER(COALESCE(m.text, '')), ?) > 0)"
+            ")"
+        ]
+        params: list[Any] = [q_lower, q_lower, q_lower, q_lower]
+        if not include_hidden:
+            where_clauses.append("r.is_hidden = 0")
+        if not include_archived:
+            where_clauses.append("r.is_archived = 0")
 
-            result.append(d)
-            if len(result) >= limit:
-                break
-        return result
+        where_sql = f"WHERE {' AND '.join(where_clauses)}"
+        sql = f"""
+            SELECT
+                r.id,
+                r.id AS roomId,
+                r.session_id AS sessionId,
+                r.title,
+                r.preview,
+                r.created_at AS createdAt,
+                r.updated_at AS updatedAt,
+                r.last_channel AS lastChannel,
+                r.is_hidden AS isHidden,
+                COALESCE(r.is_archived, 0) AS isArchived,
+                r.model,
+                r.effort,
+                r.workdir,
+                r.parent_agent_id AS parentAgentId,
+                (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
+                (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild,
+                (
+                    SELECT m.text
+                    FROM messages m
+                    WHERE m.room_id = r.id AND INSTR(LOWER(COALESCE(m.text, '')), ?) > 0
+                    ORDER BY m.id DESC
+                    LIMIT 1
+                ) AS matchedText
+            FROM rooms r
+            {where_sql}
+            ORDER BY r.updated_at DESC
+            LIMIT ?;
+        """
+        # SELECT 절 서브쿼리의 ? 1개 + WHERE 절의 ? 3개 + LIMIT ? 1개
+        params.append(limit * 2)
+        cur.execute(sql, tuple(params))
+        rooms = _normalize_room_rows(cur.fetchall(), limit)
+        for room in rooms:
+            matched_text = room.pop("matchedText", None)
+            room["matchSnippet"] = _extract_match_snippet(matched_text or "", q) if matched_text else ""
+        return rooms
 
 
 _ROOM_SELECT_COLS = """
