@@ -184,6 +184,12 @@ window.addEventListener('DOMContentLoaded', () => {
   const runDeferredInit = () => {
     setupDragAndDropAndPaste();
     loadChatRoomsFromStorage();
+    try {
+      const deepLinkRoom = new URLSearchParams(window.location.search).get('room');
+      if (deepLinkRoom) {
+        currentRoomId = deepLinkRoom;
+      }
+    } catch (_) {}
     loadChatRoomsFromServer(false);
 
     const fi = document.getElementById('file-input');
@@ -278,12 +284,16 @@ window.addEventListener('DOMContentLoaded', () => {
       const urlParams = new URLSearchParams(window.location.search);
       const initialRoom = urlParams.get('room');
       if (initialRoom) {
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('room');
-        window.history.replaceState({}, '', cleanUrl.toString());
+        if (typeof syncRoomHistory === 'function') {
+          syncRoomHistory(initialRoom, 'replace');
+        }
         setTimeout(() => {
-          if (typeof selectRoom === 'function') selectRoom(initialRoom);
+          if (typeof selectRoom === 'function') {
+            selectRoom(initialRoom, { historyMode: 'replace' });
+          }
         }, 100);
+      } else if (currentRoomId && typeof syncRoomHistory === 'function') {
+        syncRoomHistory(currentRoomId, 'replace');
       }
       const isVoicePath = window.location.pathname === '/voice' || window.location.pathname === '/voice/';
       const isVoiceParam = urlParams.has('voice') && urlParams.get('voice') !== '0' && urlParams.get('voice') !== 'false';
@@ -293,7 +303,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (isVoicePath) cleanUrl.pathname = '/';
         cleanUrl.searchParams.delete('voice');
         cleanUrl.searchParams.delete('auto');
-        window.history.replaceState({}, '', cleanUrl.toString());
+        window.history.replaceState(window.history.state || {}, '', cleanUrl.toString());
         setTimeout(() => {
           focusChatInput();
           tryStartVoice(false);
@@ -307,6 +317,17 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     setTimeout(runDeferredInit, 0);
   }
+});
+
+window.addEventListener('popstate', (event) => {
+  try {
+    const stateRoomId = event && event.state && event.state.roomId;
+    const urlRoomId = new URLSearchParams(window.location.search).get('room');
+    const targetRoomId = stateRoomId || urlRoomId;
+    if (targetRoomId && typeof selectRoom === 'function') {
+      selectRoom(targetRoomId, { historyMode: 'none' });
+    }
+  } catch (_) {}
 });
 
 window.addEventListener('load', () => {

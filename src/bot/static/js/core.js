@@ -99,6 +99,44 @@ window.fetch = function(url, options = {}) {
   return _nativeFetch.call(this, url, options);
 };
 
+// ─── 브라우저 히스토리 API (?room=<roomId>) 연동 ───
+function buildRoomHistoryUrl(roomId) {
+  try {
+    const url = new URL(window.location.href);
+    if (roomId) {
+      url.searchParams.set('room', roomId);
+    } else {
+      url.searchParams.delete('room');
+    }
+    return url.toString();
+  } catch (_) {
+    return roomId ? `?room=${encodeURIComponent(roomId)}` : (window.location.pathname || '/');
+  }
+}
+
+function syncRoomHistory(roomId, mode = 'push') {
+  if (!roomId || mode === 'none' || !window.history) return;
+  try {
+    const targetUrl = buildRoomHistoryUrl(roomId);
+    const currentStateRoomId = window.history.state && window.history.state.roomId;
+    const currentUrlRoomId = new URLSearchParams(window.location.search).get('room');
+
+    if (mode === 'replace') {
+      if (currentStateRoomId === roomId && currentUrlRoomId === roomId) return;
+      window.history.replaceState({ roomId }, '', targetUrl);
+      return;
+    }
+
+    // 동일 방 중복 클릭 시 히스토리 스택이 쌓이지 않도록 방지
+    if (currentStateRoomId === roomId && currentUrlRoomId === roomId) return;
+    if (!currentStateRoomId && currentUrlRoomId === roomId) {
+      window.history.replaceState({ roomId }, '', targetUrl);
+      return;
+    }
+    window.history.pushState({ roomId }, '', targetUrl);
+  } catch (_) {}
+}
+
 // ─── 유틸리티 헬퍼 ───
 function escapeHtml(str) {
   if (!str) return '';

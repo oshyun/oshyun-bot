@@ -390,6 +390,10 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
         if (matchedCur) currentRoomId = matchedCur.id;
       }
 
+      if (currentRoomId && typeof syncRoomHistory === 'function') {
+        syncRoomHistory(currentRoomId, 'replace');
+      }
+
       if (Array.isArray(data.activeRuns)) {
         applyActiveRunsSnapshot(data.activeRuns, true);
       }
@@ -739,9 +743,9 @@ async function executeBatchDeleteRooms(targetRoomIds) {
 
   if (wasCurrentDeleted) {
     if (chatRooms.length > 0) {
-      selectRoom(chatRooms[0].id, { keepDrawerOpen: sidebarWasOpen });
+      selectRoom(chatRooms[0].id, { keepDrawerOpen: sidebarWasOpen, historyMode: 'replace' });
     } else {
-      createNewChat(true, { keepDrawerOpen: sidebarWasOpen });
+      createNewChat(true, { keepDrawerOpen: sidebarWasOpen, historyMode: 'replace' });
     }
   } else {
     renderRoomList();
