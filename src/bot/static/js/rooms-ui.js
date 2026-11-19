@@ -396,11 +396,16 @@ function createNewChat(force = false, options = {}) {
 }
 
 async function selectRoom(roomId, options = {}) {
-  const { keepDrawerOpen = false } = (options || {});
+  const { keepDrawerOpen = false, historyMode = 'push' } = (options || {});
+  const prevRoomId = currentRoomId;
   if (currentView !== 'chat') switchView('chat');
   // 방금 띄운 빈 새 대화방에서 아무런 말도 하지 않고 다른 대화방으로 이동할 때 목록에서 제거
   cleanUnusedEmptyRooms(roomId);
   currentRoomId = roomId;
+  if (typeof syncRoomHistory === 'function') {
+    const effectiveMode = (historyMode === 'push' && prevRoomId === roomId) ? 'replace' : historyMode;
+    syncRoomHistory(roomId, effectiveMode);
+  }
   saveChatRoomsToStorage();
   renderRoomList();
   updateSessionBar({ skipMasterUi: true });

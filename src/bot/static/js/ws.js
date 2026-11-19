@@ -1087,7 +1087,12 @@ function handleWsEvent(data) {
       if (!isOrchRoom) {
         if (!String(oldRoomId || '').startsWith('room-')) {
           targetRoom.id = data.sessionId;
-          if (wasCurrentRoom) currentRoomId = data.sessionId;
+          if (wasCurrentRoom) {
+            currentRoomId = data.sessionId;
+            if (typeof syncRoomHistory === 'function') {
+              syncRoomHistory(currentRoomId, 'replace');
+            }
+          }
         }
         if (oldRoomId !== data.sessionId && roomLiveStates[oldRoomId]) {
           roomLiveStates[data.sessionId] = roomLiveStates[oldRoomId];
