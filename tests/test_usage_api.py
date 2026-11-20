@@ -216,8 +216,18 @@ class TestUsageHtmlUi(unittest.TestCase):
             "function renderAllModelsUsageHtml(",
             "function renderAllModelsUsageTargets(",
             "function refreshAllModelsUsage(",
+            'id="topbar-usage-badge"',
+            "document.querySelectorAll('.avatar-usage-badge')",
         ):
             self.assertIn(marker, content, f"HTML에 필수 마커 '{marker}'가 누락되었습니다.")
+
+    def test_mobile_topbar_badge_visible_outside_drawer(self):
+        """회귀: 모바일에선 사이드바(드로어) 안 배지가 안 보이므로 상단바에도 배지가 있어야 한다."""
+        html = open(os.path.join(_SRC_DIR, "static", "index.html"), encoding="utf-8").read()
+        sidebar_end = html.index("</aside>") if "</aside>" in html else html.index('<header class="topbar"')
+        topbar_pos = html.index('id="topbar-usage-badge"')
+        self.assertGreater(topbar_pos, sidebar_end, "topbar 배지는 사이드바 밖에 있어야 함")
+        self.assertIn("topbar-usage-badge", open(os.path.join(_SRC_DIR, "static", "css", "responsive.css"), encoding="utf-8").read())
 
 
 if __name__ == "__main__":

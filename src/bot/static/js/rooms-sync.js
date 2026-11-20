@@ -1370,10 +1370,11 @@ function updateAvatarUsageBadge(usage) {
   lastAgyUsageData = usage || null;
   renderAllModelsUsageTargets(lastAgyUsageData);
 
-  const badge = document.getElementById('avatar-usage-badge');
-  if (!badge) return;
+  // 사이드바(데스크톱) + 상단바(모바일: 사이드바는 오프캔버스 드로어라 안 보임) 배지 모두 갱신
+  const badges = document.querySelectorAll('.avatar-usage-badge');
+  if (!badges.length) return;
   if (!usage || (!usage.five_hour && !usage.weekly && !usage.badge_text)) {
-    badge.style.display = 'none';
+    badges.forEach(b => { b.style.display = 'none'; });
     return;
   }
 
@@ -1412,23 +1413,24 @@ function updateAvatarUsageBadge(usage) {
   }
 
   if (items.length === 0) {
-    badge.style.display = 'none';
+    badges.forEach(b => { b.style.display = 'none'; });
     return;
   }
 
-  badge.innerHTML = items.join('');
-  badge.style.display = 'inline-flex';
-  badge.title = buildAgyUsageTooltip(usage);
-
-  // 마우스 호버 시 실시간 상대 시간 재계산 (1회 등록)
-  if (!badge.dataset.hoverBound) {
-    badge.dataset.hoverBound = 'true';
-    badge.addEventListener('mouseenter', () => {
-      if (lastAgyUsageData) {
-        badge.title = buildAgyUsageTooltip(lastAgyUsageData);
-      }
-    });
-  }
+  const html = items.join('');
+  const tip = buildAgyUsageTooltip(usage);
+  badges.forEach(badge => {
+    badge.innerHTML = html;
+    badge.style.display = 'inline-flex';
+    badge.title = tip;
+    // 마우스 호버 시 실시간 상대 시간 재계산 (1회 등록)
+    if (!badge.dataset.hoverBound) {
+      badge.dataset.hoverBound = 'true';
+      badge.addEventListener('mouseenter', () => {
+        if (lastAgyUsageData) badge.title = buildAgyUsageTooltip(lastAgyUsageData);
+      });
+    }
+  });
 }
 
 let usagePollingTimer = null;
