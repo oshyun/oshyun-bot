@@ -784,7 +784,7 @@
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: calc(10.5px * var(--ui-scale, 1));
   white-space: nowrap; flex-shrink: 0; line-height: 1;
-  cursor: help;
+  cursor: pointer;
   padding: 1.5px 4px; border-radius: 4px;
   transition: background .15s ease;
   background: transparent;

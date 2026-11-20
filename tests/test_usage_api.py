@@ -70,6 +70,34 @@ class TestUsagePricingHelpers(unittest.TestCase):
         self.assertIsNone(res["weekly"])
         self.assertEqual(res["five_hour"]["pct"], 82.4)
 
+    def test_parse_quota_data_all_model_groups(self):
+        sample_data = {
+            "Gemini Models": {
+                "Weekly Limit Remaining": {"pct": 4.3, "window": "weekly", "reset_time": "2026-11-25T00:00:06Z"},
+                "Five Hour Limit Remaining": {"pct": 99.2, "window": "5h", "reset_time": "2026-11-20T08:00:06Z"},
+            },
+            "Claude and GPT models": {
+                "Weekly Limit Remaining": {"pct": 82.2, "window": "weekly", "reset_time": "2026-11-25T14:33:45Z"},
+                "Five Hour Limit Remaining": {"pct": 100, "window": "5h", "reset_time": "2026-11-20T09:56:20Z"},
+            },
+            "Gemini 4 Argon": {
+                "Gemini 4 Argon Weekly Limit": {"pct": 99.8, "window": "weekly", "reset_time": "2026-11-25T02:41:21Z"},
+            },
+        }
+        res = usage_pricing.parse_quota_data_to_usage(sample_data)
+        self.assertIsNotNone(res)
+        self.assertEqual(res["badge_text"], "5h 99% · W 4%")
+        groups = res.get("groups")
+        self.assertIsInstance(groups, list)
+        self.assertEqual(len(groups), 3)
+        by_name = {g["name"]: g for g in groups}
+        self.assertEqual(by_name["Gemini Models"]["weekly"]["pct"], 4.3)
+        self.assertEqual(by_name["Gemini Models"]["five_hour"]["pct"], 99.2)
+        self.assertEqual(by_name["Claude and GPT models"]["weekly"]["pct"], 82.2)
+        self.assertEqual(by_name["Claude and GPT models"]["five_hour"]["pct"], 100.0)
+        self.assertEqual(by_name["Gemini 4 Argon"]["weekly"]["pct"], 99.8)
+        self.assertIsNone(by_name["Gemini 4 Argon"]["five_hour"])
+
     def test_parse_quota_data_invalid(self):
         self.assertIsNone(usage_pricing.parse_quota_data_to_usage(None))
         self.assertIsNone(usage_pricing.parse_quota_data_to_usage({}))
@@ -180,6 +208,14 @@ class TestUsageHtmlUi(unittest.TestCase):
             "initUsagePolling();",
             "/api/usage",
             "mouseenter",
+            'id="settings-group-usage"',
+            'id="settings-usage-list"',
+            'id="modal-all-usage"',
+            'id="modal-usage-list"',
+            "function openAllUsageModal(",
+            "function renderAllModelsUsageHtml(",
+            "function renderAllModelsUsageTargets(",
+            "function refreshAllModelsUsage(",
         ):
             self.assertIn(marker, content, f"HTML에 필수 마커 '{marker}'가 누락되었습니다.")
 

@@ -1233,7 +1233,143 @@ function buildAgyUsageTooltip(usage) {
   return tooltipLines.join('\n');
 }
 
+function getQuotaStatusClass(pct) {
+  if (pct >= 50) return 'safe';
+  if (pct >= 20) return 'warning';
+  return 'danger';
+}
+
+function getQuotaStatusDot(cls) {
+  if (cls === 'safe') return '🟢';
+  if (cls === 'warning') return '🟡';
+  return '🔴';
+}
+
+function getQuotaGroupsFromUsage(usage) {
+  if (!usage) return [];
+  if (Array.isArray(usage.groups) && usage.groups.length > 0) {
+    return usage.groups;
+  }
+  if (usage.five_hour || usage.weekly) {
+    return [{
+      name: 'Gemini Models',
+      five_hour: usage.five_hour || null,
+      weekly: usage.weekly || null,
+      buckets: [],
+    }];
+  }
+  return [];
+}
+
+function renderQuotaBucketRowHtml(label, bucket) {
+  if (!bucket || typeof bucket.pct !== 'number') return '';
+  const rawPct = Math.max(0, Math.min(100, bucket.pct));
+  const barPct = Math.round(rawPct);
+  const pctText = Number.isInteger(rawPct) ? `${rawPct}%` : `${rawPct.toFixed(1)}%`;
+  const cls = getQuotaStatusClass(rawPct);
+  const dot = getQuotaStatusDot(cls);
+  const resetDesc = bucket.reset_time ? formatAgyResetTooltip(bucket.reset_time) : '';
+  return (
+    `<div class="usage-bucket-row">` +
+      `<div class="usage-bucket-top">` +
+        `<span class="usage-bucket-label">${escapeHtml(label)}</span>` +
+        `<span class="usage-bucket-pct ${cls}">${dot} ${pctText}</span>` +
+      `</div>` +
+      `<div class="usage-bar-track"><span class="usage-bar-fill ${cls}" style="width:${barPct}%"></span></div>` +
+      (resetDesc ? `<div class="usage-bucket-reset">초기화: ${escapeHtml(resetDesc)}</div>` : '') +
+    `</div>`
+  );
+}
+
+function renderAllModelsUsageHtml(usage) {
+  const groups = getQuotaGroupsFromUsage(usage);
+  if (groups.length === 0) {
+    return `<div class="setting-row"><div class="setting-desc">사용량 캐시 데이터가 없습니다. 새로고침을 눌러 조회하세요.</div></div>`;
+  }
+
+  const groupBlocks = groups.map(group => {
+    const rows = [];
+    if (group.weekly) rows.push(renderQuotaBucketRowHtml('주간 한도', group.weekly));
+    if (group.five_hour) rows.push(renderQuotaBucketRowHtml('5시간 한도', group.five_hour));
+    if (rows.length === 0 && Array.isArray(group.buckets)) {
+      group.buckets.forEach(b => {
+        rows.push(renderQuotaBucketRowHtml(b.name || b.window || '한도', b));
+      });
+    }
+    if (rows.length === 0) return '';
+    return (
+      `<div class="usage-group-block">` +
+        `<div class="usage-group-header">` +
+          `<span class="usage-group-name">${escapeHtml(group.name || '모델 그룹')}</span>` +
+        `</div>` +
+        `<div class="usage-bucket-list">${rows.join('')}</div>` +
+      `</div>`
+    );
+  }).filter(Boolean);
+
+  if (groupBlocks.length === 0) {
+    return `<div class="setting-row"><div class="setting-desc">표시할 모델 사용량 정보가 없습니다.</div></div>`;
+  }
+
+  const relTime = formatAgyRelativeTime(usage.timestamp, usage.cached_at);
+  const source = usage.source || 'agy CLI (/usage 캐시)';
+  const metaHtml =
+    `<div class="usage-meta-row">` +
+      `<span>마지막 갱신: ${escapeHtml(relTime)}</span>` +
+      `<span>출처: ${escapeHtml(source)}</span>` +
+    `</div>`;
+
+  return groupBlocks.join('') + metaHtml;
+}
+
+function renderAllModelsUsageTargets(usage) {
+  const html = renderAllModelsUsageHtml(usage);
+  ['settings-usage-list', 'modal-usage-list'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+function openAllUsageModal() {
+  renderAllModelsUsageTargets(lastAgyUsageData);
+  openModal('modal-all-usage');
+  if (!lastAgyUsageData) {
+    fetchAgyUsage(false);
+  }
+}
+
+function openUsageInSettings() {
+  closeModal('modal-all-usage');
+  switchView('settings');
+  setTimeout(() => {
+    const el = document.getElementById('settings-group-usage');
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 50);
+}
+
+async function refreshAllModelsUsage() {
+  const btns = document.querySelectorAll('.js-usage-refresh-btn');
+  btns.forEach(btn => {
+    btn.disabled = true;
+    btn.dataset.origText = btn.textContent;
+    btn.textContent = '갱신 중...';
+  });
+  try {
+    await fetchAgyUsage(true);
+  } finally {
+    btns.forEach(btn => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.origText || '새로고침';
+    });
+  }
+}
+
 function updateAvatarUsageBadge(usage) {
+  lastAgyUsageData = usage || null;
+  renderAllModelsUsageTargets(lastAgyUsageData);
+
   const badge = document.getElementById('avatar-usage-badge');
   if (!badge) return;
   if (!usage || (!usage.five_hour && !usage.weekly && !usage.badge_text)) {
@@ -1241,22 +1377,13 @@ function updateAvatarUsageBadge(usage) {
     return;
   }
 
-  lastAgyUsageData = usage;
-
-  // 헬퍼: 잔여율에 따른 상태 클래스 분기 (안전 / 주의 / 위험)
-  const getStatusClass = (pct) => {
-    if (pct >= 50) return 'safe';
-    if (pct >= 20) return 'warning';
-    return 'danger';
-  };
-
   const items = [];
 
   // 5시간 세션 쿼터 (미니 슬림 바 + 퍼센트)
   // 자식 요소에 title 속성을 넣으면 상위 요소의 상세 툴팁이 가려지므로 상위 툴팁 단일화
   if (usage.five_hour && typeof usage.five_hour.pct === 'number') {
     const pct = Math.max(0, Math.min(100, Math.round(usage.five_hour.pct)));
-    const cls = getStatusClass(pct);
+    const cls = getQuotaStatusClass(pct);
     items.push(
       `<div class="quota-pill">` +
         `<span class="quota-tag">5h</span>` +
@@ -1269,7 +1396,7 @@ function updateAvatarUsageBadge(usage) {
   // 주간 쿼터 (미니 슬림 바 + 퍼센트)
   if (usage.weekly && typeof usage.weekly.pct === 'number') {
     const pct = Math.max(0, Math.min(100, Math.round(usage.weekly.pct)));
-    const cls = getStatusClass(pct);
+    const cls = getQuotaStatusClass(pct);
     items.push(
       `<div class="quota-pill">` +
         `<span class="quota-tag">W</span>` +
