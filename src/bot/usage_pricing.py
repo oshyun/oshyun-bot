@@ -296,6 +296,52 @@ def _load_cached_quota_file(cache_file: str | None = None) -> dict[str, Any] | N
         return None
 
 
+def _parse_quota_group_buckets(buckets: dict[str, Any]) -> dict[str, Any] | None:
+    """단일 모델 그룹의 버킷 딕셔너리에서 5시간/주간 및 전체 버킷 목록을 추출한다."""
+    if not isinstance(buckets, dict):
+        return None
+
+    five_hour = None
+    weekly = None
+    parsed_buckets: list[dict[str, Any]] = []
+
+    for b_name, b in buckets.items():
+        if not isinstance(b, dict):
+            continue
+        w = str(b.get("window", "")).lower()
+        bn = str(b_name).lower()
+        pct = b.get("pct")
+        if pct is None:
+            continue
+        try:
+            pct_val = round(float(pct), 1)
+        except (ValueError, TypeError):
+            continue
+
+        reset_time = str(b.get("reset_time") or "")
+        bucket_entry = {
+            "name": str(b_name),
+            "window": str(b.get("window") or ""),
+            "pct": pct_val,
+            "reset_time": reset_time,
+        }
+        parsed_buckets.append(bucket_entry)
+
+        if "5h" in w or "five" in w or "5h" in bn or "five" in bn or "5 hour" in bn:
+            five_hour = {"pct": pct_val, "reset_time": reset_time}
+        elif "weekly" in w or "weekly" in bn or "week" in w or "week" in bn:
+            weekly = {"pct": pct_val, "reset_time": reset_time}
+
+    if not parsed_buckets:
+        return None
+
+    return {
+        "five_hour": five_hour,
+        "weekly": weekly,
+        "buckets": parsed_buckets,
+    }
+
+
 def parse_quota_data_to_usage(
     data: dict[str, Any] | None,
     timestamp: float | None = None,
@@ -306,43 +352,31 @@ def parse_quota_data_to_usage(
     if not isinstance(data, dict):
         return None
 
-    # Gemini 그룹 우선 선택, 없으면 첫 번째 유효 그룹
-    target_buckets: dict[str, Any] | None = None
-    for g_name, buckets in data.items():
-        if isinstance(buckets, dict) and "gemini" in g_name.lower():
-            target_buckets = buckets
-            break
-    if target_buckets is None:
-        for g_name, buckets in data.items():
-            if isinstance(buckets, dict):
-                target_buckets = buckets
-                break
+    groups: list[dict[str, Any]] = []
+    primary_group: dict[str, Any] | None = None
 
-    if not isinstance(target_buckets, dict):
+    for g_name, buckets in data.items():
+        parsed = _parse_quota_group_buckets(buckets)
+        if not parsed:
+            continue
+        group_entry = {
+            "name": str(g_name),
+            "five_hour": parsed["five_hour"],
+            "weekly": parsed["weekly"],
+            "buckets": parsed["buckets"],
+        }
+        groups.append(group_entry)
+        if primary_group is None and "gemini" in str(g_name).lower():
+            primary_group = group_entry
+
+    if primary_group is None and groups:
+        primary_group = groups[0]
+
+    if primary_group is None:
         return None
 
-    five_hour = None
-    weekly = None
-
-    for b_name, b in target_buckets.items():
-        if not isinstance(b, dict):
-            continue
-        w = str(b.get("window", "")).lower()
-        bn = str(b_name).lower()
-        pct = b.get("pct")
-        if pct is None:
-            continue
-        try:
-            pct_val = float(pct)
-        except (ValueError, TypeError):
-            continue
-
-        reset_time = str(b.get("reset_time") or "")
-
-        if "5h" in w or "five" in w or "5h" in bn or "five" in bn or "5 hour" in bn:
-            five_hour = {"pct": round(pct_val, 1), "reset_time": reset_time}
-        elif "weekly" in w or "weekly" in bn or "week" in w or "week" in bn:
-            weekly = {"pct": round(pct_val, 1), "reset_time": reset_time}
+    five_hour = primary_group["five_hour"]
+    weekly = primary_group["weekly"]
 
     if not five_hour and not weekly:
         return None
@@ -358,6 +392,7 @@ def parse_quota_data_to_usage(
         "five_hour": five_hour,
         "weekly": weekly,
         "badge_text": badge_text,
+        "groups": groups,
         "timestamp": timestamp or time.time(),
         "cached_at": cached_at,
         "source": source,

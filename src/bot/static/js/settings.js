@@ -62,7 +62,7 @@ function applyStatusPayload(data) {
   if (Array.isArray(data.activeRuns)) {
     applyActiveRunsSnapshot(data.activeRuns, true);
   }
-  if (data.usage) {
+  if ('usage' in data) {
     updateAvatarUsageBadge(data.usage);
   }
   updateRoomConfigBar();
