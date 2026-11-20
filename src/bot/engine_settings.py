@@ -145,6 +145,14 @@ def get_model_labels(engine: str | None = None) -> dict[str, str]:
     return inst.get_models()
 
 
+def get_all_model_labels() -> dict[str, str]:
+    """모든 등록 엔진의 {모델키: 표시명} 합집합 (모델명 사전 검증·오류 보고용)."""
+    merged: dict[str, str] = {}
+    for eng in ENGINE_REGISTRY:
+        merged.update(get_engine_instance(eng).get_models())
+    return merged
+
+
 def get_supported_efforts(
     engine: str | None = None, model: str | None = None
 ) -> tuple[str, ...]:
