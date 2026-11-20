@@ -303,3 +303,12 @@ body.is-pinching-font {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+/* 모바일: 사이드바가 오프캔버스 드로어라 상단바 쿼터 배지를 노출 — 공간 절약을 위해 바 트랙 숨김 */
+@media (max-width: 1024px) {
+  .topbar-usage-badge { gap: 4px; padding: 4px 3px; }
+  .topbar-usage-badge .quota-track { display: none; }
+}
+@media (min-width: 1025px) {
+  .topbar-usage-badge { display: none !important; } /* 데스크톱은 사이드바 푸터 배지 사용 */
+}
