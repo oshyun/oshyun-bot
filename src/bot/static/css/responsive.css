@@ -304,11 +304,56 @@ body.is-pinching-font {
   -webkit-user-select: none !important;
 }
 
-/* 모바일: 사이드바가 오프캔버스 드로어라 상단바 쿼터 배지를 노출 — 공간 절약을 위해 바 트랙 숨김 */
+/* 모바일: 사이드바가 오프캔버스 드로어라 상단바 쿼터 배지를 노출 — 공간 절약을 위해 바 트랙 숨김 및 콤팩트 패딩 */
 @media (max-width: 1024px) {
-  .topbar-usage-badge { gap: 4px; padding: 4px 3px; }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+  .topbar-usage-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3.5px;
+    padding: 2.5px 5px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+  }
   .topbar-usage-badge .quota-track { display: none; }
 }
+
+@media (max-width: 480px) {
+  .topbar-title-btn span.t { max-width: min(28vw, 120px); }
+  .topbar-usage-badge {
+    gap: 2px;
+    padding: 2px 3.5px;
+    font-size: calc(9.5px * var(--ui-scale, 1));
+  }
+  .topbar-usage-badge .quota-pill { gap: 2px; }
+  .topbar-usage-badge .quota-tag { font-size: calc(8.5px * var(--ui-scale, 1)); }
+}
+
+@media (max-width: 360px) {
+  .topbar-title-btn span.t { max-width: min(20vw, 75px); }
+  .topbar-workdir-pill { display: none !important; }
+}
+
+/* PWA Standalone 모드 (안드로이드 WebAPK / iOS 홈 화면 바로가기) 전용 */
+@media all and (display-mode: standalone) {
+  .topbar {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+}
+@media (max-width: 1024px) and (display-mode: standalone) {
+  .topbar-usage-badge {
+    display: inline-flex !important;
+  }
+}
+
 @media (min-width: 1025px) {
   .topbar-usage-badge { display: none !important; } /* 데스크톱은 사이드바 푸터 배지 사용 */
 }
