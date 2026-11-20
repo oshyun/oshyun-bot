@@ -395,7 +395,7 @@ async def handle_usage(request: web.Request) -> web.Response:
     return web.json_response({
         "status": "ok",
         "usage": usage,
-    })
+    }, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 async def handle_settings(request: web.Request) -> web.Response:

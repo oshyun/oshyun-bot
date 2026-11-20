@@ -1437,7 +1437,9 @@ let usagePollingTimer = null;
 const USAGE_POLL_INTERVAL_MS = 45000; // 45초 주기 (30~60초 권고)
 
 async function fetchAgyUsage(forceRefresh = false) {
-  if (document.hidden) return; // 비활성 탭 절전
+  // 절전: 주기적 자동 폴링이고 문서가 비활성인 경우에만 스킵
+  // 강제 갱신(forceRefresh)이거나 최초 로드 시에는 안드로이드 PWA 시작 시점의 hidden 여부와 무관하게 조회 진행
+  if (!forceRefresh && document.hidden) return;
   try {
     const url = forceRefresh ? '/api/usage?refresh=1' : '/api/usage';
     const res = await fetch(url);
@@ -1454,7 +1456,8 @@ function initUsagePolling() {
   if (usagePollingInitialized) return;
   usagePollingInitialized = true;
 
-  fetchAgyUsage(false);
+  // 최초 로드 시 forceRefresh=true로 즉시 조회하여 PWA standalone 화면에서도 대기 없이 배지 표시
+  fetchAgyUsage(true);
 
   if (usagePollingTimer) clearInterval(usagePollingTimer);
   usagePollingTimer = setInterval(() => {
@@ -1463,10 +1466,20 @@ function initUsagePolling() {
     }
   }, USAGE_POLL_INTERVAL_MS);
 
+  // 안드로이드 PWA(standalone) 및 모바일 브라우저 라이프사이클 대응:
+  // 1) 탭/앱 전환 및 화면 켜짐 (visibilitychange)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       fetchAgyUsage(false);
     }
+  });
+
+  // 2) PWA 백그라운드 복귀 및 창 포커스 복원 (focus, pageshow)
+  window.addEventListener('focus', () => {
+    fetchAgyUsage(false);
+  });
+  window.addEventListener('pageshow', () => {
+    fetchAgyUsage(false);
   });
 }
 

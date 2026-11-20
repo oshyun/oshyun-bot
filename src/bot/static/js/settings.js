@@ -390,8 +390,37 @@ function onNotificationSoundChange() {
 let deferredPwaPrompt = null;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      if (reg) {
+        // 안드로이드 PWA(standalone) 시작 시 서비스 워커 백그라운드 갱신 검사
+        reg.update().catch(() => {});
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          }
+        });
+      }
+    }).catch(() => {});
   });
+
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!swRefreshing) {
+      swRefreshing = true;
+      if (typeof fetchAgyUsage === 'function') {
+        fetchAgyUsage(true);
+      }
+    }
+  });
+
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'NAVIGATE_ROOM') {
       const targetId = event.data.roomId;

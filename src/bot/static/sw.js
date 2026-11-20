@@ -1,5 +1,5 @@
 // oshyun-bot PWA Service Worker
-const CACHE_NAME = 'oshyun-hub-v7';
+const CACHE_NAME = 'oshyun-hub-v8';
 const CORE_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -15,6 +15,12 @@ self.addEventListener('install', (event) => {
       return cache.addAll(CORE_ASSETS).catch(() => {});
     }).then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {

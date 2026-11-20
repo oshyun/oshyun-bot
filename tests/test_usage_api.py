@@ -223,11 +223,48 @@ class TestUsageHtmlUi(unittest.TestCase):
 
     def test_mobile_topbar_badge_visible_outside_drawer(self):
         """회귀: 모바일에선 사이드바(드로어) 안 배지가 안 보이므로 상단바에도 배지가 있어야 한다."""
-        html = open(os.path.join(_SRC_DIR, "static", "index.html"), encoding="utf-8").read()
+        with open(os.path.join(_SRC_DIR, "static", "index.html"), encoding="utf-8") as f:
+            html = f.read()
         sidebar_end = html.index("</aside>") if "</aside>" in html else html.index('<header class="topbar"')
         topbar_pos = html.index('id="topbar-usage-badge"')
         self.assertGreater(topbar_pos, sidebar_end, "topbar 배지는 사이드바 밖에 있어야 함")
-        self.assertIn("topbar-usage-badge", open(os.path.join(_SRC_DIR, "static", "css", "responsive.css"), encoding="utf-8").read())
+        with open(os.path.join(_SRC_DIR, "static", "css", "responsive.css"), encoding="utf-8") as f:
+            self.assertIn("topbar-usage-badge", f.read())
+
+    def test_pwa_standalone_cache_busting_and_lifecycle(self):
+        """안드로이드 PWA(standalone) 환경에서 구버전 캐시 고착을 막고 즉시 갱신되도록 보장하는지 검증."""
+        static_dir = os.path.join(_SRC_DIR, "static")
+        with open(os.path.join(static_dir, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        with open(os.path.join(static_dir, "sw.js"), encoding="utf-8") as f:
+            sw_js = f.read()
+        with open(os.path.join(static_dir, "js", "rooms-sync.js"), encoding="utf-8") as f:
+            rooms_sync_js = f.read()
+        with open(os.path.join(static_dir, "js", "settings.js"), encoding="utf-8") as f:
+            settings_js = f.read()
+        with open(os.path.join(static_dir, "css", "responsive.css"), encoding="utf-8") as f:
+            responsive_css = f.read()
+
+        # 1. Service Worker 캐시 이름이 업그레이드되었는지 (구버전 캐시 자동 퍼지)
+        self.assertIn("oshyun-hub-v8", sw_js, "Service Worker 캐시 버전이 v8로 업그레이드되어야 함")
+        self.assertNotIn("oshyun-hub-v7", sw_js, "구버전 캐시 v7이 남아있지 않아야 함")
+
+        # 2. index.html의 캐시 버스팅 파라미터가 갱신되었는지
+        self.assertIn("rooms-sync.js?v=3", html, "rooms-sync.js의 캐시 버스팅 파라미터가 갱신되어야 함")
+        self.assertIn("responsive.css?v=2", html, "responsive.css의 캐시 버스팅 파라미터가 갱신되어야 함")
+
+        # 3. PWA 라이프사이클 (pageshow, focus, visibilitychange) 복귀 시 갱신 리스너 검증
+        self.assertIn("addEventListener('pageshow'", rooms_sync_js)
+        self.assertIn("addEventListener('focus'", rooms_sync_js)
+        self.assertIn("fetchAgyUsage(true)", rooms_sync_js, "최초 실행 시 강제 갱신으로 document.hidden 여부와 무관하게 즉시 조회해야 함")
+
+        # 4. SW 등록 시 백그라운드 갱신 검사(update) 및 제어권 교체(controllerchange)
+        self.assertIn("reg.update()", settings_js)
+        self.assertIn("controllerchange", settings_js)
+
+        # 5. PWA standalone 미디어 쿼리 지원
+        self.assertIn("display-mode: standalone", responsive_css)
+        self.assertIn("topbar-usage-badge", responsive_css)
 
 
 if __name__ == "__main__":
