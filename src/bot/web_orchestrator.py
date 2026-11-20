@@ -752,6 +752,26 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     req_effort = payload.get("effort")
     clean_effort = str(req_effort).strip() if (isinstance(req_effort, str) and req_effort.strip()) else None
 
+    # --model 사전 검증: 표시명("Claude Sonnet 5.5 (Medium)") 정규화, 해석 불가 시 허용 목록과 함께 400
+    if clean_model:
+        import child_error_report
+        import engine_settings
+        known = engine_settings.get_all_model_labels()
+        norm_model, norm_effort = child_error_report.normalize_model(clean_model, known)
+        if norm_model is None:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "error": f"invalid model selection (--model \"{clean_model}\"): 허용 모델 목록: "
+                    + child_error_report.format_allowed_models(known),
+                    "allowedModels": list(known),
+                },
+                status=400,
+            )
+        clean_model = norm_model
+        if clean_effort is None:
+            clean_effort = norm_effort
+
     req_parent = payload.get("parentAgentId") or payload.get("parent_agent_id") or payload.get("parent")
     parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
     if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:

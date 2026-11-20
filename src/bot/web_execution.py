@@ -45,6 +45,7 @@ from master_supervisor import (
 )
 import master_memory
 import master_tasks
+import child_error_report
 from paths import (
     CODEDIR,
     child_default_workdir,
@@ -719,6 +720,8 @@ async def _finalize_orchestrator_completion(
     elapsed_seconds: int = 0,
     error_text: str | None = None,
     on_complete: Callable[[dict[str, Any]], Any] | None = None,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> None:
     """턴 종료 시 작업 원장 갱신, 사용자 정의 on_complete 훅 호출, 부모 에이전트 자동 보고를 일원화한다."""
     is_wait = False
@@ -763,17 +766,51 @@ async def _finalize_orchestrator_completion(
     )
 
     # 비동기 위임(--async)은 마스터가 응답을 기다리지 않으므로 서버 내장 완료 훅이 직접 보고 턴을 건다.
-    if channel == "orchestrator" and not is_wait and not is_orchestrator:
+    # 실패(오류·중단·타임아웃·취소·잘못된 모델)는 사용자가 UI 에서 직접 띄운 하위 채팅(부모 지정 방)도 부모에게 보고한다.
+    # 부모/보고 턴 자체(is_orchestrator, task_report 채널)는 제외해 오류 보고의 재귀 루프를 차단한다.
+    if is_orchestrator or is_wait or channel in child_error_report.NO_REPORT_CHANNELS:
+        return
+    if channel == "orchestrator" or (not is_success and _room_parent_id(room_id)):
         notify_fn = _get_mod_attr("_notify_master_agent", _notify_master_agent)
-        await notify_fn(room_id, task_id, result_text, is_success=is_success)
+        if is_success or not (model or effort):
+            await notify_fn(room_id, task_id, result_text, is_success=is_success)
+        else:
+            await notify_fn(
+                room_id, task_id, error_text or result_text, is_success=False, model=model, effort=effort
+            )
 
 
-async def _notify_master_agent(room_id: str, task_id: str | None, result_text: str, is_success: bool = True) -> None:
+def _room_parent_id(room_id: str) -> str | None:
+    """방 레코드의 parentAgentId (없으면 None)."""
+    db = _get_mod_attr("chat_db", chat_db)
+    try:
+        rec = db.get_room(room_id) if db else None
+    except Exception:
+        return None
+    pid = rec.get("parentAgentId") if isinstance(rec, dict) else None
+    return pid if isinstance(pid, str) and pid.strip() else None
+
+
+async def _notify_master_agent(
+    room_id: str,
+    task_id: str | None,
+    result_text: str,
+    is_success: bool = True,
+    *,
+    model: str | None = None,
+    effort: str | None = None,
+) -> None:
     """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가)에게 결과를 알리고 후속 턴을 트리거한다."""
     if room_id in ORCHESTRATOR_ROOM_IDS:
         return
     if task_id and not master_tasks.claim_report(task_id):
         return  # 이미 보고됨(중복 방지)
+    # task_id 없는(UI 직접 생성) 방의 오류는 (방, 원문) 단위로 멱등 처리
+    error_claimed = False
+    if not is_success and not task_id:
+        if not child_error_report.claim_error_report(room_id, result_text):
+            return
+        error_claimed = True
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     room_record = current_chat_db.get_room(room_id) if current_chat_db else None
@@ -817,16 +854,23 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
             f"※ {parent_label} 지침: 작업 원장은 자동 완료 처리되었으므로 별도 `session-ctl task --close` 호출 없이 결과만 확인하고 후속 지시가 필요할 때만 이어가세요."
         )
     else:
-        report_msg = (
-            f"[하위 작업 중단/오류 보고] [{room_title}] 세션 작업 중단\n"
-            f"• 대상 방: {room_title} (Room ID: {room_id})\n"
-        )
-        if task_id:
-            report_msg += f"• 작업 ID: {task_id} (상태: failed)\n"
-        report_msg += (
-            f"• 상태: 비정상 중단 / 오류\n"
-            f"• 내용: {short_res}\n\n"
-            f"※ {parent_label} 지침: 작업 실패 원인을 확인하고 재시도 여부를 판단하세요."
+        if not (model or effort) and room_record:
+            model = room_record.get("model")
+            effort = room_record.get("effort")
+        try:
+            import engine_settings
+            allowed = engine_settings.get_all_model_labels()
+        except Exception:
+            allowed = {}
+        report_msg = child_error_report.build_error_report(
+            room_title=room_title,
+            room_id=room_id,
+            error_text=result_text,
+            task_id=task_id,
+            model=model,
+            effort=effort,
+            parent_label=parent_label,
+            allowed_models=allowed,
         )
 
     try:
@@ -862,6 +906,8 @@ async def _notify_master_agent(room_id: str, task_id: str | None, result_text: s
         logger.error("[web_jobs] %s 에이전트 완료 보고 전달 실패: %s", parent_label, exc)
         if task_id:
             master_tasks.release_report(task_id)  # 감독 루프 안전망이 재시도
+        elif error_claimed:
+            child_error_report.release_error_report(room_id, result_text)
 
 
 async def _run_stream_tail_loop(
@@ -2390,7 +2436,8 @@ async def execute_chat_turn(
     )
 
     is_interrupted = bool(agent_output.get("interrupted"))
-    is_turn_success = bool(reply_text) and not is_interrupted
+    is_turn_error = is_interrupted or child_error_report.looks_like_error_reply(reply_text)
+    is_turn_success = bool(reply_text) and not is_turn_error
     await _finalize_orchestrator_completion(
         room_id=room_key,
         task_id=task_id,
@@ -2398,11 +2445,13 @@ async def execute_chat_turn(
         is_orchestrator=is_orchestrator,
         is_success=is_turn_success,
         result_text=reply_text,
-        status=("failed" if is_interrupted else "done"),
+        status=("failed" if is_turn_error else "done"),
         resolved_session_id=resolved_session_id,
         elapsed_seconds=elapsed_seconds,
-        error_text=(reply_text if is_interrupted else None),
+        error_text=(reply_text if is_turn_error else None),
         on_complete=on_complete,
+        model=asst_model,
+        effort=asst_effort,
     )
     if is_orchestrator and reply_text and not reply_text.startswith("⚠️"):
         try:
