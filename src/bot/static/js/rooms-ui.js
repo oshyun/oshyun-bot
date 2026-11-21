@@ -576,21 +576,23 @@ function renderMasterSubtaskTree(masterChildRooms) {
   };
 
   const masterRooms = masterChildRooms.filter(r => !r.parentAgentId || r.parentAgentId === CORE_ROOM_ID);
-  const vaultRooms = masterChildRooms.filter(r => r.parentAgentId === EXPERT_VAULT_ROOM_ID);
-  const codingRooms = masterChildRooms.filter(r => r.parentAgentId === EXPERT_CODING_ROOM_ID);
-
   renderTree('master-subtask-tree', masterRooms, '마스터 직속 채팅');
-  renderTree('expert-vault-subtask-tree', vaultRooms, '세컨브레인 직속 채팅');
-  renderTree('expert-coding-subtask-tree', codingRooms, '봇개발 직속 채팅');
 
-  if (Array.isArray(agentConfigs)) {
-    for (const agent of agentConfigs) {
-      if (!agent || !agent.id || agent.builtin || [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(agent.id)) {
-        continue;
-      }
-      const customRooms = masterChildRooms.filter(r => r.parentAgentId === agent.id);
-      renderTree(`custom-subtask-tree-${agent.id}`, customRooms, `${agent.name || agent.id} 직속 채팅`);
-    }
+  const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
+    ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
+    : [
+        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인' },
+        { id: EXPERT_CODING_ROOM_ID, name: '봇개발' },
+      ];
+
+  for (const agent of allAgents) {
+    const isVault = (agent.id === EXPERT_VAULT_ROOM_ID);
+    const isCoding = (agent.id === EXPERT_CODING_ROOM_ID);
+    const containerId = isVault
+      ? 'expert-vault-subtask-tree'
+      : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${agent.id}`);
+    const agentRooms = masterChildRooms.filter(r => r.parentAgentId === agent.id);
+    renderTree(containerId, agentRooms, `${agent.name || agent.id} 직속 채팅`);
   }
 }
 

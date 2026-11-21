@@ -630,15 +630,17 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
     };
   }
 
-  // 4-1. 사용자 정의 커스텀 에이전트 (__custom_<slug>__)
+  // 4-1. 등록된 전문 에이전트
   const customCfg = getAgentConfigById(rId);
   if (customCfg && !customCfg.builtin) {
     return {
       name: customCfg.name || rId,
       fullName: `${customCfg.name || rId}${customCfg.roleDescription ? ` (${customCfg.roleDescription})` : ''}`,
-      role: 'custom_agent',
+      role: 'expert_agent',
       avatarCls: 'is-subtask',
-      avatarIcon: `<span>${escapeHtml(customCfg.emoji || '🤖')}</span>`,
+      avatarIcon: (!customCfg.emoji || customCfg.emoji === '🤖')
+        ? (typeof getAgentMonolineIconSvg === 'function' ? getAgentMonolineIconSvg(customCfg.id) : `<span>🤖</span>`)
+        : `<span>${escapeHtml(customCfg.emoji)}</span>`,
       roleBadgeHtml: ''
     };
   }
@@ -823,7 +825,7 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       } else if (pId === EXPERT_VAULT_ROOM_ID) {
         orchLabel = '세컨브레인 전문가 지시';
         orchCls = ' is-vault';
-      } else if (parentCfg && !parentCfg.builtin) {
+      } else if (parentCfg) {
         orchLabel = `${parentCfg.name || pId} 지시`;
       }
       const orchTag = document.createElement('div');

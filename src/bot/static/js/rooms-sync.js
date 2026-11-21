@@ -118,54 +118,112 @@ function updateCoreAgentSlotUi() {
   };
 
   updateSlot('core-agent-slot', 'core-agent-sub', CORE_ROOM_ID, 'core-agent-title');
-  updateSlot('expert-vault-slot', 'expert-vault-sub', EXPERT_VAULT_ROOM_ID, 'expert-vault-title');
-  updateSlot('expert-coding-slot', 'expert-coding-sub', EXPERT_CODING_ROOM_ID, 'expert-coding-title');
 
-  // 사용자 정의 커스텀 에이전트 사이드바 슬롯 동적 렌더링
-  const customBranch = document.getElementById('custom-agents-branch');
-  if (customBranch) {
-    const customAgents = Array.isArray(agentConfigs)
-      ? agentConfigs.filter(a => a && a.id && !a.builtin && ![CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(a.id))
-      : [];
-    if (customAgents.length === 0) {
-      customBranch.innerHTML = '';
-    } else {
-      customBranch.innerHTML = customAgents.map(agent => {
-        const safeId = escapeHtml(agent.id);
-        const live = roomLiveStates[agent.id];
-        const isRunning = Boolean(live && live.isRunning);
-        const isActive = (currentRoomId === agent.id && currentView === 'chat');
-        const name = escapeHtml(agent.name || agent.id);
-        const desc = escapeHtml(agent.roleDescription || '커스텀 전문 에이전트');
-        const iconHtml = (!agent.emoji || agent.emoji === '🤖')
-          ? getAgentMonolineIconSvg(agent.id)
-          : `<span class="agent-cfg-symbol">${escapeHtml(agent.emoji)}</span>`;
-        return `
-          <div class="expert-agent-node custom-agent-node" id="expert-node-${safeId}">
-            <div class="sb-expert-row">
-              <div class="core-agent-slot expert-slot ${isActive ? 'active' : ''} ${isRunning ? 'running' : ''}" id="custom-slot-${safeId}" onclick="selectRoom('${safeId}')" title="${desc}">
-                <div class="core-agent-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">
-                  ${iconHtml}
-                </div>
-                <div class="core-agent-body">
-                  <div class="core-agent-top">
-                    <span class="core-agent-title">${name}</span>
-                  </div>
-                  <div class="core-agent-sub" id="custom-sub-${safeId}">${isRunning ? '작업 중' : '대기'}</div>
-                </div>
-              </div>
-              <button type="button" class="core-agent-cfg-btn expert-cfg-btn" onclick="openAgentConfigModal('${safeId}', event)" title="${name} 에이전트 지침 및 하위 프롬프트 설정">
-                <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              </button>
-              <button type="button" class="core-agent-reset-btn expert-reset-btn" onclick="resetCoreOrchestratorRoom(event, '${safeId}')" title="${name} 에이전트 세션 초기화">
-                <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-              </button>
-            </div>
-            <div class="sb-core-tree sb-subtask-tree" id="custom-subtask-tree-${safeId}"></div>
-          </div>
-        `;
-      }).join('');
+  // 전체 에이전트 목록을 바탕으로 parentAgentId 계층 트리 구성
+  const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
+    ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
+    : [
+        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', roleDescription: 'Obsidian 볼트 지식·5대 도메인 동기화 전문 에이전트', emoji: '🧠', color: '#d97706', parentAgentId: CORE_ROOM_ID, builtin: true },
+        { id: EXPERT_CODING_ROOM_ID, name: '봇개발', roleDescription: 'oshyun-bot 소스코드 개발·테스트·토큰버닝 전문 에이전트', emoji: '💻', color: '#3b82f6', parentAgentId: CORE_ROOM_ID, builtin: true },
+      ];
+
+  const agentIdSet = new Set(allAgents.map(a => a.id));
+  const childrenByParent = new Map();
+  for (const a of allAgents) {
+    let p = String(a.parentAgentId || '').trim();
+    if (!p || p === CORE_ROOM_ID || !agentIdSet.has(p) || p === a.id) {
+      p = CORE_ROOM_ID;
     }
+    if (!childrenByParent.has(p)) childrenByParent.set(p, []);
+    childrenByParent.get(p).push(a);
+  }
+
+  // 재귀적 계층 트리 렌더링 함수
+  const renderAgentBranch = (parentId) => {
+    const children = childrenByParent.get(parentId) || [];
+    if (children.length === 0) return '';
+
+    return children.map(agent => {
+      const safeId = escapeHtml(agent.id);
+      const live = roomLiveStates[agent.id];
+      const isRunning = Boolean(live && live.isRunning);
+      const isActive = (currentRoomId === agent.id && currentView === 'chat');
+      const name = escapeHtml(agent.name || agent.id);
+      const desc = escapeHtml(agent.roleDescription || '전문 에이전트');
+
+      const isVault = (agent.id === EXPERT_VAULT_ROOM_ID);
+      const isCoding = (agent.id === EXPERT_CODING_ROOM_ID);
+
+      const slotId = isVault ? 'expert-vault-slot' : (isCoding ? 'expert-coding-slot' : `custom-slot-${safeId}`);
+      const titleId = isVault ? 'expert-vault-title' : (isCoding ? 'expert-coding-title' : '');
+      const subId = isVault ? 'expert-vault-sub' : (isCoding ? 'expert-coding-sub' : `custom-sub-${safeId}`);
+      const cfgBtnId = isVault ? 'btn-expert-vault-cfg' : (isCoding ? 'btn-expert-coding-cfg' : `btn-agent-cfg-${safeId}`);
+      const resetBtnId = isVault ? 'btn-expert-vault-reset' : (isCoding ? 'btn-expert-coding-reset' : `btn-agent-reset-${safeId}`);
+      const treeId = isVault ? 'expert-vault-subtask-tree' : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${safeId}`);
+
+      const colorStyle = agent.color
+        ? `background:${escapeHtml(agent.color)}26;color:${escapeHtml(agent.color)};`
+        : (isVault ? 'background:rgba(217,119,6,0.15);color:#d97706;' : (isCoding ? 'background:rgba(59,130,246,0.15);color:#3b82f6;' : 'background:rgba(16,185,129,0.15);color:#10b981;'));
+
+      let iconHtml;
+      if (isVault) {
+        iconHtml = `<svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>`;
+      } else if (isCoding) {
+        iconHtml = `<svg class="i" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+      } else if (!agent.emoji || agent.emoji === '🤖') {
+        iconHtml = getAgentMonolineIconSvg(agent.id);
+      } else {
+        iconHtml = `<span class="agent-cfg-symbol">${escapeHtml(agent.emoji)}</span>`;
+      }
+
+      // 하위 에이전트 재귀 중첩 렌더링
+      const subAgentsHtml = renderAgentBranch(agent.id);
+
+      return `
+        <div class="expert-agent-node" id="expert-node-${safeId}">
+          <div class="sb-expert-row">
+            <div class="core-agent-slot expert-slot ${isActive ? 'active' : ''} ${isRunning ? 'running' : ''}" id="${slotId}" onclick="selectRoom('${safeId}')" title="${desc}">
+              <div class="core-agent-icon" style="${colorStyle}">
+                ${iconHtml}
+              </div>
+              <div class="core-agent-body">
+                <div class="core-agent-top">
+                  <span class="core-agent-title" ${titleId ? `id="${titleId}"` : ''}>${name}</span>
+                </div>
+                <div class="core-agent-sub" id="${subId}">${isRunning ? '작업 중' : '대기'}</div>
+              </div>
+            </div>
+            <button type="button" class="core-agent-cfg-btn expert-cfg-btn" id="${cfgBtnId}" onclick="openAgentConfigModal('${safeId}', event)" title="${name} 에이전트 지침 및 설정">
+              <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+            <button type="button" class="core-agent-reset-btn expert-reset-btn" id="${resetBtnId}" onclick="resetCoreOrchestratorRoom(event, '${safeId}')" title="${name} 에이전트 세션 초기화">
+              <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+          <!-- 직속 하위 채팅 트리 -->
+          <div class="sb-core-tree sb-subtask-tree" id="${treeId}"></div>
+          <!-- 산하 하위 에이전트 브랜치 (중첩 트리) -->
+          <div class="sb-subagents-container" id="subagents-${safeId}">${subAgentsHtml}</div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const treeContainer = document.getElementById('sb-agent-tree-container');
+  if (treeContainer) {
+    treeContainer.innerHTML = renderAgentBranch(CORE_ROOM_ID);
+  } else {
+    // 폴백: custom-agents-branch가 있는 구버전 DOM 지원
+    const customBranch = document.getElementById('custom-agents-branch');
+    if (customBranch) {
+      customBranch.innerHTML = renderAgentBranch(CORE_ROOM_ID);
+    }
+  }
+
+  // 폴백용 custom-agents-branch 클리어
+  const legacyBranch = document.getElementById('custom-agents-branch');
+  if (legacyBranch && treeContainer) {
+    legacyBranch.innerHTML = '';
   }
 }
 
@@ -1853,6 +1911,21 @@ function getAgentMonolineIconSvg(agentId, className = 'i') {
   return `<svg class="${className}" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>`;
 }
 
+function getDescendantAgentIds(targetId) {
+  const descendants = new Set();
+  const queue = [targetId];
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    for (const a of (agentConfigs || [])) {
+      if (a && a.id && a.parentAgentId === cur && !descendants.has(a.id)) {
+        descendants.add(a.id);
+        queue.push(a.id);
+      }
+    }
+  }
+  return descendants;
+}
+
 function renderAgentConfigSelectorBar(activeId) {
   const bar = document.getElementById('agent-cfg-selector-bar');
   if (!bar) return;
@@ -1868,7 +1941,6 @@ function renderAgentConfigSelectorBar(activeId) {
     const isSel = (activeId && a.id === activeId);
     const safeId = escapeHtml(a.id);
     const name = escapeHtml(a.name || a.id);
-    const badge = a.builtin ? '' : '<span class="agent-cfg-chip-tag">커스텀</span>';
     const iconHtml = (a.builtin || !a.emoji || a.emoji === '🤖' || ['👑', '🧠', '💻'].includes(a.emoji))
       ? getAgentMonolineIconSvg(a.id)
       : `<span class="agent-cfg-symbol">${escapeHtml(a.emoji)}</span>`;
@@ -1876,7 +1948,6 @@ function renderAgentConfigSelectorBar(activeId) {
       <button type="button" class="agent-cfg-chip ${isSel ? 'active' : ''}" onclick="openAgentConfigModal('${safeId}')">
         <span class="agent-cfg-chip-icon">${iconHtml}</span>
         <span>${name}</span>
-        ${badge}
       </button>
     `;
   }).join('');
@@ -1931,8 +2002,8 @@ function populateAgentConfigForm(targetAgentId = null) {
     childModel: 'gemini-3.8-flash',
     childEffort: 'medium',
     injectChildTemplate: true,
-    childPromptTemplate: `[커스텀 에이전트 산하 워커 동작 규칙]\n1. 지정된 작업 디렉토리 내에서 요청된 과업을 정확하고 신속하게 수행한다.\n2. 결론과 핵심 수치를 첫 줄에 두괄식으로 요약하여 보고한다.`,
-    systemPrompt: `# 커스텀 에이전트 전용 지침\n\n너는 사용자가 정의한 전문 에이전트다.\n- 직접 무거운 작업을 수행하거나 필요 시 \`session-ctl spawn --parent <자기ID>\` 로 하위 워커를 스폰할 수 있다.`,
+    childPromptTemplate: `[하위 워커 동작 규칙]\n1. 지정된 작업 디렉토리 내에서 요청된 과업을 정확하고 신속하게 수행하라.\n2. 결론과 핵심 수치를 첫 줄에 두괄식으로 요약하여 보고하라.`,
+    systemPrompt: `# 전문 에이전트 전용 지침\n\n너는 oshyun-bot의 전문 에이전트다.\n- 작업 디렉토리 내에서 전문 작업을 직접 수행하거나, 필요 시 하위 워커를 스폰하여 비동기 위임할 수 있다.\n- 사용자에게 항상 명확하고 간결하게 핵심 결론부터 한국어로 보고한다.`,
   };
 
   if (avatarEl) {
@@ -1948,13 +2019,18 @@ function populateAgentConfigForm(targetAgentId = null) {
   if (titleEl) {
     titleEl.textContent = editingAgentId
       ? `${formVals.name || editingAgentId} 설정 및 하위 프롬프트 관리`
-      : '새 커스텀 에이전트 추가';
+      : '새 에이전트 추가';
   }
   if (subEl) {
     if (editingAgentId) {
-      const typeBadge = isBuiltin
-        ? `<span class="agent-cfg-type-pill builtin">기본 에이전트</span>`
-        : `<span class="agent-cfg-type-pill custom">커스텀 에이전트</span>`;
+      let typeBadge;
+      if (editingAgentId === CORE_ROOM_ID) {
+        typeBadge = `<span class="agent-cfg-type-pill master">마스터 오케스트레이터</span>`;
+      } else {
+        const parentCfg = getAgentConfigById(formVals.parentAgentId);
+        const parentName = parentCfg ? (parentCfg.name || formVals.parentAgentId) : '마스터';
+        typeBadge = `<span class="agent-cfg-type-pill expert">소속: ${escapeHtml(parentName)} 산하</span>`;
+      }
       subEl.innerHTML = `
         <span class="agent-cfg-id-badge">${escapeHtml(editingAgentId)}</span>
         ${typeBadge}
@@ -1988,13 +2064,23 @@ function populateAgentConfigForm(targetAgentId = null) {
       parentSel.value = '';
       parentSel.disabled = true;
     } else {
-      parentSel.disabled = isBuiltin;
-      parentSel.innerHTML = `
-        <option value="__core__">마스터 직속 (__core__)</option>
-        <option value="__expert_vault__">세컨브레인 산하 (__expert_vault__)</option>
-        <option value="__expert_coding__">봇개발 산하 (__expert_coding__)</option>
-      `;
+      const forbiddenIds = editingAgentId ? getDescendantAgentIds(editingAgentId) : new Set();
+      if (editingAgentId) forbiddenIds.add(editingAgentId);
+
+      const parentOptions = [
+        `<option value="${CORE_ROOM_ID}">👑 마스터 직속 (${CORE_ROOM_ID})</option>`
+      ];
+
+      (agentConfigs || []).forEach(a => {
+        if (!a || !a.id || a.id === CORE_ROOM_ID || forbiddenIds.has(a.id)) return;
+        const icon = a.emoji || (a.id === EXPERT_VAULT_ROOM_ID ? '🧠' : (a.id === EXPERT_CODING_ROOM_ID ? '💻' : '🤖'));
+        const label = `${icon} ${a.name || a.id} 산하 (${a.id})`;
+        parentOptions.push(`<option value="${escapeHtml(a.id)}">${escapeHtml(label)}</option>`);
+      });
+
+      parentSel.innerHTML = parentOptions.join('');
       parentSel.value = formVals.parentAgentId || CORE_ROOM_ID;
+      parentSel.disabled = isBuiltin;
     }
   }
 
@@ -2270,8 +2356,8 @@ async function deleteCurrentCustomAgentConfig() {
   const targetId = editingAgentId;
   const label = cfg.name || targetId;
   openConfirmModal(
-    '커스텀 에이전트 삭제',
-    `'${label}'(${targetId}) 커스텀 에이전트를 삭제하시겠습니까?`,
+    '에이전트 삭제',
+    `'${label}'(${targetId}) 에이전트를 삭제하시겠습니까?\n(등록된 지침과 설정이 제거되며, 산하 대화방 및 하위 에이전트는 마스터 직속으로 안전하게 보존됩니다)`,
     '에이전트 삭제',
     async () => {
       try {

@@ -178,22 +178,55 @@ def _resolve_workdir_path(raw_workdir: str | None, fallback: str | None = None) 
     return os.path.abspath(os.path.join(WORKDIR, expanded))
 
 
+def _has_parent_cycle(
+    agent_id: str,
+    proposed_parent: str | None,
+    all_agents_raw: dict[str, Any] | None = None,
+) -> bool:
+    """parentAgentId 체인 상에서 순환(A -> B -> A)이 발생하는지 검사한다."""
+    if not proposed_parent or proposed_parent == CORE_ORCHESTRATOR_ROOM_ID:
+        return False
+    if proposed_parent == agent_id:
+        return True
+    if not all_agents_raw or not isinstance(all_agents_raw, dict):
+        return False
+
+    visited = {agent_id, proposed_parent}
+    cur = proposed_parent
+    depth = 0
+    while cur and cur != CORE_ORCHESTRATOR_ROOM_ID and depth < 30:
+        depth += 1
+        parent_rec = all_agents_raw.get(cur)
+        if not isinstance(parent_rec, dict):
+            break
+        p = parent_rec.get("parentAgentId")
+        if not p or p == CORE_ORCHESTRATOR_ROOM_ID:
+            break
+        p_str = str(p).strip()
+        if p_str in visited:
+            return True
+        visited.add(p_str)
+        cur = p_str
+    return False
+
+
 def _normalize_agent_record(
     agent_id: str,
     raw: dict[str, Any],
     defaults_map: dict[str, dict[str, Any]],
     order_fallback: int = 10,
+    all_agents_raw: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """단일 에이전트 설정 레코드를 정규화한다."""
     is_builtin = agent_id in defaults_map
     base = copy.deepcopy(defaults_map[agent_id]) if is_builtin else {
         "id": agent_id,
-        "name": "커스텀 에이전트",
-        "title": "커스텀 에이전트",
+        "name": "전문 에이전트",
+        "title": "전문 에이전트",
         "emoji": "🤖",
         "color": "#10b981",
         "parentAgentId": CORE_ORCHESTRATOR_ROOM_ID,
-        "memoryScope": f"custom_{agent_id.strip('_')}",
+        "memoryScope": f"expert_{agent_id.strip('_')}",
         "sessionNamespace": f"{agent_id.strip('_')}_",
         "roleDescription": "사용자 정의 전문 에이전트",
         "workdir": WORKDIR,
@@ -221,7 +254,7 @@ def _normalize_agent_record(
     else:
         raw_parent = raw.get("parentAgentId")
         parent_id = str(raw_parent).strip() if raw_parent else (base.get("parentAgentId") or CORE_ORCHESTRATOR_ROOM_ID)
-        if parent_id == agent_id:
+        if parent_id == agent_id or _has_parent_cycle(agent_id, parent_id, all_agents_raw):
             parent_id = CORE_ORCHESTRATOR_ROOM_ID
 
     role_desc = str(
@@ -360,7 +393,7 @@ def _load_all_unlocked() -> dict[str, dict[str, Any]]:
     agents: dict[str, dict[str, Any]] = {}
     for b_id in BUILTIN_AGENT_IDS:
         raw_rec = raw_agents.get(b_id) if isinstance(raw_agents.get(b_id), dict) else {}
-        agents[b_id] = _normalize_agent_record(b_id, raw_rec, defaults_map)
+        agents[b_id] = _normalize_agent_record(b_id, raw_rec, defaults_map, all_agents_raw=raw_agents)
 
     order_idx = 10
     for k, raw_rec in raw_agents.items():
@@ -369,7 +402,7 @@ def _load_all_unlocked() -> dict[str, dict[str, Any]]:
         clean_id = _sanitize_agent_id(k, str(raw_rec.get("name") or ""))
         if clean_id in BUILTIN_AGENT_IDS:
             continue
-        agents[clean_id] = _normalize_agent_record(clean_id, raw_rec, defaults_map, order_fallback=order_idx)
+        agents[clean_id] = _normalize_agent_record(clean_id, raw_rec, defaults_map, order_fallback=order_idx, all_agents_raw=raw_agents)
         order_idx += 1
 
     return agents
@@ -485,6 +518,7 @@ def upsert_agent_config(payload: dict[str, Any]) -> dict[str, Any]:
             merged_raw,
             defaults_map,
             order_fallback=len(agents) + 1,
+            all_agents_raw=agents,
         )
         agents[target_id] = normalized
         _save_all_unlocked(agents)
