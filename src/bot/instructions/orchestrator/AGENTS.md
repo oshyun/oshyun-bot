@@ -37,4 +37,4 @@
 - **하위 스폰**: `session-ctl spawn "<제목>" "<지시>" --parent <__core__|__expert_vault__|__expert_coding__> --model <모델> --effort <레벨>`
 - **방에 전달**: `session-ctl send "<방ID_또는_제목>" "<지시>" [--model <모델>] [--effort <레벨>]`
 - **상태 조회**: `session-ctl list` | `summaries` | `tasks [--active-only]` | `memory`
-- **모델 기준**: 단순 조회/메모리 `--model gemini-3.8-flash --effort low`, 일반 볼트/수정 `gemini-3.8-flash (medium)`, 고난도 코딩 `gemini-4-hydrogen (medium)`.
+- **모델 기준 (12/31까지 Flash 50% 할인)**: 단순 조회/메모리 `--model gemini-3.8-flash --effort low`, 일반 볼트/수정 `gemini-3.8-flash (medium)`. 코딩 작업도 12/31까지 Flash 50% 할인 정책에 따라 기본적으로 `gemini-3.8-flash (medium)`을 우선 사용하고, 굉장히 복잡한 코딩에 한해서만 `gemini-4-argon (medium)` 사용.

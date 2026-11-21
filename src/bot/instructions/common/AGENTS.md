@@ -23,3 +23,7 @@
 - **Gemini API (`gemini-consult`) 오프로드 (Hard Constraint)**:
   - **AGY 잔여 쿼터 < 50% (또는 `[QUOTA ALERT]` 수신) 시**: 고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링·복잡한 디버깅 가설 수립 시 자체 AGY 토큰으로 길게 추론하지 말고 **1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50`) 호출을 강제**한다.
   - **AGY 잔여 쿼터 ≥ 50% 시**: 중대 아키텍처/보안 교차검증에 한해 최소 페이로드(3~5줄 요약)로 제한 사용.
+
+## 4. 모델 배정 기준 (12/31까지 Flash 50% 할인 정책)
+- **볼트/일반 실무**: 단순 조회 `gemini-3.8-flash (low)`, 일반 노트/동기화/수정 `gemini-3.8-flash (medium)`.
+- **코딩 작업**: 12/31까지 Flash 토큰 50% 할인 정책에 따라 기본적으로 **`gemini-3.8-flash (medium)`**을 우선 사용하고, **굉장히 복잡한 코딩에 한해서만 `gemini-4-argon (medium)`**을 사용한다.
