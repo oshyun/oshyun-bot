@@ -349,15 +349,32 @@
   flex-shrink: 0;
 }
 .sb-tree-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #3b82f6;
   flex-shrink: 0;
 }
-.sb-tree-item.running .sb-tree-dot {
-  background: #22c55e;
-  animation: pulse 1.2s ease-in-out infinite;
+/* 실행 중 표시: 회전 스피너(초록) — '확인 필요'(파란 점)와 형태·색 모두 구분 */
+.run-spinner {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  box-sizing: border-box;
+  border: 2.5px solid rgba(52, 211, 153, .28);
+  border-top-color: #34d399;
+  animation: run-spin .8s linear infinite;
+}
+.run-label {
+  flex-shrink: 0; font-size: calc(10px * var(--ui-scale, 1)); font-weight: 700;
+  color: #34d399; background: rgba(52, 211, 153, .14);
+  border-radius: 8px; padding: 1px 6px; line-height: 1.4;
+}
+.sb-tree-item.running, .room-item.running {
+  background: rgba(52, 211, 153, .08);
+  box-shadow: inset 3px 0 0 #34d399;
+}
+@keyframes run-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .run-spinner { animation: none; border-color: #34d399; }
 }
 .sb-tree-del-btn {
   display: none;
@@ -699,7 +716,7 @@
 .room-time {
   font-size: calc(11px * var(--ui-scale, 1)); color: var(--text-3); flex-shrink: 0; font-weight: 400;
 }
-.room-running { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; animation: pulse 1.2s ease-in-out infinite; }
+
 .room-actions-inline {
   display: none; align-items: center; gap: 2px; flex-shrink: 0;
 }

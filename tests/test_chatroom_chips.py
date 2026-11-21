@@ -75,5 +75,16 @@ class TestChatroomChips(unittest.TestCase):
         self.assertIsNone(filter_regex.match(matches[0]))
 
 
+class TestRunningIndicator(unittest.TestCase):
+    def test_running_spinner_and_reduced_motion(self):
+        b = read_static_bundle(STATIC_DIR)
+        self.assertIn(".run-spinner", b)
+        self.assertIn("@keyframes run-spin", b)
+        self.assertRegex(b, r"prefers-reduced-motion[^{]*\{\s*\.run-spinner \{ animation: none")
+        self.assertIn('class="run-spinner"', b)
+        self.assertIn(".sb-tree-item.running", b)
+        self.assertNotIn("room-running", b)
+
+
 if __name__ == "__main__":
     unittest.main()
