@@ -249,9 +249,26 @@ class TestOrchestratorNotifyDedupAndRouting(AioHTTPTestCase):
     """/api/orchestrator/notify 의 중복 보고 방지(dedup) 및 parentAgentId 라우팅 검증."""
 
     async def get_application(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self._patchers = [
+            patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
+            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "master_tasks.json")),
+            patch("master_memory.MASTER_MEMORY_FILE", os.path.join(self._tmp_dir.name, "master_memory.json")),
+            patch.object(web_execution, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
+            patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
+        ]
+        for p in self._patchers:
+            p.start()
         web_server.WEB_TOKEN = "test-secret-token-1234"
         web_server.AUTH_DELAY_SECONDS = 0.0
         return web_server.create_web_app(static_dir="/nonexistent")
+
+    async def tearDownAsync(self):
+        await super().tearDownAsync()
+        for p in reversed(getattr(self, "_patchers", [])):
+            p.stop()
+        if hasattr(self, "_tmp_dir"):
+            self._tmp_dir.cleanup()
 
     async def asyncSetUp(self):
         await super().asyncSetUp()

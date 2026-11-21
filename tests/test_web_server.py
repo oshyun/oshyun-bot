@@ -918,6 +918,8 @@ class TestPwaSupport(AioHTTPTestCase):
     async def get_application(self):
         self.test_vault_dir = tempfile.mkdtemp()
         self._cleanup_runtime = _install_runtime_isolation(self.test_vault_dir)
+        self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
+        chat_db.CHAT_DB_FILE = os.path.join(self.test_vault_dir, "test_chat.db")
         web_server.WORKDIR = self.test_vault_dir
         web_server.WEB_TOKEN = "super-secret-password-999"
         web_server.AUTH_DELAY_SECONDS = 0.0
@@ -934,6 +936,8 @@ class TestPwaSupport(AioHTTPTestCase):
 
     def tearDown(self):
         super().tearDown()
+        if getattr(self, "orig_chat_db_file", None):
+            chat_db.CHAT_DB_FILE = self.orig_chat_db_file
         if hasattr(self, "orig_hidden_file"):
             web_server.HIDDEN_ROOMS_FILE = self.orig_hidden_file
         if getattr(self, "orig_chat_db_hidden_file", None):

@@ -84,6 +84,8 @@ def _sandbox_prefix(workdir: str) -> list[str]:
         "ATTACHED_FILES_DIR": _ATTACHED_FILES_DIR,
         "JOBS_DIR": _JOBS_DIR,
         "AGENT_TMP_DIR": _AGENT_TMP_DIR,
+        "AGY_CLI_HOME": os.path.join(_HOME, ".gemini", "antigravity-cli"),
+        "AGY_HOME": os.path.join(_HOME, ".gemini", "antigravity"),
         "LIB_KEYCHAINS": os.path.join(_HOME, "Library", "Keychains"),
         "LIB_PREFS": os.path.join(_HOME, "Library", "Preferences"),
     }

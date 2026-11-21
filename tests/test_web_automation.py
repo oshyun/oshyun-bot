@@ -25,6 +25,13 @@ import web_server
 class TestWebAutomationEndpoints(AioHTTPTestCase):
     async def get_application(self):
         self.test_dir = tempfile.mkdtemp()
+        self._patchers = [
+            patch("chat_db.CHAT_DB_FILE", os.path.join(self.test_dir, "chat.db")),
+            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self.test_dir, "master_tasks.json")),
+            patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self.test_dir, "web_jobs.json")),
+        ]
+        for p in self._patchers:
+            p.start()
         self.orig_sched_file = schedules.SCHEDULES_FILE
         self.orig_burn_file = burn_todo.BURN_TODO_FILE
         self.orig_sched_enabled = os.environ.get("WEB_SCHEDULER_ENABLED")
@@ -39,6 +46,8 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
 
     async def tearDownAsync(self):
         await super().tearDownAsync()
+        for p in reversed(getattr(self, "_patchers", [])):
+            p.stop()
         schedules.SCHEDULES_FILE = self.orig_sched_file
         burn_todo.BURN_TODO_FILE = self.orig_burn_file
         web_server.WEB_AUTH_REQUIRED = self.orig_auth_required

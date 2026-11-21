@@ -6,12 +6,19 @@ import asyncio
 from datetime import datetime
 import logging
 import os
+import sys
 
 from paths import WEB_LOG_FILE, WORKDIR
 
 
+def _is_test_runner() -> bool:
+    return "unittest" in sys.modules or "pytest" in sys.modules
+
+
 def _append_log(path: str, entry: str) -> None:
     """지정 경로 파일에 한 줄을 추가하고 최근 100줄만 유지한다."""
+    if _is_test_runner() and path in (WEB_LOG_FILE, BOT_LOG_PATH):
+        return
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a+", encoding="utf-8") as f:

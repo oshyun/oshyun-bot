@@ -127,6 +127,14 @@ class TestUsageEndpoints(AioHTTPTestCase):
     """GET /api/usage 및 build_status_payload 검증."""
 
     async def get_application(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self._patchers = [
+            patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
+            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "master_tasks.json")),
+            patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
+        ]
+        for p in self._patchers:
+            p.start()
         self.orig_auth = getattr(web_server, "WEB_AUTH_REQUIRED", True)
         web_server.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app()
@@ -135,6 +143,10 @@ class TestUsageEndpoints(AioHTTPTestCase):
         web_server.WEB_AUTH_REQUIRED = getattr(self, "orig_auth", True)
         if hasattr(self, "client") and self.client:
             await self.client.close()
+        for p in reversed(getattr(self, "_patchers", [])):
+            p.stop()
+        if hasattr(self, "_tmp_dir"):
+            self._tmp_dir.cleanup()
 
     async def test_api_usage_endpoint(self):
         with tempfile.TemporaryDirectory() as tmpdir:
