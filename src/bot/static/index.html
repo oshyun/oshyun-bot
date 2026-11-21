@@ -38,13 +38,13 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/css/automation.css?v=3">
-  <link rel="stylesheet" href="/css/base.css?v=2">
-  <link rel="stylesheet" href="/css/layout.css?v=4">
-  <link rel="stylesheet" href="/css/chat.css?v=3">
-  <link rel="stylesheet" href="/css/views-modals.css?v=2">
-  <link rel="stylesheet" href="/css/responsive.css?v=2">
-  <link rel="stylesheet" href="/css/master-inspector.css?v=2">
+  <link rel="stylesheet" href="/css/automation.css?v=4">
+  <link rel="stylesheet" href="/css/base.css?v=3">
+  <link rel="stylesheet" href="/css/layout.css?v=5">
+  <link rel="stylesheet" href="/css/chat.css?v=4">
+  <link rel="stylesheet" href="/css/views-modals.css?v=3">
+  <link rel="stylesheet" href="/css/responsive.css?v=3">
+  <link rel="stylesheet" href="/css/master-inspector.css?v=3">
 </head>
 <body>
   <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeRoomDrawer()"></div>
@@ -692,9 +692,18 @@
           <div class="msb-section" id="msb-memory-section">
             <!-- 에이전트 메모리 스코프 탭 -->
             <div class="msb-agent-tabs" id="msb-agent-tabs" style="display:flex;gap:4px;margin-bottom:10px;background:var(--bg-card);padding:3px;border-radius:8px;border:1px solid var(--border);">
-              <button type="button" class="btn sm tab active" data-agent="master" onclick="switchMsbMemoryAgent('master')" style="flex:1;font-size:11px;padding:4px 0;">👑 마스터</button>
-              <button type="button" class="btn sm tab" data-agent="second_brain" onclick="switchMsbMemoryAgent('second_brain')" style="flex:1;font-size:11px;padding:4px 0;">🧠 세컨브레인</button>
-              <button type="button" class="btn sm tab" data-agent="bot_dev" onclick="switchMsbMemoryAgent('bot_dev')" style="flex:1;font-size:11px;padding:4px 0;">💻 봇개발</button>
+              <button type="button" class="btn sm tab active" data-agent="master" onclick="switchMsbMemoryAgent('master')" style="flex:1;font-size:11px;padding:4px 6px;display:inline-flex;align-items:center;justify-content:center;gap:5px;">
+                <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/></svg>
+                <span>마스터</span>
+              </button>
+              <button type="button" class="btn sm tab" data-agent="second_brain" onclick="switchMsbMemoryAgent('second_brain')" style="flex:1;font-size:11px;padding:4px 6px;display:inline-flex;align-items:center;justify-content:center;gap:5px;">
+                <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>
+                <span>세컨브레인</span>
+              </button>
+              <button type="button" class="btn sm tab" data-agent="bot_dev" onclick="switchMsbMemoryAgent('bot_dev')" style="flex:1;font-size:11px;padding:4px 6px;display:inline-flex;align-items:center;justify-content:center;gap:5px;">
+                <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>봇개발</span>
+              </button>
             </div>
 
             <div class="msb-mem-pipeline" id="msb-mem-pipeline">
@@ -726,7 +735,10 @@
               <div class="msb-mem-meter-info">
                 <span id="msb-mem-usage-text">0 / 0자 (0/0건)</span>
                 <div class="msb-mem-actions" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-                  <button type="button" class="btn sm ghost" id="btn-msb-mem-rebalance" onclick="rebalanceMasterMemory()" title="전체 4계층 메모리 중복 제거 및 최적 용량 리밸런싱">⚖️ 리밸런싱</button>
+                  <button type="button" class="btn sm ghost" id="btn-msb-mem-rebalance" onclick="rebalanceMasterMemory()" title="전체 4계층 메모리 중복 제거 및 최적 용량 리밸런싱" style="display:inline-flex;align-items:center;gap:5px;">
+                    <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+                    <span>리밸런싱</span>
+                  </button>
                   <button type="button" class="btn sm ghost" id="btn-msb-mem-clear" onclick="clearMasterMemory(currentMsbMemoryTier)" title="현재 선택한 메모리 계층 비우기" style="color:var(--danger,#ef4444);">비우기</button>
                 </div>
               </div>
@@ -885,12 +897,18 @@
   <!-- ═══ 에이전트 레벨 설정 & 하위 채팅 프롬프트 투명 관리 / 신규 에이전트 생성 모달 ═══ -->
   <div id="modal-agent-config" class="modal-overlay" onclick="onModalBackdropClick(event, 'modal-agent-config')">
     <div class="modal-card lg agent-config-modal-card">
-      <div class="modal-header">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span id="agent-cfg-modal-icon" style="font-size:18px;">⚙️</span>
+      <div class="modal-header agent-cfg-modal-header">
+        <div class="agent-cfg-modal-head-left">
+          <div class="agent-cfg-modal-avatar" id="agent-cfg-modal-avatar">
+            <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
           <div>
             <div class="modal-title" id="agent-cfg-modal-title">에이전트 설정 및 하위 프롬프트 관리</div>
-            <div id="agent-cfg-modal-subtitle" style="font-size:11.5px;color:var(--text-3);margin-top:1px;">에이전트의 역할, 작업 디렉토리, 하위 채팅 주입 프롬프트를 투명하게 관리합니다</div>
+            <div id="agent-cfg-modal-subtitle" class="agent-cfg-subtitle">
+              <span class="agent-cfg-id-badge">__core__</span>
+              <span class="agent-cfg-type-pill builtin">기본 에이전트</span>
+              <span class="agent-cfg-sub-desc">하위 세션 스폰 시 결합되는 프롬프트와 동작 정책을 투명하게 제어합니다</span>
+            </div>
           </div>
         </div>
         <button type="button" class="icon-btn" onclick="closeAgentConfigModal()"><svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -901,8 +919,14 @@
 
       <!-- 내부 탭: 1) 기본 & 하위 프롬프트 설정 / 2) 하위 채팅 조립 프롬프트 미리보기(Preview) -->
       <div class="agent-cfg-view-tabs">
-        <button type="button" class="agent-cfg-tab active" id="tab-agent-cfg-edit" onclick="switchAgentConfigTab('edit')">⚙️ 에이전트 &amp; 하위 지침 설정</button>
-        <button type="button" class="agent-cfg-tab" id="tab-agent-cfg-preview" onclick="switchAgentConfigTab('preview')">🔍 하위 채팅 전달 프롬프트 미리보기 (투명성 검증)</button>
+        <button type="button" class="agent-cfg-tab active" id="tab-agent-cfg-edit" onclick="switchAgentConfigTab('edit')">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>에이전트 &amp; 하위 지침 설정</span>
+        </button>
+        <button type="button" class="agent-cfg-tab" id="tab-agent-cfg-preview" onclick="switchAgentConfigTab('preview')">
+          <svg class="i" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>하위 전달 프롬프트 미리보기</span>
+        </button>
       </div>
 
       <div class="modal-body agent-cfg-body">
@@ -916,15 +940,15 @@
             </div>
             <div class="agent-cfg-grid-emoji-color">
               <div class="field">
-                <label for="agent-cfg-emoji">아이콘 / 이모지</label>
-                <input type="text" id="agent-cfg-emoji" class="input" placeholder="🤖" maxlength="4" style="text-align:center;font-size:16px;" oninput="onAgentConfigFieldInput()">
+                <label for="agent-cfg-emoji">식별 심볼 / 태그</label>
+                <input type="text" id="agent-cfg-emoji" class="input mono" placeholder="BOT" maxlength="8" style="text-align:center;font-size:13px;letter-spacing:0.04em;" oninput="onAgentConfigFieldInput()">
               </div>
               <div class="field">
                 <label for="agent-cfg-parent">상위 소속 (계층)</label>
                 <select id="agent-cfg-parent" class="select" onchange="onAgentConfigFieldInput()">
-                  <option value="__core__">👑 마스터 직속 (__core__)</option>
-                  <option value="__expert_vault__">🧠 세컨브레인 산하 (__expert_vault__)</option>
-                  <option value="__expert_coding__">💻 봇개발 산하 (__expert_coding__)</option>
+                  <option value="__core__">마스터 직속 (__core__)</option>
+                  <option value="__expert_vault__">세컨브레인 산하 (__expert_vault__)</option>
+                  <option value="__expert_coding__">봇개발 산하 (__expert_coding__)</option>
                 </select>
               </div>
             </div>
@@ -939,8 +963,14 @@
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
               <label for="agent-cfg-workdir">작업 디렉토리 (Workdir · 하위 채팅 기본 cwd)</label>
               <div style="display:flex;gap:4px;">
-                <button type="button" class="btn xs ghost" onclick="setAgentConfigWorkdirPreset('vault')" style="font-size:11px;padding:1px 6px;">📓 볼트 루트</button>
-                <button type="button" class="btn xs ghost" onclick="setAgentConfigWorkdirPreset('code')" style="font-size:11px;padding:1px 6px;">💻 봇 코드 리포</button>
+                <button type="button" class="btn xs ghost" onclick="setAgentConfigWorkdirPreset('vault')" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;">
+                  <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                  <span>볼트 루트</span>
+                </button>
+                <button type="button" class="btn xs ghost" onclick="setAgentConfigWorkdirPreset('code')" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;">
+                  <svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span>봇 코드 리포</span>
+                </button>
               </div>
             </div>
             <input type="text" id="agent-cfg-workdir" class="input mono" placeholder="/Users/user/... 또는 볼트 하위 상대경로" oninput="onAgentConfigFieldInput()">
@@ -948,7 +978,10 @@
 
           <div class="agent-cfg-grid-2">
             <div class="agent-cfg-subcard">
-              <div class="agent-cfg-subcard-title">🤖 에이전트 본체 기본 모델</div>
+              <div class="agent-cfg-subcard-title">
+                <svg class="i" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+                <span>에이전트 본체 기본 모델</span>
+              </div>
               <div class="agent-cfg-grid-2" style="margin-bottom:0;">
                 <div class="field" style="margin-bottom:0;">
                   <label for="agent-cfg-model">모델</label>
@@ -966,7 +999,10 @@
             </div>
 
             <div class="agent-cfg-subcard">
-              <div class="agent-cfg-subcard-title">🚀 하위 채팅 스폰 기본 모델</div>
+              <div class="agent-cfg-subcard-title">
+                <svg class="i" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>하위 채팅 스폰 기본 모델</span>
+              </div>
               <div class="agent-cfg-grid-2" style="margin-bottom:0;">
                 <div class="field" style="margin-bottom:0;">
                   <label for="agent-cfg-child-model">하위 모델</label>
@@ -986,7 +1022,10 @@
 
           <div class="field">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-              <label for="agent-cfg-child-prompt" style="font-weight:650;color:var(--text);">📨 하위 채팅 스폰/위임 시 자동 주입 프롬프트 템플릿 (하위 동작 규칙)</label>
+              <label for="agent-cfg-child-prompt" class="agent-cfg-field-label">
+                <svg class="i" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span>하위 세션 자동 주입 프롬프트 템플릿 (동작 규칙)</span>
+              </label>
               <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-text);cursor:pointer;font-weight:600;">
                 <input type="checkbox" id="agent-cfg-inject-child" checked onchange="onAgentConfigFieldInput()">
                 <span>하위 세션 지시 시 자동 조립·주입 활성화</span>
@@ -1000,7 +1039,10 @@
 
           <div class="field" style="margin-bottom:4px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-              <label for="agent-cfg-sys-prompt" style="font-weight:650;color:var(--text);">📜 에이전트 본체 전용 시스템 지침 (AGENTS.md)</label>
+              <label for="agent-cfg-sys-prompt" class="agent-cfg-field-label">
+                <svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span>에이전트 본체 시스템 지침 (AGENTS.md)</span>
+              </label>
               <span style="font-size:11px;color:var(--text-3);">이 에이전트 방에서 대화할 때 주입되는 시스템 프롬프트</span>
             </div>
             <textarea id="agent-cfg-sys-prompt" class="input mono" rows="7" placeholder="# 에이전트 전용 지침..." oninput="onAgentConfigFieldInput()"></textarea>
@@ -1019,7 +1061,10 @@
 
           <div class="agent-preview-block">
             <div class="agent-preview-head">
-              <span>1️⃣ 하위 채팅에 실제 전달되는 최종 조립 사용자 프롬프트 (Assembled Prompt)</span>
+              <div class="agent-preview-title">
+                <span class="step-num">01</span>
+                <span>하위 채팅 최종 조립 사용자 프롬프트 (Assembled User Prompt)</span>
+              </div>
               <span class="agent-preview-badge" id="agent-preview-inject-badge">자동 주입 활성</span>
             </div>
             <pre class="agent-preview-code" id="agent-preview-assembled-prompt"></pre>
@@ -1027,14 +1072,20 @@
 
           <div class="agent-preview-block">
             <div class="agent-preview-head">
-              <span>2️⃣ 상위 에이전트의 하위 세션 스폰 명령어 및 실제 CLI 호출 규격</span>
+              <div class="agent-preview-title">
+                <span class="step-num">02</span>
+                <span>상위 에이전트 스폰 명령어 및 CLI 규격</span>
+              </div>
             </div>
             <pre class="agent-preview-code" id="agent-preview-cli-cmd"></pre>
           </div>
 
           <div class="agent-preview-block">
             <div class="agent-preview-head">
-              <span>3️⃣ 에이전트 본체 시스템 프롬프트 조립 결과 (common/AGENTS.md + 전용 지침)</span>
+              <div class="agent-preview-title">
+                <span class="step-num">03</span>
+                <span>에이전트 본체 시스템 지침 조립 결과 (AGENTS.md)</span>
+              </div>
             </div>
             <pre class="agent-preview-code" id="agent-preview-agent-sys" style="max-height:180px;"></pre>
           </div>
@@ -1056,19 +1107,19 @@
 
   <div id="toast"></div>
 
-  <script src="/js/core.js?v=3"></script>
-  <script src="/js/rooms-sync.js?v=4"></script>
-  <script src="/js/master-memory.js?v=3"></script>
-  <script src="/js/ws.js?v=5"></script>
-  <script src="/js/markdown.js?v=2"></script>
-  <script src="/js/composer.js?v=2"></script>
-  <script src="/js/rooms-ui.js?v=6"></script>
-  <script src="/js/messages.js?v=2"></script>
-  <script src="/js/gestures.js?v=2"></script>
-  <script src="/js/voice.js?v=2"></script>
-  <script src="/js/vault.js?v=2"></script>
-  <script src="/js/settings.js?v=2"></script>
-  <script src="/js/init.js?v=3"></script>
-  <script src="/js/automation.js?v=4"></script>
+  <script src="/js/core.js?v=4"></script>
+  <script src="/js/rooms-sync.js?v=5"></script>
+  <script src="/js/master-memory.js?v=4"></script>
+  <script src="/js/ws.js?v=6"></script>
+  <script src="/js/markdown.js?v=3"></script>
+  <script src="/js/composer.js?v=3"></script>
+  <script src="/js/rooms-ui.js?v=7"></script>
+  <script src="/js/messages.js?v=3"></script>
+  <script src="/js/gestures.js?v=3"></script>
+  <script src="/js/voice.js?v=3"></script>
+  <script src="/js/vault.js?v=3"></script>
+  <script src="/js/settings.js?v=3"></script>
+  <script src="/js/init.js?v=4"></script>
+  <script src="/js/automation.js?v=5"></script>
 </body>
 </html>

@@ -246,12 +246,12 @@ class TestUsageHtmlUi(unittest.TestCase):
             responsive_css = f.read()
 
         # 1. Service Worker 캐시 이름이 업그레이드되었는지 (구버전 캐시 자동 퍼지)
-        self.assertIn("oshyun-hub-v8", sw_js, "Service Worker 캐시 버전이 v8로 업그레이드되어야 함")
+        self.assertRegex(sw_js, r"oshyun-hub-v[8-9]", "Service Worker 캐시 버전이 v8 이상으로 업그레이드되어야 함")
         self.assertNotIn("oshyun-hub-v7", sw_js, "구버전 캐시 v7이 남아있지 않아야 함")
 
         # 2. index.html의 캐시 버스팅 파라미터가 갱신되었는지
         self.assertRegex(html, r"rooms-sync\.js\?v=[3-9]", "rooms-sync.js의 캐시 버스팅 파라미터가 갱신되어야 함")
-        self.assertIn("responsive.css?v=2", html, "responsive.css의 캐시 버스팅 파라미터가 갱신되어야 함")
+        self.assertRegex(html, r"responsive\.css\?v=[2-9]", "responsive.css의 캐시 버스팅 파라미터가 갱신되어야 함")
 
         # 3. PWA 라이프사이클 (pageshow, focus, visibilitychange) 복귀 시 갱신 리스너 검증
         self.assertIn("addEventListener('pageshow'", rooms_sync_js)
