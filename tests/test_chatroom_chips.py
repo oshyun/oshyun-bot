@@ -84,6 +84,7 @@ class TestRunningIndicator(unittest.TestCase):
         self.assertIn('class="run-spinner"', b)
         self.assertIn(".sb-tree-item.running", b)
         self.assertNotIn("room-running", b)
+        self.assertNotIn("inset 3px 0 0 #34d399", b)
 
 
 class TestUnreadClearOptimistic(unittest.TestCase):
