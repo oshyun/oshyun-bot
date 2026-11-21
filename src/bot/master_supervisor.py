@@ -435,13 +435,30 @@ class MasterSupervisor:
         self.interval_seconds = interval_seconds
         self.stall_seconds = stall_seconds
         self._wake = asyncio.Event()
+        self._wake_loop: asyncio.AbstractEventLoop | None = None
         self._patrol_task: asyncio.Task | None = None
         self._last_signature = ""
         self._last_graph: dict | None = None
 
+    def _ensure_wake_event(self) -> asyncio.Event:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None and self._wake_loop is not loop:
+            was_set = self._wake.is_set()
+            self._wake = asyncio.Event()
+            self._wake_loop = loop
+            if was_set:
+                self._wake.set()
+        return self._wake
+
     # 외부(웹 서버)에서 실행 상태가 바뀔 때 호출 — 다음 틱을 기다리지 않고 즉시 반영.
     def poke(self) -> None:
-        self._wake.set()
+        try:
+            self._ensure_wake_event().set()
+        except RuntimeError:
+            pass
 
     @property
     def patrol_running(self) -> bool:
@@ -636,9 +653,10 @@ class MasterSupervisor:
             except Exception as exc:
                 logger.warning("[master] 감독 루프 틱 오류: %s", exc)
             try:
-                await asyncio.wait_for(self._wake.wait(), timeout=self.tick_seconds)
+                wake_ev = self._ensure_wake_event()
+                await asyncio.wait_for(wake_ev.wait(), timeout=self.tick_seconds)
                 # 연속 이벤트를 한 번에 반영하도록 짧게 디바운스
                 await asyncio.sleep(0.3)
             except asyncio.TimeoutError:
                 pass
-            self._wake.clear()
+            self._ensure_wake_event().clear()

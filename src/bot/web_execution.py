@@ -894,20 +894,28 @@ async def _notify_master_agent(
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     room_record = current_chat_db.get_room(room_id) if current_chat_db else None
-    target_parent_id = (room_record.get("parentAgentId") if room_record else None) or CORE_ORCHESTRATOR_ROOM_ID
+    if not isinstance(room_record, dict):
+        room_record = None
+    raw_parent = room_record.get("parentAgentId") if room_record else None
+    target_parent_id = (
+        raw_parent.strip() if isinstance(raw_parent, str) and raw_parent.strip() else CORE_ORCHESTRATOR_ROOM_ID
+    )
     if not _is_orchestrator_room_id(target_parent_id):
         target_parent_id = CORE_ORCHESTRATOR_ROOM_ID
 
     room_title = room_id
-    if room_record and room_record.get("title"):
-        room_title = room_record["title"]
+    raw_title = room_record.get("title") if room_record else None
+    if isinstance(raw_title, str) and raw_title.strip():
+        room_title = raw_title.strip()
     else:
         try:
             from web_rooms import _load_chat_rooms_index
             rooms = _load_chat_rooms_index()
             for r in rooms:
-                if r.get("id") == room_id:
-                    room_title = r.get("title") or room_id
+                if isinstance(r, dict) and r.get("id") == room_id:
+                    rt = r.get("title")
+                    if isinstance(rt, str) and rt.strip():
+                        room_title = rt.strip()
                     break
         except Exception:
             pass
@@ -940,8 +948,10 @@ async def _notify_master_agent(
         )
     else:
         if not (model or effort) and room_record:
-            model = room_record.get("model")
-            effort = room_record.get("effort")
+            raw_m = room_record.get("model")
+            raw_e = room_record.get("effort")
+            model = raw_m if isinstance(raw_m, str) else None
+            effort = raw_e if isinstance(raw_e, str) else None
         try:
             import engine_settings
             allowed = engine_settings.get_all_model_labels()
@@ -2757,7 +2767,17 @@ async def execute_chat_turn(
     resolved_session_id = new_session_id or current_session_id
 
     # 최종 응답이 비어있거나 중단/공백 표시인 경우 다단계 복구 시도
-    if not reply_text or reply_text in ("⚠️ 응답이 중단되었습니다.", "(도구 실행이 완료되었습니다)", "(응답 없음)"):
+    _EMPTY_OR_PLACEHOLDER_REPLIES = (
+        "",
+        _EMPTY_OUTPUT_TEXT,
+        _NO_RESULT_TEXT,
+        "(결과 없음)",
+        "(빈 출력)",
+        "⚠️ 응답이 중단되었습니다.",
+        "(도구 실행이 완료되었습니다)",
+        "(응답 없음)",
+    )
+    if not reply_text or reply_text in _EMPTY_OR_PLACEHOLDER_REPLIES:
         curr_stream = (live_snapshot.get("streamText") or "").strip()
         if curr_stream:
             reply_text = curr_stream
@@ -2766,7 +2786,7 @@ async def execute_chat_turn(
             if transcript_txt:
                 reply_text = transcript_txt
 
-    if not reply_text:
+    if not reply_text or reply_text in (_EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, "(결과 없음)", "(빈 출력)"):
         curr_stream = (live_snapshot.get("streamText") or "").strip()
         if curr_stream:
             reply_text = curr_stream
@@ -2776,6 +2796,42 @@ async def execute_chat_turn(
             reply_text = "(도구 실행이 완료되었습니다)"
         else:
             reply_text = "(응답 없음)"
+
+    # AGY 세션이 에러 없이 종료되었으나 도구 호출도 텍스트도 전혀 없이 (응답 없음)으로 끝난 경우 1회 자동 재시도
+    if (
+        reply_text == "(응답 없음)"
+        and not collected_steps
+        and not agent_output.get("interrupted")
+        and room_key not in _user_cancelled_rooms
+        and not _shutting_down
+    ):
+        logger.warning(
+            "[voice-web] 빈 응답 감지 (room=%s, session=%s) — 1회 자동 재실행합니다.",
+            room_key,
+            resolved_session_id,
+        )
+        retried_empty = await _retry_turn(
+            "빈 응답이 감지되어 자동으로 다시 요청합니다...",
+            resolved_session_id,
+        )
+        if retried_empty is not None:
+            agent_output, retried_text = retried_empty
+            retried_sid = agent_output.get("session_id") or resolved_session_id
+            if retried_sid:
+                resolved_session_id = retried_sid
+                _room_session_ids[room_key] = retried_sid
+            if not retried_text or retried_text in _EMPTY_OR_PLACEHOLDER_REPLIES:
+                curr_stream = (live_snapshot.get("streamText") or "").strip()
+                if curr_stream:
+                    retried_text = curr_stream
+                elif resolved_session_id:
+                    transcript_txt = extract_agy_transcript_final_response(resolved_session_id)
+                    if transcript_txt:
+                        retried_text = transcript_txt
+            if retried_text and retried_text not in (_EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, "(결과 없음)", "(빈 출력)"):
+                reply_text = retried_text
+            elif collected_steps:
+                reply_text = "(도구 실행이 완료되었습니다)"
     speech_text = clean_text_for_speech(reply_text)
 
     # 대화방 전용 SQLite SSOT 저장소에 어시스턴트 답변 및 실행 단계 영속 기록

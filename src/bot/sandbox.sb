@@ -25,6 +25,9 @@
   (subpath (param "JOBS_DIR"))
   ;; claude 스크래치(AGENT_CODE_TMPDIR) — claude 가 직접 만들고 쓰는 곳.
   (subpath (param "AGENT_TMP_DIR"))
+  ;; AGY CLI 설정·설치ID·세션 브레인 디렉토리 (~/.gemini/antigravity-cli 및 ~/.gemini/antigravity).
+  (subpath (param "AGY_CLI_HOME"))
+  (subpath (param "AGY_HOME"))
   (subpath "/private/tmp")
   (subpath "/private/var/tmp")
   (subpath "/private/var/folders"))
@@ -48,6 +51,9 @@
   (subpath (param "JOBS_DIR"))
   ;; claude 스크래치(AGENT_CODE_TMPDIR).
   (subpath (param "AGENT_TMP_DIR"))
+  ;; AGY CLI 설정·설치ID·세션 브레인 디렉토리.
+  (subpath (param "AGY_CLI_HOME"))
+  (subpath (param "AGY_HOME"))
   ;; 인증: macOS Keychain DB(암호화·securityd ACL 보호) + 프레임워크가 읽는 prefs.
   ;; claude 의 OAuth 토큰이 로그인 Keychain 에 저장되므로 read 가 필요하다.
   (subpath (param "LIB_KEYCHAINS"))
