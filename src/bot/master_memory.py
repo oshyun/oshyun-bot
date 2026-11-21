@@ -107,10 +107,25 @@ _AGENT_ALIASES: dict[str, str] = {
 
 
 def normalize_agent_id(agent_id: str | None = None) -> str:
-    """에이전트 식별자(또는 룸 ID)를 정규 메모리 스코프('master', 'second_brain', 'bot_dev')로 변환한다."""
+    """에이전트 식별자(또는 룸 ID)를 정규 메모리 스코프('master', 'second_brain', 'bot_dev', 또는 'custom_<slug>')로 변환한다."""
     raw = str(agent_id or "").strip().lower()
     if raw in _AGENT_ALIASES:
         return _AGENT_ALIASES[raw]
+    if raw.startswith("__custom_") and raw.endswith("__") and len(raw) > 11:
+        slug = re.sub(r"[^a-z0-9_\-]", "", raw[9:-2]).strip("_-")
+        if slug:
+            return f"custom_{slug}"
+    if raw.startswith("custom_"):
+        slug = re.sub(r"[^a-z0-9_\-]", "", raw[7:]).strip("_-")
+        if slug:
+            return f"custom_{slug}"
+    try:
+        import agent_configs
+        cfg = agent_configs.get_agent_config(raw)
+        if cfg and cfg.get("memoryScope"):
+            return str(cfg["memoryScope"])
+    except Exception:
+        pass
     raise ValueError(f"지원하지 않는 에이전트 메모리 식별자입니다: {agent_id}")
 
 

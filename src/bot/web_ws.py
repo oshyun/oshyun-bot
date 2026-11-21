@@ -195,10 +195,11 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                                 cancel_run_fn(crid)
                     else:
                         cancel_run_fn(target_room)
-                    if target_room in ORCHESTRATOR_ROOM_IDS:
+                    if target_room in ORCHESTRATOR_ROOM_IDS or (target_room and str(target_room).startswith("__custom_")):
                         ns = (
                             "core_" if target_room == CORE_ORCHESTRATOR_ROOM_ID
-                            else ("vault_" if target_room == EXPERT_VAULT_ROOM_ID else "coding_")
+                            else ("vault_" if target_room == EXPERT_VAULT_ROOM_ID
+                            else ("coding_" if target_room == EXPERT_CODING_ROOM_ID else f"{str(target_room).strip('_')}_"))
                         )
                         clear_session_fn(ns=ns)
                         _room_session_ids.pop(target_room, None)
@@ -231,7 +232,7 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                         target_room = target_room.strip() or None
                     else:
                         target_room = None
-                    if target_room in ORCHESTRATOR_ROOM_IDS:
+                    if target_room in ORCHESTRATOR_ROOM_IDS or (target_room and str(target_room).startswith("__custom_")):
                         import web_orchestrator
                         reset_fn = _get_mod_attr(
                             "reset_core_orchestrator_state",

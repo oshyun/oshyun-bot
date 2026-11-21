@@ -43,6 +43,7 @@ from master_supervisor import (
     MASTER_PATROL_CHANNEL,
     MasterSupervisor,
 )
+import agent_configs
 import master_memory
 import master_tasks
 import child_error_report
@@ -80,6 +81,18 @@ EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
 ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 IDLE_RESET_SECONDS = 6 * 3600
+
+
+def _is_orchestrator_room_id(room_id: str | None) -> bool:
+    if not room_id:
+        return False
+    clean = str(room_id).strip()
+    if clean in ORCHESTRATOR_ROOM_IDS:
+        return True
+    try:
+        return agent_configs.is_orchestrator_room(clean)
+    except Exception:
+        return False
 WEB_PORT = int(os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765")
 WEB_TOKEN = os.getenv("WEB_TOKEN", os.getenv("VOICE_WEB_TOKEN", "")).strip()
 
@@ -147,8 +160,6 @@ async def detach_active_tasks(timeout: float = 1.5) -> int:
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
     """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value"):
-        return fallback
     mod = sys.modules.get("web_server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
@@ -161,7 +172,7 @@ def _should_sync_global_session(
     global_session_id: str | None,
 ) -> bool:
     """웹 대화방 턴이 전역(텔레그램/코어) 세션을 동기화·덮어쓰기해야 하는지 판별한다."""
-    if not room_id or room_id == "__default__" or room_id in ORCHESTRATOR_ROOM_IDS:
+    if not room_id or room_id == "__default__" or _is_orchestrator_room_id(room_id):
         return True
     if global_session_id and global_session_id in (room_id, current_session_id):
         return True
@@ -803,7 +814,7 @@ async def _notify_master_agent(
     effort: str | None = None,
 ) -> None:
     """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가)에게 결과를 알리고 후속 턴을 트리거한다."""
-    if room_id in ORCHESTRATOR_ROOM_IDS:
+    if _is_orchestrator_room_id(room_id):
         return
     if task_id and not master_tasks.claim_report(task_id):
         return  # 이미 보고됨(중복 방지)
@@ -817,7 +828,7 @@ async def _notify_master_agent(
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     room_record = current_chat_db.get_room(room_id) if current_chat_db else None
     target_parent_id = (room_record.get("parentAgentId") if room_record else None) or CORE_ORCHESTRATOR_ROOM_ID
-    if target_parent_id not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(target_parent_id):
         target_parent_id = CORE_ORCHESTRATOR_ROOM_ID
 
     room_title = room_id
@@ -838,9 +849,14 @@ async def _notify_master_agent(
     if len(short_res) > 1500:
         short_res = short_res[:1500] + "…"
 
+    parent_cfg = agent_configs.get_agent_config(target_parent_id)
     parent_label = (
-        "세컨브레인" if target_parent_id == EXPERT_VAULT_ROOM_ID
-        else ("봇개발" if target_parent_id == EXPERT_CODING_ROOM_ID else "마스터")
+        str(parent_cfg.get("name"))
+        if parent_cfg and parent_cfg.get("name")
+        else (
+            "세컨브레인" if target_parent_id == EXPERT_VAULT_ROOM_ID
+            else ("봇개발" if target_parent_id == EXPERT_CODING_ROOM_ID else "마스터")
+        )
     )
 
     if is_success:
@@ -1733,17 +1749,25 @@ async def execute_chat_turn(
 ) -> dict[str, Any]:
     """단일 대화방(AGY 세션)의 1턴 질의응답을 실행하고 실시간 스트림을 브로드캐스트한다."""
     room_key = room_id or "__default__"
-    is_orchestrator = room_key in ORCHESTRATOR_ROOM_IDS
+    is_orchestrator = _is_orchestrator_room_id(room_key)
+    agent_cfg = agent_configs.get_agent_config(room_key) if is_orchestrator else None
     is_coding = get_coding_mode() or (room_key == EXPERT_CODING_ROOM_ID)
-    session_namespace = (
-        "core_" if room_key == CORE_ORCHESTRATOR_ROOM_ID
-        else ("vault_" if room_key == EXPERT_VAULT_ROOM_ID
-        else ("coding_" if is_coding else ""))
-    )
+    if room_key == CORE_ORCHESTRATOR_ROOM_ID:
+        session_namespace = "core_"
+    elif room_key == EXPERT_VAULT_ROOM_ID:
+        session_namespace = "vault_"
+    elif room_key == EXPERT_CODING_ROOM_ID:
+        session_namespace = "coding_"
+    elif agent_cfg and agent_cfg.get("sessionNamespace"):
+        session_namespace = str(agent_cfg["sessionNamespace"])
+    else:
+        session_namespace = "coding_" if is_coding else ""
     mod = sys.modules.get("web_server")
     curr_workdir = getattr(mod, "WORKDIR", WORKDIR) if mod else WORKDIR
     curr_codedir = getattr(mod, "CODEDIR", CODEDIR) if mod else CODEDIR
-    if room_key == EXPERT_CODING_ROOM_ID:
+    if agent_cfg and agent_cfg.get("workdir"):
+        target_workdir = str(agent_cfg["workdir"]).strip() or curr_workdir
+    elif room_key == EXPERT_CODING_ROOM_ID:
         target_workdir = curr_codedir or curr_workdir
     elif room_key in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
         target_workdir = curr_workdir
@@ -1775,8 +1799,12 @@ async def execute_chat_turn(
     if room_workdir and not is_orchestrator:
         target_workdir = room_workdir
 
-    fallback_model = room_model or get_model()
-    fallback_effort = room_effort if room_effort is not None else get_effort()
+    fallback_model = room_model or (agent_cfg.get("model") if agent_cfg else None) or get_model()
+    fallback_effort = (
+        room_effort
+        if room_effort is not None
+        else ((agent_cfg.get("effort") if agent_cfg and agent_cfg.get("effort") else None) or get_effort())
+    )
 
     active_model = model.strip() if (isinstance(model, str) and model.strip()) else fallback_model
     active_effort = effort if effort is not None else fallback_effort
@@ -1832,9 +1860,6 @@ async def execute_chat_turn(
             user_text + VOICE_MODE_PROMPT_SUFFIX if is_voice_mode else user_text
         )
 
-    cur_room_rec = current_chat_db.get_room(room_key) if current_chat_db else None
-    parent_agent_id = cur_room_rec.get("parentAgentId") if cur_room_rec else None
-
     if is_orchestrator and not raw_prompt:
         try:
             orch_agent = master_memory.normalize_agent_id(room_key)
@@ -1846,18 +1871,6 @@ async def execute_chat_turn(
                 effective_prompt = f"{mem_ctx}\n\n[현재 요청]\n{effective_prompt}"
         except Exception:
             pass
-    elif not is_orchestrator and (channel == "orchestrator" or parent_agent_id) and not raw_prompt:
-        # 하위 작업 세션: 필수 동적 메타데이터([부모 보고 경로/ID], [작업 ID])만 간결하게 주입
-        # (※ 정적 규칙은 각 작업공간의 AGENTS.md 및 rules/에서 자동 로드되므로 중복 주입하지 않음)
-        runtime_meta: list[str] = []
-        if parent_agent_id:
-            runtime_meta.append(f"• 부모 에이전트(보고 대상): {parent_agent_id}")
-        if task_id:
-            runtime_meta.append(f"• 작업 ID: {task_id} (완료 시 서버 자동 보고 연계)")
-        if runtime_meta:
-            meta_header = "[런타임 작업 메타데이터]\n" + "\n".join(runtime_meta)
-            if "[런타임 작업 메타데이터]" not in effective_prompt:
-                effective_prompt = f"{meta_header}\n\n{effective_prompt}"
 
     # 대화방 전용 저장소에 유저/서브에이전트 보고 메시지 영속 기록 (명시적 user_msg_id 기반으로 중복 저장 원천 방지)
     actual_user_msg_id: int | None = user_msg_id if user_msg_id is not None else None
@@ -2010,6 +2023,7 @@ async def execute_chat_turn(
     is_core = (room_key == CORE_ORCHESTRATOR_ROOM_ID)
     is_expert_vault = (room_key == EXPERT_VAULT_ROOM_ID)
     is_expert_coding = (room_key == EXPERT_CODING_ROOM_ID)
+    is_custom_agent = bool(is_orchestrator and not is_core and not is_expert_vault and not is_expert_coding)
 
     use_orchestrator = is_core if orchestrator is None else bool(orchestrator)
     spawn_kwargs: dict[str, Any] = {
@@ -2017,7 +2031,7 @@ async def execute_chat_turn(
         "out_file": out_file_path,
         "err_file": err_file_path,
         "coding": is_coding,
-        "web": not use_orchestrator and not is_expert_vault and not is_coding,
+        "web": not use_orchestrator and not is_expert_vault and not is_coding and not is_custom_agent,
         "model": active_model,
         "effort": active_effort,
     }
@@ -2029,25 +2043,17 @@ async def execute_chat_turn(
         spawn_kwargs["expert_vault"] = True
     elif is_expert_coding:
         spawn_kwargs["expert_coding"] = True
+    elif is_custom_agent:
+        spawn_kwargs["agent_id"] = room_key
 
-    extra_env: dict[str, str] = {}
-    if use_orchestrator or is_expert_vault or is_expert_coding:
+    if use_orchestrator or is_expert_vault or is_expert_coding or is_custom_agent:
         ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
         proto = "https" if ssl_enabled else "http"
-        extra_env.update({
+        spawn_kwargs["extra_env"] = {
             "OSHYUN_ORCHESTRATOR_API_URL": f"{proto}://127.0.0.1:{WEB_PORT}",
             "OSHYUN_ORCHESTRATOR_TOKEN": WEB_TOKEN,
             "OSHYUN_AGENT_ROOM_ID": room_key,
-        })
-    else:
-        extra_env["OSHYUN_AGENT_ROOM_ID"] = room_key
-        if parent_agent_id:
-            extra_env["OSHYUN_PARENT_AGENT_ID"] = str(parent_agent_id)
-        if task_id:
-            extra_env["OSHYUN_TASK_ID"] = str(task_id)
-
-    if extra_env:
-        spawn_kwargs["extra_env"] = extra_env
+        }
 
     try:
         agent_proc = current_spawn_agent(

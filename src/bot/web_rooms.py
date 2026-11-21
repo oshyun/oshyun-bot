@@ -13,6 +13,7 @@ import uuid
 
 from aiohttp import web
 
+import agent_configs
 import chat_db
 from agent_engine import clear_session, delete_session_files, kill_job
 from bot_logger import logger, vault_log
@@ -27,6 +28,20 @@ EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
 ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
+
+
+def _all_orchestrator_room_ids() -> tuple[str, ...]:
+    try:
+        return agent_configs.get_orchestrator_room_ids()
+    except Exception:
+        return ORCHESTRATOR_ROOM_IDS
+
+
+def _is_orchestrator_room_id(room_id: str | None) -> bool:
+    if not room_id:
+        return False
+    clean = str(room_id).strip()
+    return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
@@ -55,9 +70,10 @@ def _load_hidden_rooms() -> set[str]:
             pass
 
     # 마스터 및 전문가 에이전트(ORCHESTRATOR_ROOM_IDS)는 영구 숨김 불가 — 자정(Self-healing) 처리
-    polluted = any(orch_id in hidden for orch_id in ORCHESTRATOR_ROOM_IDS)
+    all_orch_ids = _all_orchestrator_room_ids()
+    polluted = any(orch_id in hidden for orch_id in all_orch_ids)
     if polluted:
-        for orch_id in ORCHESTRATOR_ROOM_IDS:
+        for orch_id in all_orch_ids:
             hidden.discard(orch_id)
         try:
             tmp_path = f"{hidden_file}.tmp.{os.getpid()}"
@@ -71,12 +87,13 @@ def _load_hidden_rooms() -> set[str]:
 
 def _save_hidden_rooms(room_ids: list[str] | set[str]) -> None:
     """하나 이상의 대화방/세션 ID를 숨김 목록에 원자적으로 추가 저장한다 (ORCHESTRATOR_ROOM_IDS는 원천 차단)."""
-    cleaned = [str(r).strip() for r in room_ids if r and str(r).strip() and str(r).strip() not in ORCHESTRATOR_ROOM_IDS]
+    all_orch_ids = set(_all_orchestrator_room_ids())
+    cleaned = [str(r).strip() for r in room_ids if r and str(r).strip() and str(r).strip() not in all_orch_ids]
     if not cleaned:
         return
     hidden = _load_hidden_rooms()
     hidden.update(cleaned)
-    for orch_id in ORCHESTRATOR_ROOM_IDS:
+    for orch_id in all_orch_ids:
         hidden.discard(orch_id)
     hidden_file = _get_hidden_file()
     os.makedirs(os.path.dirname(hidden_file), exist_ok=True)
@@ -143,7 +160,7 @@ def _append_room_message(room_id: str, msg_record: dict) -> int | None:
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(clean_rid):
         hidden = current_load_hidden()
         if clean_rid in hidden or (sid and sid in hidden):
             return None
@@ -183,11 +200,11 @@ def _load_room_messages(room_id: str) -> list[dict]:
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid not in ORCHESTRATOR_ROOM_IDS and clean_rid in current_load_hidden():
+    if not _is_orchestrator_room_id(clean_rid) and clean_rid in current_load_hidden():
         return []
     try:
         msgs = current_chat_db.get_messages(clean_rid)
-        if clean_rid in ORCHESTRATOR_ROOM_IDS and msgs:
+        if _is_orchestrator_room_id(clean_rid) and msgs:
             try:
                 import web_orchestrator
                 for m in msgs:
@@ -264,7 +281,7 @@ def _load_chat_rooms_index() -> list[dict]:
         find(primary_k)
         if rid and sid:
             union(rid, sid)
-        for orch_id in ORCHESTRATOR_ROOM_IDS:
+        for orch_id in _all_orchestrator_room_ids():
             if rid == orch_id or sid == orch_id:
                 union(primary_k, orch_id)
 
@@ -279,13 +296,14 @@ def _load_chat_rooms_index() -> list[dict]:
         root = find(k)
         groups.setdefault(root, []).append((r, rid, sid))
 
+    all_orch_ids_set = set(_all_orchestrator_room_ids())
     merged_rooms_list: list[dict] = []
     for root, recs in groups.items():
         group_rids = {r[1] for r in recs if r[1]}
         group_sids = {r[2] for r in recs if r[2]}
 
         orch_match = None
-        for orch_id in ORCHESTRATOR_ROOM_IDS:
+        for orch_id in _all_orchestrator_room_ids():
             if orch_id in group_rids or orch_id in group_sids:
                 orch_match = orch_id
                 break
@@ -310,7 +328,7 @@ def _load_chat_rooms_index() -> list[dict]:
             non_room_sids = [s for s in group_sids if s and not s.startswith("room-")]
             if non_room_sids:
                 canonical_sid = non_room_sids[0]
-            elif canonical_id not in ORCHESTRATOR_ROOM_IDS and not canonical_id.startswith("room-"):
+            elif canonical_id not in all_orch_ids_set and not canonical_id.startswith("room-"):
                 canonical_sid = canonical_id
             else:
                 canonical_sid = None
@@ -334,12 +352,15 @@ def _load_chat_rooms_index() -> list[dict]:
             "workdir": None,
         }
 
+        agent_cfg = agent_configs.get_agent_config(canonical_id) if canonical_id in all_orch_ids_set else None
         if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
-            merged["title"] = CORE_ORCHESTRATOR_TITLE
+            merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or CORE_ORCHESTRATOR_TITLE
         elif canonical_id == EXPERT_VAULT_ROOM_ID:
-            merged["title"] = EXPERT_VAULT_TITLE
+            merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or EXPERT_VAULT_TITLE
         elif canonical_id == EXPERT_CODING_ROOM_ID:
-            merged["title"] = EXPERT_CODING_TITLE
+            merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or EXPERT_CODING_TITLE
+        elif agent_cfg:
+            merged["title"] = agent_cfg.get("title") or agent_cfg.get("name") or canonical_id
 
         for r, _, _ in recs:
             if r.get("isArchived"):
@@ -358,8 +379,8 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["workdir"] = str(r["workdir"]).strip()
             rtitle = str(r.get("title") or "").strip()
             if rtitle and rtitle not in ("새 대화", "대화방"):
-                if not merged["title"] or merged["title"] in ("새 대화", "대화방") or canonical_id in ORCHESTRATOR_ROOM_IDS:
-                    if canonical_id not in ORCHESTRATOR_ROOM_IDS:
+                if not merged["title"] or merged["title"] in ("새 대화", "대화방") or canonical_id in all_orch_ids_set:
+                    if canonical_id not in all_orch_ids_set:
                         merged["title"] = rtitle
 
             rpreview = str(r.get("preview") or "").strip()
@@ -385,11 +406,15 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["title"] = EXPERT_VAULT_TITLE
             elif canonical_id == EXPERT_CODING_ROOM_ID:
                 merged["title"] = EXPERT_CODING_TITLE
+            elif agent_cfg:
+                merged["title"] = agent_cfg.get("title") or agent_cfg.get("name") or canonical_id
             else:
                 merged["title"] = "새 대화"
 
         if not merged.get("workdir"):
-            if canonical_id == EXPERT_CODING_ROOM_ID:
+            if agent_cfg and agent_cfg.get("workdir"):
+                merged["workdir"] = str(agent_cfg["workdir"]).strip()
+            elif canonical_id == EXPERT_CODING_ROOM_ID:
                 merged["workdir"] = CODEDIR or WORKDIR
             elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
                 merged["workdir"] = WORKDIR
@@ -419,7 +444,7 @@ def _load_chat_rooms_index() -> list[dict]:
     valid_rooms = [
         r for r in merged_rooms_list
         if (
-            r.get("id") in ORCHESTRATOR_ROOM_IDS
+            r.get("id") in all_orch_ids_set
             or r.get("messageCount", 0) > 0
             or (r.get("messages") and len(r["messages"]) > 0)
             or (r.get("title") and r.get("title") not in ("새 대화", "대화방", ""))
@@ -454,7 +479,8 @@ def _update_room_metadata(
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_load_hidden = _get_mod_attr("_load_hidden_rooms", _load_hidden_rooms)
 
-    if clean_rid not in ORCHESTRATOR_ROOM_IDS:
+    is_orch = _is_orchestrator_room_id(clean_rid)
+    if not is_orch:
         hidden = current_load_hidden()
         if clean_rid in hidden or (clean_sid and clean_sid in hidden):
             return
@@ -464,6 +490,10 @@ def _update_room_metadata(
         title = EXPERT_VAULT_TITLE
     elif clean_rid == EXPERT_CODING_ROOM_ID:
         title = EXPERT_CODING_TITLE
+    elif is_orch:
+        cfg = agent_configs.get_agent_config(clean_rid)
+        if cfg:
+            title = cfg.get("title") or cfg.get("name") or title
     try:
         current_chat_db.get_or_create_room(clean_rid, session_id=clean_sid, title=title, channel="web")
         current_chat_db.update_room(
@@ -472,7 +502,7 @@ def _update_room_metadata(
             preview=preview,
             session_id=clean_sid,
             channel="web",
-            force_title=(clean_rid in ORCHESTRATOR_ROOM_IDS),
+            force_title=is_orch,
         )
     except Exception as exc:
         logger.warning("[chat_db] SQLite 방 메타데이터 갱신 실패: %s", exc)

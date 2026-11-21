@@ -698,9 +698,15 @@ function handleWsEvent(data) {
     }
     return;
   }
+  if (data.type === 'agent_configs_updated') {
+    if (Array.isArray(data.agents) && typeof syncAgentConfigsState === 'function') {
+      syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+    }
+    return;
+  }
   if (data.type === 'session_reset') {
-    if (data.roomId === CORE_ROOM_ID) {
-      applyMasterSessionResetLocal(data);
+    if (data.roomId && (data.roomId === CORE_ROOM_ID || ORCHESTRATOR_ROOM_IDS.includes(data.roomId))) {
+      applyOrchestratorSessionResetLocal(data.roomId, data);
     }
     return;
   }

@@ -93,6 +93,10 @@ MASTER_TASKS_FILE = os.path.join(STATE_DIR, "master_tasks.json")
 MASTER_STATE_FILE = os.path.join(STATE_DIR, "master_state.json")
 # 마스터 에이전트 4계층 메모리(Hot/Warm/Cold/Freeze) 영속화 파일.
 MASTER_MEMORY_FILE = os.path.join(STATE_DIR, "master_memory.json")
+# 에이전트(마스터·전문가·커스텀) 설정 및 하위 세션 전달 프롬프트 템플릿 영속화 파일.
+AGENT_CONFIGS_FILE = os.path.join(STATE_DIR, "agent_configs.json")
+# 동적으로 생성/편집된 에이전트 지침(AGENTS.md) 디렉토리.
+RUNTIME_INSTRUCTIONS_DIR = os.path.join(STATE_DIR, "agent_instructions")
 
 def _resolve_data_rel_path(env_key: str, fallback_path: str) -> str:
     raw = os.getenv(env_key, "").strip()
@@ -118,7 +122,15 @@ CAL_REFRESH_TRIGGER_PATH = os.path.join(
 
 
 def child_default_workdir(parent_agent_id: str | None) -> str | None:
-    """봇개발 에이전트 하위 방의 기본 작업경로(CODEDIR). 해당 없으면 None(기존 폴백 유지)."""
+    """상위 에이전트(봇개발 및 커스텀 에이전트) 하위 방의 기본 작업경로. 해당 없으면 None(기존 폴백 유지)."""
     if parent_agent_id == "__expert_coding__":
         return CODEDIR or WORKDIR
+    if parent_agent_id:
+        try:
+            import agent_configs
+            w = agent_configs.get_agent_workdir(str(parent_agent_id).strip())
+            if w:
+                return w
+        except Exception:
+            pass
     return None

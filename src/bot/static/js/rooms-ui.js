@@ -99,6 +99,20 @@ function updateSessionBar(options = {}) {
   if (room && btnEl) {
     btnEl.title = `터미널(CLI)에서 이어하기 명령어 복사: ${getCliCommandForRoom(room)}`;
   }
+  const agentCfgBtn = document.getElementById('btn-topbar-agent-config');
+  if (agentCfgBtn) {
+    const isOrch = Boolean(currentRoomId && isOrchestratorAgentRoomId(currentRoomId));
+    const hasParentOrch = Boolean(room && room.parentAgentId && isOrchestratorAgentRoomId(room.parentAgentId));
+    if (isOrch || hasParentOrch) {
+      agentCfgBtn.style.display = 'inline-flex';
+      const targetId = isOrch ? currentRoomId : room.parentAgentId;
+      const cfg = getAgentConfigById(targetId);
+      const label = (cfg && cfg.name) || targetId;
+      agentCfgBtn.title = `${label} 지침 및 하위 채팅 전달 프롬프트 설정 열기`;
+    } else {
+      agentCfgBtn.style.display = 'none';
+    }
+  }
   updateTopbarTitle();
   updateRoomConfigBar();
   if (!options.skipMasterUi) {
@@ -568,6 +582,16 @@ function renderMasterSubtaskTree(masterChildRooms) {
   renderTree('master-subtask-tree', masterRooms, '마스터 직속 채팅');
   renderTree('expert-vault-subtask-tree', vaultRooms, '세컨브레인 직속 채팅');
   renderTree('expert-coding-subtask-tree', codingRooms, '봇개발 직속 채팅');
+
+  if (Array.isArray(agentConfigs)) {
+    for (const agent of agentConfigs) {
+      if (!agent || !agent.id || agent.builtin || [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(agent.id)) {
+        continue;
+      }
+      const customRooms = masterChildRooms.filter(r => r.parentAgentId === agent.id);
+      renderTree(`custom-subtask-tree-${agent.id}`, customRooms, `${agent.name || agent.id} 직속 채팅`);
+    }
+  }
 }
 
 function renderRoomList() {

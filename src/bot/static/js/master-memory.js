@@ -53,18 +53,55 @@ function applyMasterModeElements() {
   return isMaster;
 }
 
+function getMemoryScopeForAgentRoomId(roomId) {
+  if (!roomId) return null;
+  if (roomId === CORE_ROOM_ID) return 'master';
+  if (roomId === EXPERT_VAULT_ROOM_ID) return 'second_brain';
+  if (roomId === EXPERT_CODING_ROOM_ID) return 'bot_dev';
+  const clean = String(roomId).trim();
+  if (clean.startsWith('__custom_') && clean.endsWith('__')) {
+    return clean.replace(/^__+|__+$/g, '');
+  }
+  return null;
+}
+
+function renderMsbMemoryAgentTabs() {
+  const wrap = document.getElementById('msb-agent-tabs');
+  if (!wrap) return;
+  const baseTabs = [
+    { scope: 'master', label: '👑 마스터' },
+    { scope: 'second_brain', label: '🧠 세컨브레인' },
+    { scope: 'bot_dev', label: '💻 봇개발' },
+  ];
+  if (Array.isArray(agentConfigs)) {
+    for (const cfg of agentConfigs) {
+      if (!cfg || !cfg.id || cfg.builtin) continue;
+      const scope = getMemoryScopeForAgentRoomId(cfg.id);
+      if (scope) {
+        baseTabs.push({
+          scope,
+          label: `${cfg.emoji || '🤖'} ${cfg.name || cfg.id}`,
+        });
+      }
+    }
+  }
+  wrap.innerHTML = baseTabs.map(t => {
+    const isActive = (t.scope === currentMsbAgent);
+    const safeScope = escapeHtml(t.scope);
+    return `<button type="button" class="btn sm tab ${isActive ? 'active' : ''}" data-agent="${safeScope}" onclick="switchMsbMemoryAgent('${safeScope}')" style="flex:1;min-width:72px;font-size:11px;padding:4px 6px;">${escapeHtml(t.label)}</button>`;
+  }).join('');
+}
+
 function getAppropriateMemoryAgentForCurrentContext() {
   // 1. 특정 에이전트 전용 대화방
-  if (currentRoomId === EXPERT_VAULT_ROOM_ID) return 'second_brain';
-  if (currentRoomId === EXPERT_CODING_ROOM_ID) return 'bot_dev';
-  if (currentRoomId === CORE_ROOM_ID) return 'master';
+  const directScope = getMemoryScopeForAgentRoomId(currentRoomId);
+  if (directScope) return directScope;
 
   // 2. 오케스트레이터가 스폰한 하위 세션 (parentAgentId 기반 상속)
   const curRoom = Array.isArray(chatRooms) ? chatRooms.find(r => r.id === currentRoomId) : null;
   if (curRoom && curRoom.parentAgentId) {
-    if (curRoom.parentAgentId === EXPERT_VAULT_ROOM_ID) return 'second_brain';
-    if (curRoom.parentAgentId === EXPERT_CODING_ROOM_ID) return 'bot_dev';
-    if (curRoom.parentAgentId === CORE_ROOM_ID) return 'master';
+    const parentScope = getMemoryScopeForAgentRoomId(curRoom.parentAgentId);
+    if (parentScope) return parentScope;
   }
 
   // 3. 특정 화면/뷰 기준 자연스러운 에이전트 매핑

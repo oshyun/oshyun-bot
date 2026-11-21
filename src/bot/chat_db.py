@@ -25,6 +25,19 @@ CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 PROTECTED_ROOM_IDS = {CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID}
+
+
+def _is_protected_room_id(room_id: str | None) -> bool:
+    clean = str(room_id or "").strip()
+    if not clean:
+        return False
+    if clean in PROTECTED_ROOM_IDS:
+        return True
+    try:
+        import agent_configs
+        return agent_configs.is_orchestrator_room(clean)
+    except Exception:
+        return False
 _SUB_AGENT_REPORT_PREFIXES = (
     "[하위 작업 완료 보고]",
     "[하위 작업 중단/오류 보고]",
@@ -1146,17 +1159,18 @@ def delete_room(
     room_id_or_session_id: str,
     hard_delete: bool = True,
     db_path: str | None = None,
+    allow_custom_agent: bool = False,
 ) -> bool:
     """대화방을 삭제(기본: 완전 삭제, 외래키로 메시지도 함께 삭제) 처리한다 (마스터 및 전문가 에이전트는 삭제 불가)."""
     target = str(room_id_or_session_id).strip()
-    if not target or target in PROTECTED_ROOM_IDS:
+    if not target or target in PROTECTED_ROOM_IDS or (not allow_custom_agent and _is_protected_room_id(target)):
         return False
 
     room = get_room(target, db_path=db_path)
     if not room:
         return False
     actual_room_id = room["id"]
-    if actual_room_id in PROTECTED_ROOM_IDS:
+    if actual_room_id in PROTECTED_ROOM_IDS or (not allow_custom_agent and _is_protected_room_id(actual_room_id)):
         return False
 
     with get_connection(db_path) as conn:
@@ -1174,14 +1188,20 @@ def delete_rooms_bulk(
     db_path: str | None = None,
 ) -> int:
     """여러 대화방(방 ID 또는 세션 ID 목록)을 단일 트랜잭션으로 일괄 삭제 처리한다 (마스터 및 전문가 에이전트는 삭제 불가)."""
-    cleaned = [str(t).strip() for t in targets if t and str(t).strip() and str(t).strip() not in PROTECTED_ROOM_IDS]
+    cleaned = [str(t).strip() for t in targets if t and str(t).strip() and not _is_protected_room_id(str(t).strip())]
     cleaned = list(dict.fromkeys(cleaned))
     if not cleaned:
         return 0
 
     # 보호 대상 룸의 세션 ID도 삭제 대상에서 제외
     protected_sids: set[str] = set()
-    for pid in PROTECTED_ROOM_IDS:
+    all_protected = set(PROTECTED_ROOM_IDS)
+    try:
+        import agent_configs
+        all_protected.update(agent_configs.get_orchestrator_room_ids())
+    except Exception:
+        pass
+    for pid in all_protected:
         try:
             p_room = get_room(pid, db_path=db_path)
             if p_room and p_room.get("sessionId"):

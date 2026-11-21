@@ -14,7 +14,7 @@ function getRoomTimestamp(r) {
 }
 
 function ensureCoreRoom() {
-  const ensureAgent = (id, title, desc, workdir) => {
+  const ensureAgent = (id, title, desc, workdir, extra = {}) => {
     let room = chatRooms.find(r => r && r.id === id);
     if (!room) {
       room = {
@@ -26,46 +26,145 @@ function ensureCoreRoom() {
         isNewSession: true,
         sessionId: null,
         workdir: workdir || (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '',
+        model: extra.model || null,
+        effort: extra.effort || null,
+        parentAgentId: extra.parentAgentId || null,
         updatedAt: 0
       };
       chatRooms.push(room);
     } else {
       room.title = title;
-      if (!room.workdir && serverStatus) {
-        room.workdir = workdir || serverStatus.vaultDir || serverStatus.workdir || '';
+      if (desc) room.preview = room.preview || desc;
+      if (workdir) {
+        room.workdir = workdir;
+      } else if (!room.workdir && serverStatus) {
+        room.workdir = serverStatus.vaultDir || serverStatus.workdir || '';
       }
+      if (extra.model && !room.model) room.model = extra.model;
+      if (extra.effort && !room.effort) room.effort = extra.effort;
     }
     return room;
   };
 
-  const coreRoom = ensureAgent(CORE_ROOM_ID, CORE_ROOM_TITLE, '전체 AGY 세션 열람 · 지시 · 스폰', (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '');
-  ensureAgent(EXPERT_VAULT_ROOM_ID, EXPERT_VAULT_TITLE, '옵시디언 볼트 지식 · 개인 기록 전담', (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '');
-  ensureAgent(EXPERT_CODING_ROOM_ID, EXPERT_CODING_TITLE, 'oshyun-bot 개발 · 테스트 전담', (serverStatus && (serverStatus.codeDir || serverStatus.codedir || serverStatus.vaultDir)) || '');
+  const defaultVaultDir = (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '';
+  const defaultCodeDir = (serverStatus && (serverStatus.codeDir || serverStatus.codedir || serverStatus.vaultDir)) || '';
+
+  const coreCfg = getAgentConfigById(CORE_ROOM_ID);
+  const vaultCfg = getAgentConfigById(EXPERT_VAULT_ROOM_ID);
+  const codingCfg = getAgentConfigById(EXPERT_CODING_ROOM_ID);
+
+  const coreRoom = ensureAgent(
+    CORE_ROOM_ID,
+    (coreCfg && coreCfg.name) || CORE_ROOM_TITLE,
+    (coreCfg && coreCfg.roleDescription) || '전체 AGY 세션 열람 · 지시 · 스폰',
+    (coreCfg && coreCfg.workdir) || defaultVaultDir,
+    coreCfg || {}
+  );
+  ensureAgent(
+    EXPERT_VAULT_ROOM_ID,
+    (vaultCfg && vaultCfg.name) || EXPERT_VAULT_TITLE,
+    (vaultCfg && vaultCfg.roleDescription) || '옵시디언 볼트 지식 · 개인 기록 전담',
+    (vaultCfg && vaultCfg.workdir) || defaultVaultDir,
+    vaultCfg || {}
+  );
+  ensureAgent(
+    EXPERT_CODING_ROOM_ID,
+    (codingCfg && codingCfg.name) || EXPERT_CODING_TITLE,
+    (codingCfg && codingCfg.roleDescription) || 'oshyun-bot 개발 · 테스트 전담',
+    (codingCfg && codingCfg.workdir) || defaultCodeDir,
+    codingCfg || {}
+  );
+
+  if (Array.isArray(agentConfigs)) {
+    for (const cfg of agentConfigs) {
+      if (!cfg || !cfg.id) continue;
+      if (!ORCHESTRATOR_ROOM_IDS.includes(cfg.id)) {
+        ORCHESTRATOR_ROOM_IDS.push(cfg.id);
+      }
+      if ([CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(cfg.id)) continue;
+      ensureAgent(
+        cfg.id,
+        cfg.name || cfg.id,
+        cfg.roleDescription || '사용자 정의 전문 에이전트',
+        cfg.workdir || defaultVaultDir,
+        cfg
+      );
+    }
+  }
   return coreRoom;
 }
 
 function updateCoreAgentSlotUi() {
   ensureCoreRoom();
-  const updateSlot = (slotId, subId, roomId) => {
+  const updateSlot = (slotId, subId, roomId, titleId = null) => {
     const slot = document.getElementById(slotId);
     const subEl = document.getElementById(subId);
     if (!slot) return;
+    const cfg = getAgentConfigById(roomId);
+    if (cfg && titleId) {
+      const tEl = document.getElementById(titleId);
+      if (tEl && cfg.name) tEl.textContent = cfg.name;
+    }
+    if (cfg && cfg.roleDescription) {
+      slot.title = cfg.roleDescription;
+    }
     const live = roomLiveStates[roomId];
     const isRunning = Boolean(live && live.isRunning);
     slot.classList.toggle('active', currentRoomId === roomId && currentView === 'chat');
     slot.classList.toggle('running', isRunning);
     if (subEl) {
-      if (isRunning) {
-        subEl.textContent = '작업 중';
-      } else {
-        subEl.textContent = '대기';
-      }
+      subEl.textContent = isRunning ? '작업 중' : '대기';
     }
   };
 
-  updateSlot('core-agent-slot', 'core-agent-sub', CORE_ROOM_ID);
-  updateSlot('expert-vault-slot', 'expert-vault-sub', EXPERT_VAULT_ROOM_ID);
-  updateSlot('expert-coding-slot', 'expert-coding-sub', EXPERT_CODING_ROOM_ID);
+  updateSlot('core-agent-slot', 'core-agent-sub', CORE_ROOM_ID, 'core-agent-title');
+  updateSlot('expert-vault-slot', 'expert-vault-sub', EXPERT_VAULT_ROOM_ID, 'expert-vault-title');
+  updateSlot('expert-coding-slot', 'expert-coding-sub', EXPERT_CODING_ROOM_ID, 'expert-coding-title');
+
+  // 사용자 정의 커스텀 에이전트 사이드바 슬롯 동적 렌더링
+  const customBranch = document.getElementById('custom-agents-branch');
+  if (customBranch) {
+    const customAgents = Array.isArray(agentConfigs)
+      ? agentConfigs.filter(a => a && a.id && !a.builtin && ![CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(a.id))
+      : [];
+    if (customAgents.length === 0) {
+      customBranch.innerHTML = '';
+    } else {
+      customBranch.innerHTML = customAgents.map(agent => {
+        const safeId = escapeHtml(agent.id);
+        const live = roomLiveStates[agent.id];
+        const isRunning = Boolean(live && live.isRunning);
+        const isActive = (currentRoomId === agent.id && currentView === 'chat');
+        const emoji = escapeHtml(agent.emoji || '🤖');
+        const name = escapeHtml(agent.name || agent.id);
+        const desc = escapeHtml(agent.roleDescription || '커스텀 전문 에이전트');
+        return `
+          <div class="expert-agent-node custom-agent-node" id="expert-node-${safeId}">
+            <div class="sb-expert-row">
+              <div class="core-agent-slot expert-slot ${isActive ? 'active' : ''} ${isRunning ? 'running' : ''}" id="custom-slot-${safeId}" onclick="selectRoom('${safeId}')" title="${desc}">
+                <div class="core-agent-icon" style="background:rgba(16,185,129,0.15);color:#10b981;font-size:13px;">
+                  <span>${emoji}</span>
+                </div>
+                <div class="core-agent-body">
+                  <div class="core-agent-top">
+                    <span class="core-agent-title">${name}</span>
+                  </div>
+                  <div class="core-agent-sub" id="custom-sub-${safeId}">${isRunning ? '작업 중' : '대기'}</div>
+                </div>
+              </div>
+              <button type="button" class="core-agent-cfg-btn expert-cfg-btn" onclick="openAgentConfigModal('${safeId}', event)" title="${name} 에이전트 지침 및 하위 프롬프트 설정">
+                <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+              <button type="button" class="core-agent-reset-btn expert-reset-btn" onclick="resetCoreOrchestratorRoom(event, '${safeId}')" title="${name} 에이전트 세션 초기화">
+                <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              </button>
+            </div>
+            <div class="sb-core-tree sb-subtask-tree" id="custom-subtask-tree-${safeId}"></div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
 }
 
 function getOrchestratorRoom(roomId) {
@@ -77,10 +176,13 @@ function getOrchestratorRoom(roomId) {
 function applyOrchestratorSessionResetLocal(targetRoomId, data = {}) {
   const rid = targetRoomId || CORE_ROOM_ID;
   const room = getOrchestratorRoom(rid);
+  const cfg = getAgentConfigById(rid);
   if (room) {
     room.messages = [];
     room.messageCount = 0;
-    if (rid === EXPERT_VAULT_ROOM_ID) {
+    if (cfg && cfg.roleDescription) {
+      room.preview = cfg.roleDescription;
+    } else if (rid === EXPERT_VAULT_ROOM_ID) {
       room.preview = '옵시디언 볼트 지식 · 개인 기록 전담';
     } else if (rid === EXPERT_CODING_ROOM_ID) {
       room.preview = 'oshyun-bot 개발 · 테스트 전담';
@@ -114,8 +216,12 @@ async function resetCoreOrchestratorRoom(event, targetRoomId = CORE_ROOM_ID) {
   const targetId = targetRoomId || CORE_ROOM_ID;
   const isVault = targetId === EXPERT_VAULT_ROOM_ID;
   const isCoding = targetId === EXPERT_CODING_ROOM_ID;
-  const agentScope = isVault ? 'vault' : (isCoding ? 'coding' : 'master');
-  const agentLabel = isVault ? '세컨브레인' : (isCoding ? '봇개발' : '마스터');
+  const cfg = getAgentConfigById(targetId);
+  let agentScope = 'master';
+  if (isVault) agentScope = 'vault';
+  else if (isCoding) agentScope = 'coding';
+  else if (targetId !== CORE_ROOM_ID) agentScope = targetId;
+  const agentLabel = (cfg && cfg.name) || (isVault ? '세컨브레인' : (isCoding ? '봇개발' : '마스터'));
 
   const doReset = async (clearDoneTasks = false) => {
     applyOrchestratorSessionResetLocal(targetId, {});
@@ -1534,4 +1640,493 @@ function fallbackCopyText(text, label) {
     showToast('복사에 실패했습니다.');
   }
   document.body.removeChild(ta);
+}
+
+// ─── 에이전트 레벨 설정 & 하위 채팅 프롬프트 투명 관리 / 신규 커스텀 에이전트 생성 ───
+let currentAgentConfigTab = 'edit'; // 'edit' | 'preview'
+let agentPromptPreviewTimer = null;
+
+function syncAgentConfigsState(agentsList, orchestratorIds = null) {
+  if (Array.isArray(agentsList)) {
+    agentConfigs = agentsList.filter(a => a && typeof a === 'object' && a.id);
+  }
+  const nextOrchIds = new Set([CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID]);
+  if (Array.isArray(orchestratorIds)) {
+    orchestratorIds.forEach(id => {
+      if (id) nextOrchIds.add(String(id).trim());
+    });
+  }
+  if (Array.isArray(agentConfigs)) {
+    agentConfigs.forEach(a => {
+      if (a && a.id) nextOrchIds.add(String(a.id).trim());
+    });
+  }
+  ORCHESTRATOR_ROOM_IDS = Array.from(nextOrchIds);
+
+  ensureCoreRoom();
+  updateCoreAgentSlotUi();
+  if (typeof renderMsbMemoryAgentTabs === 'function') {
+    renderMsbMemoryAgentTabs();
+  }
+  if (typeof renderRoomList === 'function') {
+    renderRoomList();
+  }
+  if (typeof updateSessionBar === 'function') {
+    updateSessionBar({ skipMasterUi: true });
+  }
+}
+
+async function loadAgentConfigsFromServer() {
+  try {
+    const res = await fetch('/api/orchestrator/agents');
+    const data = await res.json();
+    if (data && data.ok && Array.isArray(data.agents)) {
+      syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+    }
+  } catch (err) {
+    console.warn('에이전트 설정 목록 로드 실패:', err);
+  }
+}
+
+function getModelOptionsHtmlForAgentConfig(selectedModel) {
+  const serverModel = (serverStatus && serverStatus.model) || 'gemini-3.8-flash';
+  const curVal = selectedModel || serverModel;
+  let modelsList = [];
+  if (serverStatus && Array.isArray(serverStatus.availableModels) && serverStatus.availableModels.length > 0) {
+    modelsList = serverStatus.availableModels;
+  } else {
+    modelsList = [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'gemini-4-argon', label: 'Gemini 4 Argon' }
+    ];
+  }
+  let html = '';
+  let found = false;
+  for (const m of modelsList) {
+    const isSel = m.id === curVal;
+    if (isSel) found = true;
+    html += `<option value="${escapeHtml(m.id)}" ${isSel ? 'selected' : ''}>${escapeHtml(m.label || m.id)}</option>`;
+  }
+  if (curVal && !found) {
+    html += `<option value="${escapeHtml(curVal)}" selected>${escapeHtml(curVal)}</option>`;
+  }
+  return html;
+}
+
+function renderAgentConfigSelectorBar(activeId) {
+  const bar = document.getElementById('agent-cfg-selector-bar');
+  if (!bar) return;
+  const list = Array.isArray(agentConfigs) && agentConfigs.length > 0
+    ? agentConfigs
+    : [
+        { id: CORE_ROOM_ID, name: '마스터 오케스트레이터', emoji: '👑', builtin: true },
+        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', emoji: '🧠', builtin: true },
+        { id: EXPERT_CODING_ROOM_ID, name: '봇개발', emoji: '💻', builtin: true },
+      ];
+
+  const chipsHtml = list.map(a => {
+    const isSel = (activeId && a.id === activeId);
+    const safeId = escapeHtml(a.id);
+    const emoji = escapeHtml(a.emoji || '🤖');
+    const name = escapeHtml(a.name || a.id);
+    const badge = a.builtin ? '' : '<span class="agent-cfg-chip-tag">커스텀</span>';
+    return `
+      <button type="button" class="agent-cfg-chip ${isSel ? 'active' : ''}" onclick="openAgentConfigModal('${safeId}')">
+        <span>${emoji}</span>
+        <span>${name}</span>
+        ${badge}
+      </button>
+    `;
+  }).join('');
+
+  const isNewMode = !activeId;
+  const addBtnHtml = `
+    <button type="button" class="agent-cfg-chip is-new ${isNewMode ? 'active' : ''}" onclick="openAgentConfigModal(null)">
+      <span>➕</span>
+      <span>새 에이전트 추가</span>
+    </button>
+  `;
+  bar.innerHTML = chipsHtml + addBtnHtml;
+}
+
+function populateAgentConfigForm(targetAgentId = null) {
+  editingAgentId = targetAgentId ? String(targetAgentId).trim() : null;
+  const cfg = editingAgentId ? getAgentConfigById(editingAgentId) : null;
+  const isBuiltin = Boolean(cfg && cfg.builtin) || [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(editingAgentId);
+  const isCustomExisting = Boolean(editingAgentId && !isBuiltin && cfg);
+
+  renderAgentConfigSelectorBar(editingAgentId);
+
+  const iconEl = document.getElementById('agent-cfg-modal-icon');
+  const titleEl = document.getElementById('agent-cfg-modal-title');
+  const subEl = document.getElementById('agent-cfg-modal-subtitle');
+
+  const defaultVaultDir = (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '';
+
+  const formVals = cfg ? {
+    id: cfg.id,
+    name: cfg.name || '',
+    emoji: cfg.emoji || '🤖',
+    parentAgentId: cfg.parentAgentId || CORE_ROOM_ID,
+    roleDescription: cfg.roleDescription || '',
+    workdir: cfg.workdir || defaultVaultDir,
+    model: cfg.model || 'gemini-3.8-flash',
+    effort: cfg.effort || 'medium',
+    childModel: cfg.childModel || cfg.model || 'gemini-3.8-flash',
+    childEffort: cfg.childEffort || cfg.effort || 'medium',
+    injectChildTemplate: cfg.injectChildTemplate !== false,
+    childPromptTemplate: cfg.childPromptTemplate || '',
+    systemPrompt: cfg.systemPrompt || '',
+  } : {
+    id: '',
+    name: '',
+    emoji: '🤖',
+    parentAgentId: CORE_ROOM_ID,
+    roleDescription: '',
+    workdir: defaultVaultDir,
+    model: 'gemini-3.8-flash',
+    effort: 'medium',
+    childModel: 'gemini-3.8-flash',
+    childEffort: 'medium',
+    injectChildTemplate: true,
+    childPromptTemplate: `[커스텀 에이전트 산하 워커 동작 규칙]\n1. 지정된 작업 디렉토리 내에서 요청된 과업을 정확하고 신속하게 수행한다.\n2. 결론과 핵심 수치를 첫 줄에 두괄식으로 요약하여 보고한다.`,
+    systemPrompt: `# 커스텀 에이전트 전용 지침\n\n너는 사용자가 정의한 전문 에이전트다.\n- 직접 무거운 작업을 수행하거나 필요 시 \`session-ctl spawn --parent <자기ID>\` 로 하위 워커를 스폰할 수 있다.`,
+  };
+
+  if (iconEl) iconEl.textContent = formVals.emoji || '⚙️';
+  if (titleEl) {
+    titleEl.textContent = editingAgentId
+      ? `${formVals.name || editingAgentId} 설정 및 하위 프롬프트 관리`
+      : '새 커스텀 에이전트 추가';
+  }
+  if (subEl) {
+    subEl.textContent = editingAgentId
+      ? `ID: ${editingAgentId} · ${isBuiltin ? '기본 내장 에이전트' : '사용자 정의 에이전트'} — 하위 채팅 스폰 시 전달되는 프롬프트와 동작 규칙을 투명하게 제어합니다`
+      : '자신만의 전문 에이전트(예: 가계부 분석가, 독서 비서)의 역할, 작업 경로, 하위 채팅 전달 프롬프트를 정의합니다';
+  }
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val !== undefined && val !== null ? String(val) : '';
+  };
+
+  setVal('agent-cfg-id', formVals.id);
+  setVal('agent-cfg-name', formVals.name);
+  setVal('agent-cfg-emoji', formVals.emoji);
+  setVal('agent-cfg-role', formVals.roleDescription);
+  setVal('agent-cfg-workdir', formVals.workdir);
+  setVal('agent-cfg-child-prompt', formVals.childPromptTemplate);
+  setVal('agent-cfg-sys-prompt', formVals.systemPrompt);
+
+  const parentSel = document.getElementById('agent-cfg-parent');
+  if (parentSel) {
+    if (editingAgentId === CORE_ROOM_ID) {
+      parentSel.innerHTML = `<option value="">(최상위 루트 오케스트레이터)</option>`;
+      parentSel.value = '';
+      parentSel.disabled = true;
+    } else {
+      parentSel.disabled = isBuiltin;
+      parentSel.innerHTML = `
+        <option value="__core__">👑 마스터 직속 (__core__)</option>
+        <option value="__expert_vault__">🧠 세컨브레인 산하 (__expert_vault__)</option>
+        <option value="__expert_coding__">💻 봇개발 산하 (__expert_coding__)</option>
+      `;
+      parentSel.value = formVals.parentAgentId || CORE_ROOM_ID;
+    }
+  }
+
+  const modelSel = document.getElementById('agent-cfg-model');
+  if (modelSel) {
+    modelSel.innerHTML = getModelOptionsHtmlForAgentConfig(formVals.model);
+    modelSel.value = formVals.model;
+  }
+  const childModelSel = document.getElementById('agent-cfg-child-model');
+  if (childModelSel) {
+    childModelSel.innerHTML = getModelOptionsHtmlForAgentConfig(formVals.childModel);
+    childModelSel.value = formVals.childModel;
+  }
+  setVal('agent-cfg-effort', formVals.effort);
+  setVal('agent-cfg-child-effort', formVals.childEffort);
+
+  const injectChk = document.getElementById('agent-cfg-inject-child');
+  if (injectChk) injectChk.checked = Boolean(formVals.injectChildTemplate);
+
+  const resetBtn = document.getElementById('btn-agent-cfg-reset-builtin');
+  if (resetBtn) resetBtn.style.display = isBuiltin ? 'inline-flex' : 'none';
+
+  const delBtn = document.getElementById('btn-agent-cfg-delete-custom');
+  if (delBtn) delBtn.style.display = isCustomExisting ? 'inline-flex' : 'none';
+
+  const saveBtn = document.getElementById('btn-agent-cfg-save');
+  if (saveBtn) saveBtn.textContent = editingAgentId ? '설정 저장' : '새 에이전트 생성';
+
+  refreshAgentPromptPreview();
+}
+
+async function openAgentConfigModal(agentId = null, event = null) {
+  if (event && typeof event.stopPropagation === 'function') {
+    event.stopPropagation();
+  }
+  if (!Array.isArray(agentConfigs) || agentConfigs.length === 0) {
+    await loadAgentConfigsFromServer();
+  }
+  const modal = document.getElementById('modal-agent-config');
+  if (modal) modal.style.display = 'flex';
+  switchAgentConfigTab('edit');
+  populateAgentConfigForm(agentId);
+}
+
+function openCurrentRoomAgentConfigModal() {
+  let targetId = CORE_ROOM_ID;
+  if (currentRoomId && isOrchestratorAgentRoomId(currentRoomId)) {
+    targetId = currentRoomId;
+  } else {
+    const curRoom = getCurrentRoom();
+    if (curRoom && curRoom.parentAgentId && isOrchestratorAgentRoomId(curRoom.parentAgentId)) {
+      targetId = curRoom.parentAgentId;
+    }
+  }
+  openAgentConfigModal(targetId);
+}
+
+function closeAgentConfigModal() {
+  const modal = document.getElementById('modal-agent-config');
+  if (modal) modal.style.display = 'none';
+}
+
+function switchAgentConfigTab(tabName) {
+  currentAgentConfigTab = (tabName === 'preview') ? 'preview' : 'edit';
+  const editBtn = document.getElementById('tab-agent-cfg-edit');
+  const prevBtn = document.getElementById('tab-agent-cfg-preview');
+  const editPane = document.getElementById('agent-cfg-pane-edit');
+  const prevPane = document.getElementById('agent-cfg-pane-preview');
+
+  if (editBtn) editBtn.classList.toggle('active', currentAgentConfigTab === 'edit');
+  if (prevBtn) prevBtn.classList.toggle('active', currentAgentConfigTab === 'preview');
+  if (editPane) editPane.style.display = currentAgentConfigTab === 'edit' ? 'block' : 'none';
+  if (prevPane) prevPane.style.display = currentAgentConfigTab === 'preview' ? 'block' : 'none';
+
+  if (currentAgentConfigTab === 'preview') {
+    refreshAgentPromptPreview();
+  }
+}
+
+function setAgentConfigWorkdirPreset(preset) {
+  const workdirInput = document.getElementById('agent-cfg-workdir');
+  if (!workdirInput) return;
+  if (preset === 'code') {
+    workdirInput.value = (serverStatus && (serverStatus.codeDir || serverStatus.codedir || serverStatus.vaultDir)) || '';
+  } else {
+    workdirInput.value = (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '';
+  }
+  onAgentConfigFieldInput();
+}
+
+function collectAgentConfigFormDraft() {
+  const idVal = (document.getElementById('agent-cfg-id')?.value || '').trim();
+  const nameVal = (document.getElementById('agent-cfg-name')?.value || '').trim();
+  const emojiVal = (document.getElementById('agent-cfg-emoji')?.value || '🤖').trim() || '🤖';
+  const parentVal = (document.getElementById('agent-cfg-parent')?.value || '').trim();
+  const roleVal = (document.getElementById('agent-cfg-role')?.value || '').trim();
+  const workdirVal = (document.getElementById('agent-cfg-workdir')?.value || '').trim();
+  const modelVal = (document.getElementById('agent-cfg-model')?.value || 'gemini-3.8-flash').trim();
+  const effortVal = (document.getElementById('agent-cfg-effort')?.value || 'medium').trim();
+  const childModelVal = (document.getElementById('agent-cfg-child-model')?.value || modelVal).trim();
+  const childEffortVal = (document.getElementById('agent-cfg-child-effort')?.value || effortVal).trim();
+  const injectChild = Boolean(document.getElementById('agent-cfg-inject-child')?.checked);
+  const childPrompt = document.getElementById('agent-cfg-child-prompt')?.value || '';
+  const sysPrompt = document.getElementById('agent-cfg-sys-prompt')?.value || '';
+
+  return {
+    id: idVal || editingAgentId || '',
+    name: nameVal,
+    emoji: emojiVal,
+    parentAgentId: idVal === CORE_ROOM_ID ? null : (parentVal || CORE_ROOM_ID),
+    roleDescription: roleVal,
+    workdir: workdirVal,
+    model: modelVal,
+    effort: effortVal,
+    childModel: childModelVal,
+    childEffort: childEffortVal,
+    injectChildTemplate: injectChild,
+    childPromptTemplate: childPrompt,
+    systemPrompt: sysPrompt,
+  };
+}
+
+function onAgentConfigFieldInput() {
+  const draft = collectAgentConfigFormDraft();
+  const iconEl = document.getElementById('agent-cfg-modal-icon');
+  if (iconEl) iconEl.textContent = draft.emoji || '⚙️';
+
+  if (agentPromptPreviewTimer) clearTimeout(agentPromptPreviewTimer);
+  agentPromptPreviewTimer = setTimeout(() => {
+    refreshAgentPromptPreview();
+  }, 150);
+}
+
+async function refreshAgentPromptPreview() {
+  const draft = collectAgentConfigFormDraft();
+  const sampleTask = (document.getElementById('agent-cfg-preview-sample')?.value || '').trim()
+    || '이번 달 지출 내역을 점검하고 특이사항을 요약해줘.';
+
+  const badgeEl = document.getElementById('agent-preview-inject-badge');
+  if (badgeEl) {
+    const active = Boolean(draft.injectChildTemplate && draft.childPromptTemplate.trim());
+    badgeEl.textContent = active ? '하위 지침 자동 주입 ON' : '원문 지시만 전달 (주입 OFF)';
+    badgeEl.classList.toggle('is-off', !active);
+  }
+
+  try {
+    const res = await fetch('/api/orchestrator/agents/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentId: draft.id || CORE_ROOM_ID,
+        sampleTask: sampleTask,
+        draft: draft,
+      })
+    });
+    const data = await res.json();
+    if (data && data.ok && data.preview) {
+      const p = data.preview;
+      const assembledEl = document.getElementById('agent-preview-assembled-prompt');
+      if (assembledEl) assembledEl.textContent = p.assembledChildUserPrompt || '';
+
+      const cliEl = document.getElementById('agent-preview-cli-cmd');
+      if (cliEl) {
+        cliEl.textContent = [
+          `# 1) 상위 에이전트가 하위 세션을 스폰할 때 호출하는 명령:`,
+          p.spawnCliExample || '',
+          ``,
+          `# 2) 백엔드 에이전트 엔진이 실제 실행하는 하위 세션 CLI:`,
+          p.childCliInvocation || '',
+          `# 작업 디렉토리(cwd): ${p.childWorkdir || draft.workdir || ''}`,
+          `# 기본 모델/Effort: ${p.childModel || draft.childModel} (${p.childEffort || draft.childEffort})`,
+        ].join('\n');
+      }
+
+      const sysEl = document.getElementById('agent-preview-agent-sys');
+      if (sysEl) sysEl.textContent = p.agentRuntimeSystemPrompt || draft.systemPrompt || '';
+    }
+  } catch (err) {
+    console.warn('프롬프트 미리보기 조회 실패:', err);
+  }
+}
+
+function copyAgentPreviewAssembledPrompt() {
+  const el = document.getElementById('agent-preview-assembled-prompt');
+  if (el && el.textContent) {
+    copyToClipboard(el.textContent, '하위 채팅 조립 프롬프트가', true);
+  }
+}
+
+async function saveAgentConfigModal() {
+  const draft = collectAgentConfigFormDraft();
+  if (!draft.name) {
+    showToast('에이전트 이름을 입력해 주세요.');
+    document.getElementById('agent-cfg-name')?.focus();
+    return;
+  }
+
+  const saveBtn = document.getElementById('btn-agent-cfg-save');
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/orchestrator/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'upsert',
+        ...draft,
+      })
+    });
+    const data = await res.json();
+    if (data && data.ok && data.agent) {
+      syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+      populateAgentConfigForm(data.agent.id);
+      showToast(`'${data.agent.name}' 에이전트 설정이 저장되었습니다.`);
+    } else {
+      showToast('저장 실패: ' + ((data && data.error) || '알 수 없는 오류'));
+    }
+  } catch (err) {
+    showToast('저장 요청 중 오류: ' + (err.message || String(err)));
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function resetCurrentBuiltinAgentConfig() {
+  if (!editingAgentId) return;
+  const cfg = getAgentConfigById(editingAgentId);
+  const label = (cfg && cfg.name) || editingAgentId;
+  openConfirmModal(
+    '에이전트 설정 초기값 복원',
+    `'${label}' 에이전트의 역할, 모델, 시스템 지침 및 하위 채팅 프롬프트 템플릿을 모두 초기 기본값으로 되돌리시겠습니까?`,
+    '기본값 복원',
+    async () => {
+      try {
+        const res = await fetch('/api/orchestrator/agents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reset',
+            agentId: editingAgentId,
+          })
+        });
+        const data = await res.json();
+        if (data && data.ok && data.agent) {
+          syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+          populateAgentConfigForm(data.agent.id);
+          showToast(`'${data.agent.name}' 설정을 초기 기본값으로 복원했습니다.`);
+        } else {
+          showToast('복원 실패: ' + ((data && data.error) || '오류'));
+        }
+      } catch (err) {
+        showToast('복원 중 오류: ' + err.message);
+      }
+    }
+  );
+}
+
+async function deleteCurrentCustomAgentConfig() {
+  if (!editingAgentId) return;
+  const cfg = getAgentConfigById(editingAgentId);
+  if (!cfg || cfg.builtin) {
+    showToast('기본 내장 에이전트는 삭제할 수 없습니다.');
+    return;
+  }
+  const targetId = editingAgentId;
+  const label = cfg.name || targetId;
+  openConfirmModal(
+    '커스텀 에이전트 삭제',
+    `'${label}'(${targetId}) 커스텀 에이전트를 삭제하시겠습니까?`,
+    '에이전트 삭제',
+    async () => {
+      try {
+        const res = await fetch('/api/orchestrator/agents/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentId: targetId,
+            deleteRoom: true,
+          })
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          chatRooms = chatRooms.filter(r => r && r.id !== targetId);
+          syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+          if (currentRoomId === targetId) {
+            selectRoom(CORE_ROOM_ID);
+          }
+          closeAgentConfigModal();
+          showToast(`'${label}' 에이전트가 삭제되었습니다.`);
+        } else {
+          showToast('삭제 실패: ' + ((data && data.error) || '오류'));
+        }
+      } catch (err) {
+        showToast('삭제 중 오류: ' + err.message);
+      }
+    }
+  );
 }

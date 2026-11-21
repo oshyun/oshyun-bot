@@ -3,6 +3,10 @@ function applyStatusPayload(data) {
   if (!data) return;
   serverStatus = data;
 
+  if (Array.isArray(data.agents) && typeof syncAgentConfigsState === 'function') {
+    syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
+  }
+
   const agentNameEl = document.getElementById('avatar-agent-name');
   if (agentNameEl) {
     agentNameEl.innerText = data.engineLabel || 'AGY';

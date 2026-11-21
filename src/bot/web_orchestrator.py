@@ -25,6 +25,7 @@ from master_supervisor import (
     MasterSupervisor,
     build_graph as build_master_graph,
 )
+import agent_configs
 import master_memory
 import master_tasks
 from paths import MASTER_STATE_FILE, WORKDIR, child_default_workdir
@@ -38,6 +39,20 @@ EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
 ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
 _master_state_lock = threading.Lock()
+
+
+def _all_orchestrator_room_ids() -> tuple[str, ...]:
+    try:
+        return agent_configs.get_orchestrator_room_ids()
+    except Exception:
+        return ORCHESTRATOR_ROOM_IDS
+
+
+def _is_orchestrator_room_id(room_id: str | None) -> bool:
+    if not room_id:
+        return False
+    clean = str(room_id).strip()
+    return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
@@ -774,8 +789,14 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
 
     req_parent = payload.get("parentAgentId") or payload.get("parent_agent_id") or payload.get("parent")
     parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
-    if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(parent_agent_id):
         parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
+
+    parent_cfg = agent_configs.get_agent_config(parent_agent_id)
+    if clean_model is None and parent_cfg and parent_cfg.get("childModel"):
+        clean_model = str(parent_cfg["childModel"]).strip() or None
+    if clean_effort is None and parent_cfg and parent_cfg.get("childEffort"):
+        clean_effort = str(parent_cfg["childEffort"]).strip() or None
 
     raw_prompt = bool(payload.get("rawPrompt") or payload.get("raw_prompt"))
     slash_commands = bool(payload.get("slashCommands") or payload.get("slash_commands"))
@@ -784,6 +805,12 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
 
     if not message:
         return web.json_response({"ok": False, "error": "전송할 message가 비어 있습니다."}, status=400)
+
+    effective_message = (
+        message
+        if (raw_prompt or slash_commands)
+        else agent_configs.compose_child_dispatch_prompt(parent_agent_id, message, raw_prompt=raw_prompt)
+    )
 
     from web_rooms import _append_room_message, _update_room_metadata
     from web_execution import (
@@ -883,7 +910,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                 {
                     "type": "user",
                     "role": "user",
-                    "text": message,
+                    "text": effective_message,
                     "channel": "orchestrator",
                     "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 },
@@ -907,6 +934,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                     "isNewSession": True,
                     "model": clean_model,
                     "effort": clean_effort,
+                    "workdir": child_default_workdir(parent_agent_id),
                     "byOrchestrator": True,
                     "isOrchestratorChild": True,
                     "parentAgentId": parent_agent_id,
@@ -918,7 +946,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         target = str(payload.get("target") or payload.get("roomId") or payload.get("sessionId") or "").strip()
         if not target:
             return web.json_response({"ok": False, "error": "target 식별자가 필요합니다."}, status=400)
-        if target in ORCHESTRATOR_ROOM_IDS:
+        if _is_orchestrator_room_id(target):
             if payload.get("allowCore") or payload.get("channel") in ("task_report", "master_patrol", "schedule_trigger"):
                 return await handle_orchestrator_notify(request)
             return web.json_response(
@@ -947,7 +975,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         "roomId": room_id,
         "sessionId": session_id,
         "title": room_title,
-        "text": message,
+        "text": effective_message,
         "msgId": user_msg_id,
         "clientMsgId": dispatch_client_msg_id,
         "queued": will_be_queued,
@@ -997,7 +1025,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
 
     enqueue_kwargs: dict[str, Any] = {
         "room_id": room_id,
-        "user_text": message,
+        "user_text": effective_message,
         "is_voice_mode": False,
         "client_session_id": session_id,
         "is_new_session": is_new_session,
@@ -1329,7 +1357,7 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     message = str(payload.get("message") or payload.get("prompt") or payload.get("text") or "").strip()
     req_parent = payload.get("parentAgentId") or payload.get("parent_agent_id") or payload.get("parent")
     parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
-    if parent_agent_id not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(parent_agent_id):
         parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
 
     if not message:
@@ -1355,9 +1383,14 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     current_enqueue = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
 
+    parent_cfg = agent_configs.get_agent_config(parent_agent_id)
     parent_ns = (
-        "core_" if parent_agent_id == CORE_ORCHESTRATOR_ROOM_ID
-        else ("vault_" if parent_agent_id == EXPERT_VAULT_ROOM_ID else "coding_")
+        str(parent_cfg.get("sessionNamespace"))
+        if parent_cfg and parent_cfg.get("sessionNamespace")
+        else (
+            "core_" if parent_agent_id == CORE_ORCHESTRATOR_ROOM_ID
+            else ("vault_" if parent_agent_id == EXPERT_VAULT_ROOM_ID else "coding_")
+        )
     )
     target_sid = _room_session_ids.get(parent_agent_id) or get_session(ns=parent_ns)
 
@@ -1637,25 +1670,39 @@ def ensure_orchestrator_room(
     model: str | None = None,
     effort: str | None = None,
 ) -> dict[str, Any]:
-    """총괄 에이전트 및 전문가 에이전트 대화방이 chat_db 에 항상 존재하도록 보장한다."""
+    """총괄 에이전트 및 전문가/커스텀 에이전트 대화방이 chat_db 에 항상 존재하도록 보장한다."""
     db = current_chat_db or _get_mod_attr("chat_db", chat_db)
     clean_rid = str(room_id or "").strip()
-    if clean_rid == EXPERT_VAULT_ROOM_ID:
+    cfg = agent_configs.get_agent_config(clean_rid)
+    if cfg:
+        title = str(cfg.get("title") or cfg.get("name") or clean_rid)
+        rid = str(cfg["id"])
+        workdir = str(cfg.get("workdir") or "").strip() or None
+        eff_model = model if model is not None else cfg.get("model")
+        eff_effort = effort if effort is not None else cfg.get("effort")
+    elif clean_rid == EXPERT_VAULT_ROOM_ID:
         title = EXPERT_VAULT_TITLE
         rid = EXPERT_VAULT_ROOM_ID
+        workdir = None
+        eff_model, eff_effort = model, effort
     elif clean_rid == EXPERT_CODING_ROOM_ID:
         title = EXPERT_CODING_TITLE
         rid = EXPERT_CODING_ROOM_ID
+        workdir = None
+        eff_model, eff_effort = model, effort
     else:
         title = CORE_ORCHESTRATOR_TITLE
         rid = CORE_ORCHESTRATOR_ROOM_ID
+        workdir = None
+        eff_model, eff_effort = model, effort
     return db.get_or_create_room(
         rid,
         session_id=None,
         title=title,
         channel="web",
-        model=model,
-        effort=effort,
+        model=eff_model,
+        effort=eff_effort,
+        workdir=workdir,
     )
 
 
@@ -1675,23 +1722,28 @@ async def reset_core_orchestrator_state(
     memory_mode: str = "keep",
     clear_done_tasks: bool = False,
 ) -> dict[str, Any]:
-    """마스터 에이전트(`__core__`) 또는 전문가 에이전트 대화·세션을 초기화하고 4계층 메모리 정리 정책을 적용한다."""
+    """마스터 에이전트(`__core__`) 또는 전문가/커스텀 에이전트 대화·세션을 초기화하고 4계층 메모리 정리 정책을 적용한다."""
     target_rid = str(target_room_id or CORE_ORCHESTRATOR_ROOM_ID).strip()
-    if target_rid not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(target_rid):
         target_rid = CORE_ORCHESTRATOR_ROOM_ID
 
+    cfg = agent_configs.get_agent_config(target_rid)
     if target_rid == EXPERT_VAULT_ROOM_ID:
         ns = "vault_"
         agent_id = "vault"
-        agent_name = "세컨브레인"
+        agent_name = (cfg.get("name") if cfg else None) or "세컨브레인"
     elif target_rid == EXPERT_CODING_ROOM_ID:
         ns = "coding_"
         agent_id = "coding"
-        agent_name = "봇개발"
-    else:
+        agent_name = (cfg.get("name") if cfg else None) or "봇개발"
+    elif target_rid == CORE_ORCHESTRATOR_ROOM_ID:
         ns = "core_"
         agent_id = "master"
-        agent_name = "총괄"
+        agent_name = (cfg.get("name") if cfg else None) or "총괄"
+    else:
+        ns = str((cfg or {}).get("sessionNamespace") or f"{target_rid.strip('_')}_")
+        agent_id = str((cfg or {}).get("memoryScope") or f"custom_{target_rid.strip('_')}")
+        agent_name = str((cfg or {}).get("name") or target_rid)
 
     mode = str(memory_mode or "keep").strip().lower()
     if mode == "none":
@@ -2042,11 +2094,11 @@ async def handle_orchestrator_reset(request: web.Request) -> web.Response:
 
     target_room_id = str(
         payload.get("roomId") or payload.get("room_id")
-        or (EXPERT_VAULT_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("vault", "expert_vault") else
-            EXPERT_CODING_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("coding", "expert_coding") else
-            CORE_ORCHESTRATOR_ROOM_ID)
+        or (EXPERT_VAULT_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("vault", "expert_vault", "second_brain") else
+            EXPERT_CODING_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("coding", "expert_coding", "bot_dev") else
+            payload.get("agentId") or payload.get("agent_id") or CORE_ORCHESTRATOR_ROOM_ID)
     ).strip()
-    if target_room_id not in ORCHESTRATOR_ROOM_IDS:
+    if not _is_orchestrator_room_id(target_room_id):
         target_room_id = CORE_ORCHESTRATOR_ROOM_ID
 
     if payload.get("clearMemory") is True and "memoryMode" not in payload and "memory_mode" not in payload:
@@ -2225,7 +2277,7 @@ def extract_delegated_subagents(
             continue
 
         resolved_rid = final_rid or final_title
-        if resolved_rid in seen_room_ids or resolved_rid in ORCHESTRATOR_ROOM_IDS:
+        if resolved_rid in seen_room_ids or _is_orchestrator_room_id(resolved_rid):
             continue
         seen_room_ids.add(resolved_rid)
 
@@ -2296,6 +2348,166 @@ def extract_delegated_subagents(
         })
 
     return delegated
+
+
+async def handle_orchestrator_agents_get(request: web.Request) -> web.Response:
+    """GET /api/orchestrator/agents — 전체 에이전트(마스터, 세컨브레인, 봇개발, 커스텀 에이전트) 설정 목록 반환."""
+    agent_id = (request.query.get("id") or request.query.get("agentId") or "").strip()
+    if agent_id:
+        cfg = agent_configs.get_agent_config(agent_id)
+        if not cfg:
+            return web.json_response({"ok": False, "error": f"에이전트를 찾을 수 없습니다: {agent_id}"}, status=404)
+        return web.json_response({"ok": True, "agent": cfg})
+
+    agents = agent_configs.list_agent_configs()
+    return web.json_response({
+        "ok": True,
+        "total": len(agents),
+        "agents": agents,
+        "orchestratorRoomIds": [a["id"] for a in agents],
+    })
+
+
+async def handle_orchestrator_agent_upsert(request: web.Request) -> web.Response:
+    """POST /api/orchestrator/agents — 에이전트 설정 저장(기존 에이전트 수정 또는 신규 커스텀 에이전트 생성)."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "유효하지 않은 JSON 요청입니다."}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "JSON 객체가 필요합니다."}, status=400)
+
+    action = str(payload.get("action") or "upsert").strip().lower()
+    if action == "reset":
+        target_id = str(payload.get("id") or payload.get("agentId") or "").strip()
+        try:
+            saved = agent_configs.reset_builtin_agent_config(target_id)
+        except ValueError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    else:
+        try:
+            saved = agent_configs.upsert_agent_config(payload)
+        except ValueError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    try:
+        ensure_orchestrator_room(
+            saved["id"],
+            current_chat_db,
+            model=saved.get("model"),
+            effort=saved.get("effort"),
+        )
+        current_chat_db.update_room(
+            saved["id"],
+            title=saved.get("title") or saved.get("name"),
+            model=saved.get("model"),
+            effort=saved.get("effort"),
+            workdir=saved.get("workdir"),
+            parent_agent_id=saved.get("parentAgentId"),
+            force_title=True,
+        )
+    except Exception as exc:
+        logger.warning("[orchestrator] 에이전트 설정 DB 동기화 경고 (%s): %s", saved["id"], exc)
+
+    from web_execution import broadcast_ws_json
+    broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+    all_agents = agent_configs.list_agent_configs()
+    if broadcast_fn:
+        await broadcast_fn({
+            "type": "agent_configs_updated",
+            "agent": saved,
+            "agents": all_agents,
+            "orchestratorRoomIds": [a["id"] for a in all_agents],
+        })
+
+    return web.json_response({
+        "ok": True,
+        "agent": saved,
+        "agents": all_agents,
+        "orchestratorRoomIds": [a["id"] for a in all_agents],
+    })
+
+
+async def handle_orchestrator_agent_delete(request: web.Request) -> web.Response:
+    """POST /api/orchestrator/agents/delete (또는 DELETE) — 커스텀 에이전트 삭제."""
+    agent_id = request.match_info.get("agent_id", "").strip()
+    payload: dict[str, Any] = {}
+    try:
+        payload = await request.json()
+    except Exception:
+        pass
+    if not agent_id and isinstance(payload, dict):
+        agent_id = str(payload.get("id") or payload.get("agentId") or "").strip()
+    if not agent_id:
+        agent_id = (request.query.get("id") or request.query.get("agentId") or "").strip()
+    if not agent_id:
+        return web.json_response({"ok": False, "error": "삭제할 에이전트 ID가 필요합니다."}, status=400)
+
+    try:
+        deleted = agent_configs.delete_custom_agent_config(agent_id)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    if not deleted:
+        return web.json_response({"ok": False, "error": f"에이전트를 찾을 수 없습니다: {agent_id}"}, status=404)
+
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    try:
+        current_chat_db.delete_room(agent_id, hard_delete=True, allow_custom_agent=True)
+    except Exception:
+        pass
+
+    from web_execution import broadcast_ws_json, cancel_active_run
+    cancel_fn = _get_mod_attr("cancel_active_run", cancel_active_run)
+    if cancel_fn:
+        cancel_fn(agent_id)
+    broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+    all_agents = agent_configs.list_agent_configs()
+    if broadcast_fn:
+        await broadcast_fn({
+            "type": "agent_configs_updated",
+            "deletedAgentId": agent_id,
+            "agents": all_agents,
+            "orchestratorRoomIds": [a["id"] for a in all_agents],
+        })
+
+    return web.json_response({
+        "ok": True,
+        "deletedAgentId": agent_id,
+        "agents": all_agents,
+        "orchestratorRoomIds": [a["id"] for a in all_agents],
+    })
+
+
+async def handle_orchestrator_agent_preview(request: web.Request) -> web.Response:
+    """POST/GET /api/orchestrator/agents/preview — 에이전트 지침 및 하위 채팅 전달 프롬프트 조립 미리보기 반환."""
+    if getattr(request, "method", "POST") == "POST":
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        agent_id = str(payload.get("id") or payload.get("agentId") or CORE_ORCHESTRATOR_ROOM_ID).strip()
+        sample_task = str(payload.get("sampleTask") or payload.get("sample_task") or "").strip()
+        if isinstance(payload.get("draft"), dict):
+            overrides = payload.get("draft")
+        elif isinstance(payload.get("overrides"), dict):
+            overrides = payload.get("overrides")
+        else:
+            overrides = payload
+    else:
+        agent_id = (request.query.get("id") or request.query.get("agentId") or CORE_ORCHESTRATOR_ROOM_ID).strip()
+        sample_task = (request.query.get("sampleTask") or request.query.get("sample_task") or "").strip()
+        overrides = None
+
+    preview = agent_configs.build_agent_prompt_preview(
+        agent_id,
+        sample_task=sample_task,
+        overrides=overrides,
+    )
+    return web.json_response({"ok": True, "preview": preview, **preview})
+
 
 
 

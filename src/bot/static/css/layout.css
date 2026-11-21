@@ -86,10 +86,46 @@
 .sb-core-section {
   margin-bottom: 4px;
 }
+.sb-core-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 5px;
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 650;
+  color: var(--text-3);
+}
+.sb-core-header-title {
+  letter-spacing: 0.1px;
+}
+.new-agent-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.new-agent-inline-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.new-agent-inline-btn svg.i {
+  width: 11px;
+  height: 11px;
+}
 .sb-core-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 0;
   position: relative;
 }
@@ -166,11 +202,13 @@
   font-size: calc(12.5px * var(--ui-scale, 1));
   font-weight: 500;
 }
-.core-agent-reset-btn.expert-reset-btn {
+.core-agent-reset-btn.expert-reset-btn,
+.core-agent-cfg-btn.expert-cfg-btn {
   width: 28px;
   height: 28px;
 }
-.core-agent-reset-btn.expert-reset-btn svg.i {
+.core-agent-reset-btn.expert-reset-btn svg.i,
+.core-agent-cfg-btn.expert-cfg-btn svg.i {
   width: 12px;
   height: 12px;
 }
@@ -196,9 +234,10 @@
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
   font-weight: 600;
 }
-.core-agent-reset-btn {
-  width: 34px;
-  height: 34px;
+.core-agent-reset-btn,
+.core-agent-cfg-btn {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--bg-subtle);
@@ -210,12 +249,14 @@
   flex-shrink: 0;
   transition: background .14s, color .14s, border-color .14s, transform .2s;
 }
-.core-agent-reset-btn:hover {
+.core-agent-reset-btn:hover,
+.core-agent-cfg-btn:hover {
   background: rgba(59, 130, 246, 0.12);
   color: #3b82f6;
   border-color: rgba(59, 130, 246, 0.45);
 }
-.core-agent-reset-btn svg.i { width: 14px; height: 14px; }
+.core-agent-reset-btn svg.i,
+.core-agent-cfg-btn svg.i { width: 13.5px; height: 13.5px; }
 /* 💬 하위 서브태스크 트리 (공통/특화) */
 .sb-core-tree {
   position: relative;

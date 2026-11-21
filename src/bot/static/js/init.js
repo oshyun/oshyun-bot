@@ -24,6 +24,7 @@ window.addEventListener('keydown', (e) => {
     closeMsgActionSheet();
     closeModal('modal-spawn-session');
     closeModal('modal-task-note');
+    closeModal('modal-agent-config');
     closeImageLightbox();
     if (isRoomSelectionMode) {
       exitRoomSelectionMode();
@@ -276,6 +277,9 @@ window.addEventListener('DOMContentLoaded', () => {
     applyFontSize(getFontSize());
     updateSttTimeoutUi();
     loadStatusAndSettings();
+    if (typeof loadAgentConfigsFromServer === 'function') {
+      loadAgentConfigsFromServer();
+    }
     initUsagePolling();
     updatePwaUi();
     updateNotificationUi();

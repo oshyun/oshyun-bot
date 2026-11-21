@@ -177,6 +177,164 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); z-index: 1000; align-items: center; justify-content: center; padding: 16px; animation: fadeIn .15s; }
 .modal-card { width: 100%; max-width: 520px; max-height: 86vh; display: flex; flex-direction: column; background: var(--bg-elevated); border-radius: 16px; box-shadow: var(--shadow-lg); border: 1px solid var(--border); animation: popIn .18s ease-out; }
 .modal-card.sm { max-width: 400px; }
+.modal-card.lg { max-width: 780px; max-height: 90vh; }
+
+/* ═══ 에이전트 레벨 설정 & 프롬프트 투명 관리 모달 ═══ */
+.agent-config-modal-card {
+  max-width: 820px;
+}
+.agent-cfg-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 20px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.agent-cfg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: calc(12px * var(--ui-scale, 1));
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .14s, color .14s, border-color .14s;
+}
+.agent-cfg-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.agent-cfg-chip.active {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+.agent-cfg-chip.is-new {
+  border-style: dashed;
+}
+.agent-cfg-chip-tag {
+  font-size: calc(10px * var(--ui-scale, 1));
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-weight: 650;
+}
+.agent-cfg-view-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 20px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.agent-cfg-tab {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .14s, color .14s, border-color .14s;
+}
+.agent-cfg-tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.agent-cfg-tab.active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.agent-cfg-body {
+  padding-top: 14px;
+}
+.agent-cfg-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.agent-cfg-grid-emoji-color {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+}
+.agent-cfg-subcard {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  margin-bottom: 14px;
+}
+.agent-cfg-subcard-title {
+  font-size: calc(12px * var(--ui-scale, 1));
+  font-weight: 650;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.agent-preview-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.agent-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: calc(12px * var(--ui-scale, 1));
+  font-weight: 650;
+  color: var(--text);
+}
+.agent-preview-badge {
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  font-weight: 650;
+}
+.agent-preview-badge.is-off {
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+}
+.agent-preview-code {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: calc(12px * var(--ui-scale, 1));
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 230px;
+  overflow-y: auto;
+}
+@media (max-width: 640px) {
+  .agent-cfg-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .agent-cfg-view-tabs {
+    flex-direction: column;
+  }
+}
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 8px 20px; }
 .modal-title { font-size: calc(16px * var(--ui-scale, 1)); font-weight: 650; }
 .modal-body { padding: 8px 20px 16px; overflow-y: auto; }

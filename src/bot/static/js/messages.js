@@ -561,7 +561,20 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
     };
   }
 
-  // 5. 하위 세션 (마스터 / 전문가 직속 하위 에이전트)
+  // 4-1. 사용자 정의 커스텀 에이전트 (__custom_<slug>__)
+  const customCfg = getAgentConfigById(rId);
+  if (customCfg && !customCfg.builtin) {
+    return {
+      name: customCfg.name || rId,
+      fullName: `${customCfg.name || rId}${customCfg.roleDescription ? ` (${customCfg.roleDescription})` : ''}`,
+      role: 'custom_agent',
+      avatarCls: 'is-subtask',
+      avatarIcon: `<span>${escapeHtml(customCfg.emoji || '🤖')}</span>`,
+      roleBadgeHtml: ''
+    };
+  }
+
+  // 5. 하위 세션 (마스터 / 전문가 / 커스텀 직속 하위 에이전트)
   const isSubtask = Boolean((room && isMasterSubtaskRoom(room)) || (room && room.parentAgentId) || (m && m.parentAgentId));
   if (isSubtask) {
     let pId = String((room && room.parentAgentId) || (m && m.parentAgentId) || '').trim();
@@ -578,6 +591,7 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
     let avatarIcon = ICONS.spark;
     let avatarCls = 'is-subtask';
 
+    const parentCustomCfg = getAgentConfigById(pId);
     if (pId === EXPERT_VAULT_ROOM_ID) {
       workerName = '세컨브레인 일꾼';
       avatarIcon = ICONS.brain;
@@ -589,6 +603,10 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
     } else if (pId === CORE_ROOM_ID) {
       workerName = '마스터 일꾼';
       avatarIcon = ICONS.spark;
+      avatarCls = 'is-subtask';
+    } else if (parentCustomCfg) {
+      workerName = `${parentCustomCfg.name || pId} 일꾼`;
+      avatarIcon = `<span>${escapeHtml(parentCustomCfg.emoji || '🤖')}</span>`;
       avatarCls = 'is-subtask';
     }
 
@@ -729,12 +747,15 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       }
       let orchLabel = '마스터 에이전트 지시';
       let orchCls = '';
+      const parentCfg = getAgentConfigById(pId);
       if (pId === EXPERT_CODING_ROOM_ID) {
         orchLabel = '봇개발 전문가 지시';
         orchCls = ' is-coding';
       } else if (pId === EXPERT_VAULT_ROOM_ID) {
         orchLabel = '세컨브레인 전문가 지시';
         orchCls = ' is-vault';
+      } else if (parentCfg && !parentCfg.builtin) {
+        orchLabel = `${parentCfg.name || pId} 지시`;
       }
       const orchTag = document.createElement('div');
       orchTag.className = 'orch-msg-tag' + orchCls;
@@ -993,15 +1014,19 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     `).join('');
     let emptyTitle = '무엇을 도와드릴까요?';
     let emptyDesc = '옵시디언 볼트의 노트·일정·할 일을 읽고 답변합니다';
+    const roomAgentCfg = getAgentConfigById(room.id);
     if (isCore) {
-      emptyTitle = '마스터 에이전트';
-      emptyDesc = '모든 채팅방(AGY 세션)의 대화를 열람·요약하고 특정 세션에 작업을 지시하거나 새 세션을 생성합니다';
+      emptyTitle = (roomAgentCfg && roomAgentCfg.name) || '마스터 에이전트';
+      emptyDesc = (roomAgentCfg && roomAgentCfg.roleDescription) || '모든 채팅방(AGY 세션)의 대화를 열람·요약하고 특정 세션에 작업을 지시하거나 새 세션을 생성합니다';
     } else if (isVault) {
-      emptyTitle = '세컨브레인 에이전트';
-      emptyDesc = 'Obsidian 볼트 지식·5대 도메인(건강, 할일, 식재료, 금융, 차량) 동기화를 전담합니다';
+      emptyTitle = (roomAgentCfg && roomAgentCfg.name) || '세컨브레인 에이전트';
+      emptyDesc = (roomAgentCfg && roomAgentCfg.roleDescription) || 'Obsidian 볼트 지식·5대 도메인(건강, 할일, 식재료, 금융, 차량) 동기화를 전담합니다';
     } else if (isCoding) {
-      emptyTitle = '봇개발 에이전트';
-      emptyDesc = 'oshyun-bot 소스코드 개발·단위 테스트·토큰버닝·리팩토링을 전담합니다';
+      emptyTitle = (roomAgentCfg && roomAgentCfg.name) || '봇개발 에이전트';
+      emptyDesc = (roomAgentCfg && roomAgentCfg.roleDescription) || 'oshyun-bot 소스코드 개발·단위 테스트·토큰버닝·리팩토링을 전담합니다';
+    } else if (roomAgentCfg) {
+      emptyTitle = `${roomAgentCfg.emoji || '🤖'} ${roomAgentCfg.name || room.id}`;
+      emptyDesc = roomAgentCfg.roleDescription || '사용자 정의 전문 에이전트입니다';
     }
     container.innerHTML = `
       <div class="empty-state">
