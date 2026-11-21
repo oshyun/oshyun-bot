@@ -240,6 +240,67 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(data_del["ok"])
         self.assertNotIn(custom_id, data_del["orchestratorRoomIds"])
 
+    def test_nested_agent_hierarchy_and_parent_reassignment(self):
+        """세컨브레인 산하 에이전트 및 중첩 하위 에이전트 생성, 부모 삭제 시 마스터 재배치 검증."""
+        # 1. 세컨브레인 산하 화장품 에이전트 생성
+        cosmetics = agent_configs.upsert_agent_config(
+            {
+                "name": "화장품 분석가",
+                "emoji": "💄",
+                "parentAgentId": "__expert_vault__",
+                "roleDescription": "화장품 성분 및 재고 관리",
+            }
+        )
+        cosmetics_id = cosmetics["id"]
+        self.assertEqual(cosmetics["parentAgentId"], "__expert_vault__")
+
+        # 2. 화장품 에이전트 산하 스킨케어 에이전트 생성 (N-Level 중첩 계층)
+        skincare = agent_configs.upsert_agent_config(
+            {
+                "name": "스킨케어 루틴",
+                "emoji": "🧴",
+                "parentAgentId": cosmetics_id,
+                "roleDescription": "스킨케어 루틴 최적화",
+            }
+        )
+        skincare_id = skincare["id"]
+        self.assertEqual(skincare["parentAgentId"], cosmetics_id)
+
+        # 3. 중간 부모(화장품 에이전트) 삭제 시 하위(스킨케어)가 __core__로 안전하게 재배치되는지 확인
+        deleted = agent_configs.delete_custom_agent_config(cosmetics_id)
+        self.assertTrue(deleted)
+        reloaded_skincare = agent_configs.get_agent_config(skincare_id)
+        self.assertIsNotNone(reloaded_skincare)
+        self.assertEqual(reloaded_skincare["parentAgentId"], "__core__")
+
+    def test_cycle_prevention_in_agent_hierarchy(self):
+        """에이전트 계층 설정 시 순환 참조(A->B->A, 자기자신 등) 방지 및 마스터 폴백 검증."""
+        # 1. 에이전트 A 생성 (부모: 마스터)
+        agent_a = agent_configs.upsert_agent_config(
+            {"name": "에이전트A", "parentAgentId": "__core__"}
+        )
+        id_a = agent_a["id"]
+
+        # 2. 에이전트 B 생성 (부모: A)
+        agent_b = agent_configs.upsert_agent_config(
+            {"name": "에이전트B", "parentAgentId": id_a}
+        )
+        id_b = agent_b["id"]
+        self.assertEqual(agent_b["parentAgentId"], id_a)
+
+        # 3. A의 부모를 B로 변경 시도 (A -> B -> A 순환)
+        updated_a = agent_configs.upsert_agent_config(
+            {"id": id_a, "parentAgentId": id_b}
+        )
+        # 순환 감지되어 마스터(__core__)로 안전하게 유지/폴백됨
+        self.assertEqual(updated_a["parentAgentId"], "__core__")
+
+        # 4. 자기 자신을 부모로 지정 시도
+        self_parent = agent_configs.upsert_agent_config(
+            {"id": id_b, "parentAgentId": id_b}
+        )
+        self.assertEqual(self_parent["parentAgentId"], "__core__")
+
 
 if __name__ == "__main__":
     unittest.main()

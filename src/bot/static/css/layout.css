@@ -138,7 +138,25 @@
   flex-direction: column;
   gap: 6px;
 }
-/* 전문가 에이전트 노드 래퍼 */
+/* 에이전트 계층 트리 컨테이너 */
+.sb-agent-tree-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* 산하 하위 에이전트 브랜치 (중첩 트리 인덴트) */
+.sb-subagents-container {
+  position: relative;
+  margin: 4px 0 2px 14px;
+  padding-left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-subagents-container:empty {
+  display: none;
+}
+/* 전문가/일급 에이전트 노드 래퍼 */
 .expert-agent-node {
   position: relative;
   display: flex;
