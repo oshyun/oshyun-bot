@@ -502,6 +502,7 @@ class MasterSupervisor:
             if not t.get("reviewed")
             and (
                 (t.get("status") == "done" and (t.get("reportedAt") or t.get("wait")))
+                or t.get("status") in ("lost", "cancelled")
                 or master_tasks.is_task_aborted(t)
             )
         ]

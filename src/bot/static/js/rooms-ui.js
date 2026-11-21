@@ -574,17 +574,27 @@ function renderMasterSubtaskTree(masterChildRooms) {
     }).join('');
   };
 
-  // 마스터 직속: 명시적으로 parentAgentId가 '__core__'이거나 채널이 orchestrator인 방들
-  const masterRooms = masterChildRooms.filter(r => r.parentAgentId === CORE_ROOM_ID || r.isOrchestratorChild);
+  // 마스터 직속: parentAgentId 가 명시적으로 '__core__'이거나, 오케스트레이터 방이면서 다른 부모가 지정되지 않은 방
+  const masterRooms = masterChildRooms.filter(r => r.parentAgentId === CORE_ROOM_ID || (r.isOrchestratorChild && (!r.parentAgentId || r.parentAgentId === CORE_ROOM_ID)));
   renderTree('master-subtask-tree', masterRooms, '마스터 직속 채팅');
 
-  const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
+  // 전체 하위 에이전트 목록 (기본 3대 전문가 보장)
+  let allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
     ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
-    : [
-        { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화' },
-        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인' },
-        { id: EXPERT_CODING_ROOM_ID, name: '봇개발' },
-      ];
+    : [];
+
+  const defaultAgents = [
+    { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화' },
+    { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인' },
+    { id: EXPERT_CODING_ROOM_ID, name: '봇개발' },
+  ];
+  for (const def of defaultAgents) {
+    if (!allAgents.some(a => a && a.id === def.id)) {
+      allAgents.push(def);
+    }
+  }
+
+  const allAgentIdSet = new Set(allAgents.map(a => a.id));
 
   for (const agent of allAgents) {
     const isGeneral = (agent.id === EXPERT_GENERAL_ROOM_ID);
@@ -596,9 +606,16 @@ function renderMasterSubtaskTree(masterChildRooms) {
         ? 'expert-vault-subtask-tree'
         : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${agent.id}`));
 
-    // 일반 대화의 경우, parentAgentId === EXPERT_GENERAL_ROOM_ID 뿐 아니라 부모가 없는 기존 고아 방들도 흡수
+    // 일반 대화의 경우:
+    // 1) parentAgentId === EXPERT_GENERAL_ROOM_ID
+    // 2) 부모가 없거나(!parentAgentId)
+    // 3) 부모 ID가 유효한 에이전트 목록에 없는 고아 방들까지 100% 흡수
     const agentRooms = isGeneral
-      ? masterChildRooms.filter(r => r.parentAgentId === agent.id || (!r.parentAgentId && !r.isOrchestratorChild))
+      ? masterChildRooms.filter(r => (
+          r.parentAgentId === agent.id ||
+          (!r.parentAgentId && !r.isOrchestratorChild) ||
+          (r.parentAgentId && r.parentAgentId !== CORE_ROOM_ID && !allAgentIdSet.has(r.parentAgentId))
+        ))
       : masterChildRooms.filter(r => r.parentAgentId === agent.id);
 
     renderTree(containerId, agentRooms, `${agent.name || agent.id} 직속 채팅`);

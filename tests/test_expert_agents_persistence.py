@@ -35,6 +35,7 @@ class TestExpertAgentsPersistence(unittest.TestCase):
         # 보호 대상 룸 초기화
         for rid, title in [
             (chat_db.CORE_ORCHESTRATOR_ROOM_ID, "마스터 에이전트"),
+            (chat_db.EXPERT_GENERAL_ROOM_ID, "일반 대화 에이전트"),
             (chat_db.EXPERT_VAULT_ROOM_ID, "세컨브레인 에이전트"),
             (chat_db.EXPERT_CODING_ROOM_ID, "봇개발 에이전트"),
         ]:

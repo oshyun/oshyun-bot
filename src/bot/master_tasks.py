@@ -494,9 +494,9 @@ def unreported_async_tasks(*, now: float, max_age: float, min_age: float = 20.0)
     """종결됐지만 마스터에게 아직 보고되지 않은 비동기 위임 작업(안전망 대상)."""
     out = []
     for t in _load()["tasks"].values():
-        if is_task_aborted(t) or t.get("status") == "cancelled" or t.get("reviewed"):
+        if is_task_aborted(t) or t.get("status") in ("cancelled", "lost") or t.get("reviewed"):
             continue
-        if t.get("status") not in ("done", "failed", "lost") or t.get("wait") or t.get("reportedAt"):
+        if t.get("status") not in ("done", "failed") or t.get("wait") or t.get("reportedAt"):
             continue
         if t.get("origin") != "dispatch":
             continue

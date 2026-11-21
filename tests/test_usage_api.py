@@ -262,8 +262,8 @@ class TestUsageHtmlUi(unittest.TestCase):
         self.assertNotIn("oshyun-hub-v7", sw_js, "구버전 캐시 v7이 남아있지 않아야 함")
 
         # 2. index.html의 캐시 버스팅 파라미터가 갱신되었는지
-        self.assertRegex(html, r"rooms-sync\.js\?v=[3-9]", "rooms-sync.js의 캐시 버스팅 파라미터가 갱신되어야 함")
-        self.assertRegex(html, r"responsive\.css\?v=[2-9]", "responsive.css의 캐시 버스팅 파라미터가 갱신되어야 함")
+        self.assertRegex(html, r"rooms-sync\.js\?v=(?:[3-9]|\d{2,})", "rooms-sync.js의 캐시 버스팅 파라미터가 갱신되어야 함")
+        self.assertRegex(html, r"responsive\.css\?v=(?:[2-9]|\d{2,})", "responsive.css의 캐시 버스팅 파라미터가 갱신되어야 함")
 
         # 3. PWA 라이프사이클 (pageshow, focus, visibilitychange) 복귀 시 갱신 리스너 검증
         self.assertIn("addEventListener('pageshow'", rooms_sync_js)

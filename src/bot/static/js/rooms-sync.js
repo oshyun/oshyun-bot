@@ -128,13 +128,20 @@ function updateCoreAgentSlotUi() {
   updateSlot('core-agent-slot', 'core-agent-sub', CORE_ROOM_ID, 'core-agent-title');
 
   // 전체 에이전트 목록을 바탕으로 parentAgentId 계층 트리 구성
-  const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
+  let allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
     ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
-    : [
-        { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화', roleDescription: '사전 제약 없이 자유롭게 대화하는 순수 범용 비서', emoji: '💬', color: '#64748b', parentAgentId: CORE_ROOM_ID, builtin: true },
-        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', roleDescription: 'Obsidian 볼트 지식·5대 도메인 동기화 전문 에이전트', emoji: '🧠', color: '#d97706', parentAgentId: CORE_ROOM_ID, builtin: true },
-        { id: EXPERT_CODING_ROOM_ID, name: '봇개발', roleDescription: 'oshyun-bot 소스코드 개발·테스트·토큰버닝 전문 에이전트', emoji: '💻', color: '#3b82f6', parentAgentId: CORE_ROOM_ID, builtin: true },
-      ];
+    : [];
+
+  const defaultAgents = [
+    { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화', roleDescription: '사전 제약 없이 자유롭게 대화하는 순수 범용 비서', emoji: '💬', color: '#64748b', parentAgentId: CORE_ROOM_ID, builtin: true },
+    { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', roleDescription: 'Obsidian 볼트 지식·5대 도메인 동기화 전문 에이전트', emoji: '🧠', color: '#d97706', parentAgentId: CORE_ROOM_ID, builtin: true },
+    { id: EXPERT_CODING_ROOM_ID, name: '봇개발', roleDescription: 'oshyun-bot 소스코드 개발·테스트·토큰버닝 전문 에이전트', emoji: '💻', color: '#3b82f6', parentAgentId: CORE_ROOM_ID, builtin: true },
+  ];
+  for (const def of defaultAgents) {
+    if (!allAgents.some(a => a && a.id === def.id)) {
+      allAgents.push(def);
+    }
+  }
 
   const agentIdSet = new Set(allAgents.map(a => a.id));
   const childrenByParent = new Map();
