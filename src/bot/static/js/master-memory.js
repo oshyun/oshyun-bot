@@ -149,6 +149,14 @@ async function loadMasterTasksFromServer() {
     const data = await res.json();
     if (data.ok && Array.isArray(data.tasks)) {
       latestMasterTasks = data.tasks;
+      // 현재 보고 있는 방은 낙관적 읽음(reviewed) 상태 유지 (서버 반영 레이스 컨디션 방어)
+      if (currentRoomId) {
+        latestMasterTasks.forEach(t => {
+          if (t && t.roomId === currentRoomId) {
+            t.reviewed = true;
+          }
+        });
+      }
       updateMasterTopbarBadge();
       renderRoomList();
     }
@@ -160,6 +168,14 @@ async function loadMasterTasksFromServer() {
 function handleMasterGraphWsEvent(graph) {
   if (!graph) return;
   latestMasterGraph = graph;
+  // 현재 보고 있는 방은 낙관적 읽음(reviewed) 상태 유지
+  if (currentRoomId && Array.isArray(latestMasterTasks)) {
+    latestMasterTasks.forEach(t => {
+      if (t && t.roomId === currentRoomId) {
+        t.reviewed = true;
+      }
+    });
+  }
   renderMasterSidebarContent(graph);
   updateCoreAgentSlotUi();
   renderRoomList();

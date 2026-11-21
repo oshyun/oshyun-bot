@@ -491,6 +491,27 @@ def mark_reviewed(task_ids: list[str], *, expected_status: dict[str, str] | None
     return marked
 
 
+def mark_room_reviewed(room_id: str) -> int:
+    """특정 대화방(room_id)에 속한 모든 위임 작업을 검토 완료(reviewed=True) 처리한다."""
+    if not room_id:
+        return 0
+    rid = str(room_id).strip()
+    marked = 0
+    now = _now()
+    with _lock:
+        data = _load()
+        for task in data["tasks"].values():
+            if str(task.get("roomId") or "").strip() == rid:
+                if not task.get("reviewed"):
+                    task["reviewed"] = True
+                    task["reviewedAt"] = now
+                    task["updatedAt"] = now
+                    marked += 1
+        if marked:
+            _save(data)
+    return marked
+
+
 def handle_rooms_deleted(room_ids: list[str]) -> int:
     """대화방이 삭제되었을 때 해당 방의 작업을 종결(closed)하고 요약본(`room_summaries`)도 정리한다."""
     if not room_ids:

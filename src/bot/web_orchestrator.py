@@ -1240,6 +1240,14 @@ async def handle_orchestrator_task_update(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "JSON 객체가 필요합니다."}, status=400)
 
     task_id = str(payload.get("taskId") or payload.get("id") or "").strip()
+    room_id = str(payload.get("roomId") or "").strip()
+    if not task_id and room_id:
+        marked = master_tasks.mark_room_reviewed(room_id)
+        from web_execution import _master_supervisor
+        supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+        if supervisor:
+            supervisor.poke()
+        return web.json_response({"ok": True, "roomId": room_id, "marked": marked})
     if not task_id:
         return web.json_response({"ok": False, "error": "taskId 가 필요합니다."}, status=400)
 
@@ -1266,6 +1274,29 @@ async def handle_orchestrator_task_update(request: web.Request) -> web.Response:
     if supervisor:
         supervisor.poke()
     return web.json_response({"ok": True, "task": updated})
+
+
+async def handle_orchestrator_room_mark_read(request: web.Request) -> web.Response:
+    """POST /api/orchestrator/room/mark-read — 특정 방(roomId)에 속한 모든 위임 작업을 읽음/검토 완료(reviewed=True) 처리."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "유효하지 않은 JSON 요청입니다."}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "JSON 객체가 필요합니다."}, status=400)
+
+    room_id = str(payload.get("roomId") or payload.get("id") or "").strip()
+    if not room_id:
+        return web.json_response({"ok": False, "error": "roomId 가 필요합니다."}, status=400)
+
+    marked = master_tasks.mark_room_reviewed(room_id)
+
+    from web_execution import _master_supervisor
+    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    if supervisor:
+        supervisor.poke()
+
+    return web.json_response({"ok": True, "roomId": room_id, "marked": marked})
 
 
 async def handle_orchestrator_patrol_trigger(request: web.Request) -> web.Response:
