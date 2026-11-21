@@ -131,6 +131,8 @@ def reconcile_tasks(
     live = _live_index(live_runs)
     changes: list[tuple[str, dict]] = []
     for task in tasks:
+        if master_tasks.is_task_aborted(task):
+            continue
         status = task.get("status")
         if status not in master_tasks.ACTIVE_STATUSES:
             continue
@@ -159,7 +161,17 @@ def reconcile_tasks(
             continue
         reply = latest_reply(task.get("roomId"), float(task.get("createdAt") or 0)) if latest_reply else None
         if reply:
-            if "⚠️ 서버 재시작으로 답변이 중단되었습니다." in reply or "⚠️ 작업이 중단되었습니다." in reply:
+            if "🛑" in reply or "사용자에 의해 실행이 중단되었습니다" in reply or "작업이 취소되었습니다" in reply:
+                changes.append((tid, {
+                    "status": "cancelled",
+                    "finishedAt": now,
+                    "user_cancelled": True,
+                    "user_confirmed": True,
+                    "reviewed": True,
+                    "reviewedAt": now,
+                    "error": "사용자에 의해 작업이 취소되었습니다.",
+                }))
+            elif "⚠️ 서버 재시작으로 답변이 중단되었습니다." in reply or "⚠️ 작업이 중단되었습니다." in reply:
                 changes.append((tid, {
                     "status": "failed",
                     "finishedAt": now,
@@ -470,14 +482,15 @@ class MasterSupervisor:
         auto_review_ids = [
             t["id"]
             for t in master_tasks.list_tasks(include_closed=False, limit=500)
-            if t.get("status") == "done"
-            and not t.get("reviewed")
-            and (t.get("reportedAt") or t.get("wait"))
+            if not t.get("reviewed")
+            and (
+                (t.get("status") == "done" and (t.get("reportedAt") or t.get("wait")))
+                or master_tasks.is_task_aborted(t)
+            )
         ]
         if auto_review_ids:
             reconciled += master_tasks.mark_reviewed(
                 auto_review_ids,
-                expected_status={tid: "done" for tid in auto_review_ids},
             )
         return reconciled
 
@@ -525,9 +538,10 @@ class MasterSupervisor:
         if targets is None:
             reconciled = self._reconcile_now(now, live_runs)
             all_open = master_tasks.list_tasks(include_closed=False, limit=500)
-            targets = [t for t in all_open if master_tasks.needs_attention(t)]
+            targets = [t for t in all_open if master_tasks.needs_attention(t) and not master_tasks.is_task_aborted(t)]
         else:
             all_open = master_tasks.list_tasks(include_closed=False, limit=500)
+            targets = [t for t in targets if not master_tasks.is_task_aborted(t)]
 
         active_count = sum(1 for t in all_open if t.get("status") in master_tasks.ACTIVE_STATUSES)
 

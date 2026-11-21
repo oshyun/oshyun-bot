@@ -21,8 +21,11 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
         web_execution._active_agent_pids.clear()
         web_execution._active_watch_tasks.clear()
         web_execution._room_live_feeds.clear()
+        self._load_patcher = patch("web_execution._load_web_jobs", return_value={})
+        self._load_patcher.start()
 
     def tearDown(self) -> None:
+        self._load_patcher.stop()
         web_execution._room_live_snapshots.clear()
         web_execution._active_agent_pids.clear()
         web_execution._active_watch_tasks.clear()
