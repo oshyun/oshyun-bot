@@ -160,6 +160,8 @@ async def detach_active_tasks(timeout: float = 1.5) -> int:
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
     """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
+    if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value") or hasattr(fallback, "mock_calls"):
+        return fallback
     mod = sys.modules.get("web_server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
@@ -1726,6 +1728,247 @@ async def _recover_web_jobs() -> None:
     current_jobs_dir = _get_mod_attr("JOBS_DIR", JOBS_DIR)
     _sweep_orphan_job_files(current_jobs_dir, active_ids)
     await _restore_pending_room_turns()
+    await _recover_startup_placeholders()
+
+
+async def _recover_startup_placeholders() -> int:
+    """웹 서버 시작 시, web_jobs에 등록되지 않았지만 DB에 빈 플레이스홀더('text'=='')로 남아있는 고아 메시지를 복구한다."""
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    if not current_chat_db:
+        return 0
+    fixed_count = 0
+    try:
+        rooms = current_chat_db.get_rooms(limit=300)
+        active_room_ids = set(_active_agent_pids.keys()) | set(_room_live_snapshots.keys())
+        for r in rooms:
+            rid = str(r.get("id") or "").strip()
+            if not rid or rid in active_room_ids:
+                continue
+            msgs = current_chat_db.get_messages(rid, limit=5)
+            if not msgs:
+                continue
+            last_msg = msgs[-1]
+            if last_msg.get("role") in ("assistant", "agent") and not str(last_msg.get("text") or "").strip():
+                msg_id = last_msg.get("id")
+                if msg_id:
+                    current_chat_db.update_message(
+                        msg_id,
+                        text="⚠️ 서버 재시작으로 답변이 중단되었습니다.",
+                        update_preview=True,
+                    )
+                    fixed_count += 1
+        if fixed_count > 0:
+            logger.info("[web_jobs] 기동 시 고아 빈 플레이스홀더 메시지 %d건 복구 완료", fixed_count)
+    except Exception as exc:
+        logger.warning("[web_jobs] 기동 시 고아 플레이스홀더 복구 경고: %s", exc)
+    return fixed_count
+
+
+_zombie_reaper_task: asyncio.Task | None = None
+
+
+async def reap_zombie_sessions(
+    max_inactive_seconds: float = 900.0,
+    max_elapsed_seconds: float = 1800.0,
+) -> list[str]:
+    """비정상 종료되거나 타임아웃된 고아(Zombie) 세션을 능동 감지하여 회수(Reap)한다.
+
+    1. 프로세스 사망: PID가 기록되었으나 detached_pid_alive(pid)가 False인 경우
+    2. 무응답 타임아웃: 최근 max_inactive_seconds (기본 15분) 동안 스트림/로그/트랜스크립트 갱신이 전혀 없는 경우
+    3. 최대 실행시간 초과: 총 경과 시간이 max_elapsed_seconds (기본 30분)를 초과한 경우
+    """
+    now = time.time()
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+    kill_job_fn = _get_mod_attr("kill_job", kill_job)
+
+    # 점검 대상 방 식별 (메모리 스냅샷, 활성 PID, 영속 job 레코드)
+    jobs_data = _load_web_jobs()
+    candidate_rooms = set(_room_live_snapshots.keys()) | set(_active_agent_pids.keys())
+    for j_id, rec in jobs_data.items():
+        r_id = rec.get("room_id")
+        if r_id:
+            candidate_rooms.add(r_id)
+
+    reaped_rooms: list[str] = []
+
+    for room_id in list(candidate_rooms):
+        snap = _room_live_snapshots.get(room_id)
+        job_id = None
+        job_rec = None
+        for j_id, rec in jobs_data.items():
+            if rec.get("room_id") == room_id:
+                job_id = j_id
+                job_rec = rec
+                break
+
+        pid = _active_agent_pids.get(room_id) or (snap.get("pid") if snap else None) or (job_rec.get("pid") if job_rec else None)
+        started_at = float(
+            (snap.get("startTimestamp") if snap else None)
+            or (snap.get("startedAt", 0) / 1000.0 if snap and snap.get("startedAt") else None)
+            or (job_rec.get("started_at") if job_rec else None)
+            or now
+        )
+        elapsed = max(0.0, now - started_at)
+
+        # 활동 시각(activity) 추정: 파일 mtime 또는 스냅샷 타임스탬프
+        last_activity_time = started_at
+        out_file = job_rec.get("out_file") if job_rec else None
+        if out_file and os.path.exists(out_file):
+            try:
+                last_activity_time = max(last_activity_time, os.path.getmtime(out_file))
+            except OSError:
+                pass
+
+        session_id = (snap.get("sessionId") if snap else None) or (job_rec.get("session_id") if job_rec else None)
+        if session_id:
+            transcript_path = os.path.expanduser(
+                f"~/.gemini/antigravity-cli/brain/{session_id}/.system_generated/logs/transcript.jsonl"
+            )
+            if os.path.exists(transcript_path):
+                try:
+                    last_activity_time = max(last_activity_time, os.path.getmtime(transcript_path))
+                except OSError:
+                    pass
+
+        inactive_seconds = max(0.0, now - last_activity_time)
+
+        is_zombie = False
+        reap_reason = ""
+
+        # 판정 1: 프로세스 사망
+        if pid:
+            if not detached_pid_alive(pid):
+                is_zombie = True
+                reap_reason = f"프로세스 비정상 종료 (PID {pid} 부재)"
+        else:
+            # PID가 전혀 없는데 스냅샷만 30초 이상 남아있는 경우
+            if elapsed >= 30.0:
+                is_zombie = True
+                reap_reason = "실행 프로세스(PID) 부재 고아 세션"
+
+        # 판정 2: 무응답 비활동 타임아웃 (15분)
+        if not is_zombie and max_inactive_seconds > 0 and inactive_seconds >= max_inactive_seconds:
+            is_zombie = True
+            reap_reason = f"15분 무응답 타임아웃 (최근 비활동 {int(inactive_seconds)}초)"
+
+        # 판정 3: 최대 실행 시간 초과 (30분)
+        if not is_zombie and max_elapsed_seconds > 0 and elapsed >= max_elapsed_seconds:
+            is_zombie = True
+            reap_reason = f"최대 실행 시간 초과 ({int(elapsed)}초 경과)"
+
+        if not is_zombie:
+            continue
+
+        # 회수(Reap) 절차 수행
+        logger.warning(
+            "[zombie_reaper] 고아 세션 능동 회수: room=%s, pid=%s, elapsed=%.1fs, inactive=%.1fs, reason=%s",
+            room_id, pid, elapsed, inactive_seconds, reap_reason,
+        )
+
+        if pid and detached_pid_alive(pid):
+            try:
+                kill_job_fn(pid)
+            except Exception:
+                pass
+
+        _active_agent_pids.pop(room_id, None)
+        _room_live_snapshots.pop(room_id, None)
+        _room_live_feeds.pop(room_id, None)
+        watch_task = _active_watch_tasks.pop(room_id, None)
+        if watch_task and not watch_task.done():
+            watch_task.cancel()
+
+        if job_id:
+            _remove_web_job(job_id)
+            if job_rec:
+                _remove_job_files(job_rec.get("out_file"), job_rec.get("err_file"))
+
+        # DB 메시지 정리
+        asst_msg_id = (snap.get("asstMsgId") if snap else None) or (job_rec.get("msg_id") if job_rec else None)
+        stream_txt = (snap.get("streamText") if snap else "") or ""
+        steps = snap.get("steps") if snap else None
+        notice_text = f"⚠️ 비정상 종료 감지 및 자동 회수되었습니다. ({reap_reason})"
+
+        if current_chat_db:
+            if not asst_msg_id:
+                try:
+                    msgs = current_chat_db.get_messages(room_id, limit=3)
+                    for m in reversed(msgs):
+                        if m.get("role") in ("assistant", "agent") and not str(m.get("text") or "").strip():
+                            asst_msg_id = m.get("id")
+                            break
+                except Exception:
+                    pass
+
+            if asst_msg_id:
+                try:
+                    final_txt = f"{stream_txt}\n\n{notice_text}".strip() if stream_txt else notice_text
+                    current_chat_db.update_message(
+                        asst_msg_id,
+                        text=final_txt,
+                        steps=steps if steps else None,
+                        update_preview=True,
+                    )
+                except Exception as db_err:
+                    logger.warning("[zombie_reaper] DB 메시지 회수 갱신 실패 (%s): %s", asst_msg_id, db_err)
+
+        task_id = (snap.get("taskId") if snap else None) or (job_rec.get("task_id") if job_rec else None)
+        if task_id:
+            try:
+                master_tasks.update_task(
+                    task_id,
+                    status="failed",
+                    finishedAt=now,
+                    error=notice_text,
+                )
+                await _notify_master_agent(room_id, task_id, notice_text, is_success=False)
+            except Exception:
+                pass
+
+        try:
+            await current_broadcast({
+                "type": "error",
+                "roomId": room_id,
+                "message": notice_text,
+            })
+            await current_broadcast({
+                "type": "active_runs",
+                "activeRuns": build_active_runs_payload(),
+            })
+        except Exception:
+            pass
+
+        if _master_supervisor:
+            _master_supervisor.poke()
+
+        reaped_rooms.append(room_id)
+
+    return reaped_rooms
+
+
+async def run_zombie_reaper_loop(
+    interval: float = 60.0,
+    max_inactive_seconds: float = 900.0,
+    max_elapsed_seconds: float = 1800.0,
+) -> None:
+    """주기적으로 고아 세션을 감지하여 회수하는 백그라운드 루프."""
+    logger.info("[zombie_reaper] 고아 세션 능동 회수 루프 가동 (주기: %.0f초, 무응답 한계: %.0f초, 최대 실행: %.0f초)", interval, max_inactive_seconds, max_elapsed_seconds)
+    while not _shutting_down:
+        try:
+            await asyncio.sleep(interval)
+            if _shutting_down:
+                break
+            reaped = await reap_zombie_sessions(
+                max_inactive_seconds=max_inactive_seconds,
+                max_elapsed_seconds=max_elapsed_seconds,
+            )
+            if reaped:
+                logger.info("[zombie_reaper] 고아 세션 %d건 능동 회수 완료: %s", len(reaped), reaped)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("[zombie_reaper] 고아 세션 회수 루프 예외: %s", exc)
 
 
 async def execute_chat_turn(
@@ -1860,6 +2103,9 @@ async def execute_chat_turn(
             user_text + VOICE_MODE_PROMPT_SUFFIX if is_voice_mode else user_text
         )
 
+    cur_room_rec = current_chat_db.get_room(room_key) if current_chat_db else None
+    parent_agent_id = cur_room_rec.get("parentAgentId") if cur_room_rec else None
+
     if is_orchestrator and not raw_prompt:
         try:
             orch_agent = master_memory.normalize_agent_id(room_key)
@@ -1871,6 +2117,18 @@ async def execute_chat_turn(
                 effective_prompt = f"{mem_ctx}\n\n[현재 요청]\n{effective_prompt}"
         except Exception:
             pass
+    elif not is_orchestrator and (channel == "orchestrator" or parent_agent_id) and not raw_prompt:
+        # 하위 작업 세션: 필수 동적 메타데이터([부모 보고 경로/ID], [작업 ID])만 간결하게 주입
+        # (※ 정적 규칙은 각 작업공간의 AGENTS.md 및 rules/에서 자동 로드되므로 중복 주입하지 않음)
+        runtime_meta: list[str] = []
+        if parent_agent_id:
+            runtime_meta.append(f"• 부모 에이전트(보고 대상): {parent_agent_id}")
+        if task_id:
+            runtime_meta.append(f"• 작업 ID: {task_id} (완료 시 서버 자동 보고 연계)")
+        if runtime_meta:
+            meta_header = "[런타임 작업 메타데이터]\n" + "\n".join(runtime_meta)
+            if "[런타임 작업 메타데이터]" not in effective_prompt:
+                effective_prompt = f"{meta_header}\n\n{effective_prompt}"
 
     # 대화방 전용 저장소에 유저/서브에이전트 보고 메시지 영속 기록 (명시적 user_msg_id 기반으로 중복 저장 원천 방지)
     actual_user_msg_id: int | None = user_msg_id if user_msg_id is not None else None
@@ -2046,14 +2304,24 @@ async def execute_chat_turn(
     elif is_custom_agent:
         spawn_kwargs["agent_id"] = room_key
 
+    extra_env: dict[str, str] = {}
     if use_orchestrator or is_expert_vault or is_expert_coding or is_custom_agent:
         ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
         proto = "https" if ssl_enabled else "http"
-        spawn_kwargs["extra_env"] = {
+        extra_env.update({
             "OSHYUN_ORCHESTRATOR_API_URL": f"{proto}://127.0.0.1:{WEB_PORT}",
             "OSHYUN_ORCHESTRATOR_TOKEN": WEB_TOKEN,
             "OSHYUN_AGENT_ROOM_ID": room_key,
-        }
+        })
+    else:
+        extra_env["OSHYUN_AGENT_ROOM_ID"] = room_key
+        if parent_agent_id:
+            extra_env["OSHYUN_PARENT_AGENT_ID"] = str(parent_agent_id)
+        if task_id:
+            extra_env["OSHYUN_TASK_ID"] = str(task_id)
+
+    if extra_env:
+        spawn_kwargs["extra_env"] = extra_env
 
     try:
         agent_proc = current_spawn_agent(

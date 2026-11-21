@@ -173,6 +173,7 @@ from web_execution import (
     _serialize_live_run_entry,
     _user_cancelled_rooms,
     _watch_and_finish_web_job,
+    _zombie_reaper_task,
     broadcast_ws_json,
     build_active_runs_payload,
     cancel_active_run,
@@ -611,12 +612,21 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app = web.Application(middlewares=[cors_middleware, auth_middleware])
 
     async def _on_web_startup(_app: web.Application) -> None:
-        global _master_supervisor_task, _scheduler_task, _burn_recover_task
+        global _master_supervisor_task, _scheduler_task, _burn_recover_task, _zombie_reaper_task
         web_execution.set_shutting_down(False)
         try:
             await _recover_web_jobs()
         except Exception as exc:
             logger.error("[web_jobs] 시작 시 작업 복구 실패: %s", exc)
+
+        _zombie_reaper_task = asyncio.create_task(
+            web_execution.run_zombie_reaper_loop(
+                interval=float(os.getenv("ZOMBIE_REAPER_INTERVAL", "60.0")),
+                max_inactive_seconds=float(os.getenv("ZOMBIE_MAX_INACTIVE_SECONDS", "900.0")),
+                max_elapsed_seconds=float(os.getenv("ZOMBIE_MAX_ELAPSED_SECONDS", "1800.0")),
+            )
+        )
+        web_execution._zombie_reaper_task = _zombie_reaper_task
 
         if _master_supervisor is not None:
             _master_supervisor_task = asyncio.create_task(_master_supervisor.run_forever())
@@ -663,9 +673,9 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
             logger.warning("[web_jobs] 종료 시 태스크 분리 경고: %s", exc)
 
     async def _on_web_cleanup(_app: web.Application) -> None:
-        global _master_supervisor_task, _scheduler_task, _burn_recover_task
+        global _master_supervisor_task, _scheduler_task, _burn_recover_task, _zombie_reaper_task
         web_execution.set_shutting_down(True)
-        for task in (_master_supervisor_task, _scheduler_task, _burn_recover_task):
+        for task in (_master_supervisor_task, _scheduler_task, _burn_recover_task, _zombie_reaper_task):
             if task and not task.done():
                 task.cancel()
                 try:
@@ -675,7 +685,9 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
         _master_supervisor_task = None
         _scheduler_task = None
         _burn_recover_task = None
+        _zombie_reaper_task = None
         web_execution._master_supervisor_task = None
+        web_execution._zombie_reaper_task = None
 
     web_app.on_startup.append(_on_web_startup)
     web_app.on_shutdown.append(_on_web_shutdown)

@@ -1131,8 +1131,14 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
       <div class="thinking-line">
         <span class="spinner"></span>
         <span class="feed shimmer" id="live-feed-text">${escapeHtml(liveState.feed || '생각하는 중…')}</span>
-        <span class="live-elapsed" id="live-elapsed-timer">${elapsedText}</span>
+        <span class="live-elapsed" id="live-elapsed-timer">${elapsedSec >= 1800 ? `${elapsedText} ⚠️` : elapsedText}</span>
       </div>
+      ${elapsedSec >= 1800 ? `
+        <div class="timeout-warning-banner" style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span>⚠️ 30분 이상 경과되었습니다. 프로세스가 중단되었거나 비정상 종료되었을 수 있습니다.</span>
+          <button type="button" class="btn-abort-inline" style="padding:4px 8px;border-radius:6px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:12px;" onclick="handleAbortButtonClick(event)">중단하기</button>
+        </div>
+      ` : ''}
     `;
     if (room && ORCHESTRATOR_ROOM_IDS.includes(room.id)) {
       const liveDelegated = extractDelegatedRoomsFromSteps(liveState.steps);

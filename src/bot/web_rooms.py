@@ -18,7 +18,8 @@ import chat_db
 from agent_engine import clear_session, delete_session_files, kill_job
 from bot_logger import logger, vault_log
 from engine_settings import get_coding_mode
-from paths import ATTACHED_FILES_DIR, CHATS_DIR, CODEDIR, STATE_DIR, WORKDIR, child_default_workdir
+import paths
+from paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
 
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -415,14 +416,14 @@ def _load_chat_rooms_index() -> list[dict]:
             if agent_cfg and agent_cfg.get("workdir"):
                 merged["workdir"] = str(agent_cfg["workdir"]).strip()
             elif canonical_id == EXPERT_CODING_ROOM_ID:
-                merged["workdir"] = CODEDIR or WORKDIR
+                merged["workdir"] = paths.CODEDIR or paths.WORKDIR
             elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
-                merged["workdir"] = WORKDIR
+                merged["workdir"] = paths.WORKDIR
             elif child_default_workdir(merged.get("parentAgentId")):
                 merged["workdir"] = child_default_workdir(merged.get("parentAgentId"))
             else:
                 is_coding = get_coding_mode()
-                merged["workdir"] = (CODEDIR or WORKDIR) if is_coding else WORKDIR
+                merged["workdir"] = (paths.CODEDIR or paths.WORKDIR) if is_coding else paths.WORKDIR
 
         if merged.get("isOrchestratorChild") and not merged.get("parentAgentId"):
             merged["parentAgentId"] = CORE_ORCHESTRATOR_ROOM_ID
@@ -984,17 +985,17 @@ async def handle_chat_history(request: web.Request) -> web.Response:
     resolved_workdir = (room_rec.get("workdir") if room_rec and room_rec.get("workdir") else None)
     if not resolved_workdir:
         if resolved_room_id == EXPERT_CODING_ROOM_ID or room_id == EXPERT_CODING_ROOM_ID:
-            resolved_workdir = CODEDIR or WORKDIR
+            resolved_workdir = paths.CODEDIR or paths.WORKDIR
         elif (
             resolved_room_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID)
             or room_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID)
         ):
-            resolved_workdir = WORKDIR
+            resolved_workdir = paths.WORKDIR
         elif child_default_workdir(room_rec.get("parent_agent_id") if room_rec else None):
             resolved_workdir = child_default_workdir(room_rec.get("parent_agent_id"))
         else:
             is_coding = get_coding_mode()
-            resolved_workdir = (CODEDIR or WORKDIR) if is_coding else WORKDIR
+            resolved_workdir = (paths.CODEDIR or paths.WORKDIR) if is_coding else paths.WORKDIR
 
     return web.json_response({
         "ok": True,

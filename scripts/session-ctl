@@ -145,7 +145,12 @@ def cmd_list(args: argparse.Namespace) -> int:
         msg_cnt = s.get("messageCount") or 0
         is_running = s.get("isRunning", False)
         q_cnt = s.get("queueSize") or 0
+        elapsed_sec = int(s.get("elapsedSeconds") or 0)
         status_str = "🟢 실행 중" if is_running else "⚪ 대기"
+        if is_running and elapsed_sec >= 1800:
+            status_str += f" ⚠️ 30분 초과({elapsed_sec}초, 좀비 의심)"
+        elif is_running and elapsed_sec > 0:
+            status_str += f" ({elapsed_sec}초 경과)"
         if q_cnt > 0:
             status_str += f" (대기열 {q_cnt}건)"
         updated_str = s.get("updatedAtFormatted") or ""
@@ -322,11 +327,12 @@ def cmd_watch(args: argparse.Namespace) -> int:
     target = args.target.strip()
     task_id = (getattr(args, "task_id", None) or "").strip()
     notify_master = bool(getattr(args, "notify_master", False))
-    timeout = max(10, int(getattr(args, "timeout", 600)))
+    timeout = max(10, int(getattr(args, "timeout", 1800)))
     interval = max(0.5, float(getattr(args, "interval", 2.0)))
 
     import time
     start_time = time.time()
+    last_activity_time = start_time
     last_feed = ""
     seen_running = False
 
@@ -361,6 +367,14 @@ def cmd_watch(args: argparse.Namespace) -> int:
                 seen_running = True
                 if feed and feed != last_feed:
                     last_feed = feed
+                    last_activity_time = time.time()
+                elif current_count != initial_msg_count:
+                    last_activity_time = time.time()
+
+                # 15분 이상 어떠한 활동도 감지되지 않는 고아/좀비 세션 검사
+                if time.time() - last_activity_time >= 900.0:
+                    print(f"⚠️ 감시 중단: 세션 [{room_title}] (ID: {room_id})이 15분 이상 무응답 상태입니다 (고아/좀비 세션 감지).", file=sys.stderr)
+                    return 1
             elif seen_running or (current_count > initial_msg_count) or (time.time() - start_time >= 3.0 and not is_running):
                 # 세션이 실행 중이었다가 완료되었거나, 새 메시지가 도착했거나, 비실행 상태 확정 시
                 messages = poll_res.get("messages") or []
@@ -371,7 +385,12 @@ def cmd_watch(args: argparse.Namespace) -> int:
                         break
 
                 elapsed = max(1, int(time.time() - start_time))
-                task_status = "done"
+                is_failed_reply = bool(
+                    "⚠️ 비정상 종료 감지" in last_reply
+                    or "⚠️ 서버 재시작으로 답변이 중단되었습니다" in last_reply
+                    or "🛑 사용자에 의해 실행이 중단되었습니다" in last_reply
+                )
+                task_status = "failed" if is_failed_reply else "done"
                 if task_id:
                     t_res = _api_request("GET", "/api/orchestrator/tasks?limit=50&include_closed=1", timeout=15)
                     if t_res.get("ok"):
@@ -382,8 +401,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
                 if args.json:
                     print(json.dumps({
-                        "ok": True,
-                        "status": "completed",
+                        "ok": not is_failed_reply,
+                        "status": "failed" if is_failed_reply else "completed",
                         "roomId": room_id,
                         "title": room_title,
                         "taskId": task_id,
@@ -392,14 +411,16 @@ def cmd_watch(args: argparse.Namespace) -> int:
                         "reply": last_reply,
                     }, ensure_ascii=False, indent=2))
                 else:
-                    print(f"🏁 [{room_title}] (ID: {room_id}) 작업 완료 ({elapsed}초 소요, 상태: {task_status})")
+                    status_label = "작업 비정상 종료/회수" if is_failed_reply else "작업 완료"
+                    print(f"🏁 [{room_title}] (ID: {room_id}) {status_label} ({elapsed}초 소요, 상태: {task_status})")
                     if last_reply:
                         preview = last_reply[:300] + ("..." if len(last_reply) > 300 else "")
                         print(f"--- 🤖 하위 세션 응답 요약 ---\n{preview}")
 
                 if notify_master:
+                    report_header = "[하위 작업 비정상 종료 보고]" if is_failed_reply else "[하위 작업 완료 보고]"
                     report_lines = [
-                        "[하위 작업 완료 보고]",
+                        report_header,
                         f"• 대상 방: {room_title} (Room ID: {room_id})",
                     ]
                     if task_id:
@@ -424,7 +445,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
                     if not n_res or not n_res.get("ok"):
                         print(f"⚠️ 마스터 완료 보고 전달 실패: {n_res.get('error') if n_res else '연결 불가'}", file=sys.stderr)
 
-                return 0
+                return 1 if is_failed_reply else 0
 
         time.sleep(interval)
 
@@ -1191,7 +1212,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("target", help="감시할 채팅방의 Room ID, Session ID, 또는 제목 키워드")
     p_watch.add_argument("--task-id", help="연결된 마스터 위임 작업 ID (선택)")
     p_watch.add_argument("--notify-master", "-n", action="store_true", help="작업 완료 시 마스터 에이전트(__core__)에게 완료 보고를 자동 전송")
-    p_watch.add_argument("--timeout", type=int, default=600, help="최대 감시 대기 시간(초) (기본: 600)")
+    p_watch.add_argument("--timeout", type=int, default=1800, help="최대 감시 대기 시간(초) (기본: 1800)")
     p_watch.add_argument("--interval", type=float, default=2.0, help="상태 확인 폴링 주기(초) (기본: 2.0)")
     p_watch.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
     p_watch.set_defaults(func=cmd_watch)

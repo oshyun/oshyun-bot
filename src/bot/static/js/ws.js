@@ -572,12 +572,26 @@ function applyActiveRunsSnapshot(activeRuns, isFullSnapshot = true) {
       );
       if (isKnownActive) continue;
 
-      // 현재 활성 대화방이거나 진행 중인 단계(steps)/스트리밍 텍스트가 있는 경우,
-      // 웹소켓 연결이 유지(또는 재연결)되는 동안에는 서버 동기화 버튼 클릭 시 진행 상태를 임의로 초기화하지 않고 철저히 보존!
+      // 30분(1800초) 이상 경과한 세션은 좀비로 간주하고 무조건 회수
+      const elapsedMs = st.startedAt ? (Date.now() - st.startedAt) : 0;
+      if (elapsedMs >= 1800000) {
+        st.isRunning = false;
+        const finishedRoom = getRoomById(rId);
+        if (finishedRoom) {
+          loadChatHistoryFromServer(finishedRoom.id, finishedRoom.sessionId);
+        }
+        if (rId === currentRoomId) {
+          currentRoomAffected = true;
+        }
+        continue;
+      }
+
+      // 방금 전송된 직후(15초 이내)이거나 진행 중인 단계가 있는 경우, 웹소켓 연결 중에는 일시적 유예
       const isCurrentActive = (rId === currentRoomId);
       const hasLiveContent = (Array.isArray(st.steps) && st.steps.length > 0) || Boolean(st.streamText);
       const isWsActive = socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING);
-      if ((isCurrentActive || hasLiveContent) && isWsActive) {
+      const isRecent = elapsedMs < 15000;
+      if ((isCurrentActive || hasLiveContent) && isWsActive && isRecent) {
         continue;
       }
 
