@@ -69,9 +69,21 @@ function renderMsbMemoryAgentTabs() {
   const wrap = document.getElementById('msb-agent-tabs');
   if (!wrap) return;
   const baseTabs = [
-    { scope: 'master', label: '👑 마스터' },
-    { scope: 'second_brain', label: '🧠 세컨브레인' },
-    { scope: 'bot_dev', label: '💻 봇개발' },
+    {
+      scope: 'master',
+      label: '마스터',
+      icon: `<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
+    },
+    {
+      scope: 'second_brain',
+      label: '세컨브레인',
+      icon: `<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>`,
+    },
+    {
+      scope: 'bot_dev',
+      label: '봇개발',
+      icon: `<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+    },
   ];
   if (Array.isArray(agentConfigs)) {
     for (const cfg of agentConfigs) {
@@ -80,7 +92,8 @@ function renderMsbMemoryAgentTabs() {
       if (scope) {
         baseTabs.push({
           scope,
-          label: `${cfg.emoji || '🤖'} ${cfg.name || cfg.id}`,
+          label: cfg.name || cfg.id,
+          icon: `<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>`,
         });
       }
     }
@@ -88,7 +101,7 @@ function renderMsbMemoryAgentTabs() {
   wrap.innerHTML = baseTabs.map(t => {
     const isActive = (t.scope === currentMsbAgent);
     const safeScope = escapeHtml(t.scope);
-    return `<button type="button" class="btn sm tab ${isActive ? 'active' : ''}" data-agent="${safeScope}" onclick="switchMsbMemoryAgent('${safeScope}')" style="flex:1;min-width:72px;font-size:11px;padding:4px 6px;">${escapeHtml(t.label)}</button>`;
+    return `<button type="button" class="btn sm tab ${isActive ? 'active' : ''}" data-agent="${safeScope}" onclick="switchMsbMemoryAgent('${safeScope}')" style="flex:1;min-width:72px;font-size:11px;padding:4px 6px;display:inline-flex;align-items:center;justify-content:center;gap:5px;">${t.icon}<span>${escapeHtml(t.label)}</span></button>`;
   }).join('');
 }
 
@@ -338,7 +351,7 @@ async function rebalanceMasterMemory() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '⚖️ 리밸런싱';
+      btn.innerHTML = `<svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg><span>리밸런싱</span>`;
     }
   }
 }

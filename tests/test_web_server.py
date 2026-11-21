@@ -1439,7 +1439,7 @@ class TestVoiceRouteServing(AioHTTPTestCase):
 
         # renderMessagesForCurrentRoom 내부에서 liveRow(답변 생성 중)가 activeEntries 뒤, queuedEntries 앞에 배치되는 순서 검증
         render_start = content.index("function renderMessagesForCurrentRoom(")
-        render_block = content[render_start : render_start + 8000]
+        render_block = content[render_start : render_start + 12000]
         active_pos = render_block.index("activeEntries.forEach")
         live_pos = render_block.index("liveRow.className = 'msg assistant live-generating'")
         queued_pos = render_block.index("queuedEntries.forEach")

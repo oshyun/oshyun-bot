@@ -152,6 +152,46 @@
   font-size: calc(12px * var(--ui-scale, 1));
   color: var(--text-3);
 }
+.msb-agent-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.msb-agent-tabs .tab {
+  flex: 1;
+  font-size: calc(11px * var(--ui-scale, 1));
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 6px;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.14s ease;
+}
+.msb-agent-tabs .tab:hover {
+  color: var(--text-1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.msb-agent-tabs .tab.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-1);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.msb-agent-tabs .tab svg.i {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+
 .msb-mem-pipeline {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(0, 1fr);

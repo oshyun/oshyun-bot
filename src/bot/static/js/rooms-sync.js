@@ -135,15 +135,17 @@ function updateCoreAgentSlotUi() {
         const live = roomLiveStates[agent.id];
         const isRunning = Boolean(live && live.isRunning);
         const isActive = (currentRoomId === agent.id && currentView === 'chat');
-        const emoji = escapeHtml(agent.emoji || '🤖');
         const name = escapeHtml(agent.name || agent.id);
         const desc = escapeHtml(agent.roleDescription || '커스텀 전문 에이전트');
+        const iconHtml = (!agent.emoji || agent.emoji === '🤖')
+          ? getAgentMonolineIconSvg(agent.id)
+          : `<span class="agent-cfg-symbol">${escapeHtml(agent.emoji)}</span>`;
         return `
           <div class="expert-agent-node custom-agent-node" id="expert-node-${safeId}">
             <div class="sb-expert-row">
               <div class="core-agent-slot expert-slot ${isActive ? 'active' : ''} ${isRunning ? 'running' : ''}" id="custom-slot-${safeId}" onclick="selectRoom('${safeId}')" title="${desc}">
-                <div class="core-agent-icon" style="background:rgba(16,185,129,0.15);color:#10b981;font-size:13px;">
-                  <span>${emoji}</span>
+                <div class="core-agent-icon" style="background:rgba(16,185,129,0.15);color:#10b981;">
+                  ${iconHtml}
                 </div>
                 <div class="core-agent-body">
                   <div class="core-agent-top">
@@ -1713,26 +1715,41 @@ function getModelOptionsHtmlForAgentConfig(selectedModel) {
   return html;
 }
 
+function getAgentMonolineIconSvg(agentId, className = 'i') {
+  if (agentId === CORE_ROOM_ID || agentId === 'master') {
+    return `<svg class="${className}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>`;
+  }
+  if (agentId === EXPERT_VAULT_ROOM_ID || agentId === 'second_brain') {
+    return `<svg class="${className}" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>`;
+  }
+  if (agentId === EXPERT_CODING_ROOM_ID || agentId === 'bot_dev') {
+    return `<svg class="${className}" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+  }
+  return `<svg class="${className}" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>`;
+}
+
 function renderAgentConfigSelectorBar(activeId) {
   const bar = document.getElementById('agent-cfg-selector-bar');
   if (!bar) return;
   const list = Array.isArray(agentConfigs) && agentConfigs.length > 0
     ? agentConfigs
     : [
-        { id: CORE_ROOM_ID, name: '마스터 오케스트레이터', emoji: '👑', builtin: true },
-        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', emoji: '🧠', builtin: true },
-        { id: EXPERT_CODING_ROOM_ID, name: '봇개발', emoji: '💻', builtin: true },
+        { id: CORE_ROOM_ID, name: '마스터 오케스트레이터', builtin: true },
+        { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', builtin: true },
+        { id: EXPERT_CODING_ROOM_ID, name: '봇개발', builtin: true },
       ];
 
   const chipsHtml = list.map(a => {
     const isSel = (activeId && a.id === activeId);
     const safeId = escapeHtml(a.id);
-    const emoji = escapeHtml(a.emoji || '🤖');
     const name = escapeHtml(a.name || a.id);
     const badge = a.builtin ? '' : '<span class="agent-cfg-chip-tag">커스텀</span>';
+    const iconHtml = (a.builtin || !a.emoji || a.emoji === '🤖' || ['👑', '🧠', '💻'].includes(a.emoji))
+      ? getAgentMonolineIconSvg(a.id)
+      : `<span class="agent-cfg-symbol">${escapeHtml(a.emoji)}</span>`;
     return `
       <button type="button" class="agent-cfg-chip ${isSel ? 'active' : ''}" onclick="openAgentConfigModal('${safeId}')">
-        <span>${emoji}</span>
+        <span class="agent-cfg-chip-icon">${iconHtml}</span>
         <span>${name}</span>
         ${badge}
       </button>
@@ -1742,7 +1759,7 @@ function renderAgentConfigSelectorBar(activeId) {
   const isNewMode = !activeId;
   const addBtnHtml = `
     <button type="button" class="agent-cfg-chip is-new ${isNewMode ? 'active' : ''}" onclick="openAgentConfigModal(null)">
-      <span>➕</span>
+      <svg class="i" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       <span>새 에이전트 추가</span>
     </button>
   `;
@@ -1757,7 +1774,7 @@ function populateAgentConfigForm(targetAgentId = null) {
 
   renderAgentConfigSelectorBar(editingAgentId);
 
-  const iconEl = document.getElementById('agent-cfg-modal-icon');
+  const avatarEl = document.getElementById('agent-cfg-modal-avatar');
   const titleEl = document.getElementById('agent-cfg-modal-title');
   const subEl = document.getElementById('agent-cfg-modal-subtitle');
 
@@ -1766,7 +1783,7 @@ function populateAgentConfigForm(targetAgentId = null) {
   const formVals = cfg ? {
     id: cfg.id,
     name: cfg.name || '',
-    emoji: cfg.emoji || '🤖',
+    emoji: cfg.emoji || '',
     parentAgentId: cfg.parentAgentId || CORE_ROOM_ID,
     roleDescription: cfg.roleDescription || '',
     workdir: cfg.workdir || defaultVaultDir,
@@ -1780,7 +1797,7 @@ function populateAgentConfigForm(targetAgentId = null) {
   } : {
     id: '',
     name: '',
-    emoji: '🤖',
+    emoji: '',
     parentAgentId: CORE_ROOM_ID,
     roleDescription: '',
     workdir: defaultVaultDir,
@@ -1793,16 +1810,37 @@ function populateAgentConfigForm(targetAgentId = null) {
     systemPrompt: `# 커스텀 에이전트 전용 지침\n\n너는 사용자가 정의한 전문 에이전트다.\n- 직접 무거운 작업을 수행하거나 필요 시 \`session-ctl spawn --parent <자기ID>\` 로 하위 워커를 스폰할 수 있다.`,
   };
 
-  if (iconEl) iconEl.textContent = formVals.emoji || '⚙️';
+  if (avatarEl) {
+    if (!editingAgentId) {
+      avatarEl.innerHTML = `<svg class="i" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+    } else if (isBuiltin || !formVals.emoji || formVals.emoji === '🤖' || ['👑', '🧠', '💻'].includes(formVals.emoji)) {
+      avatarEl.innerHTML = getAgentMonolineIconSvg(editingAgentId);
+    } else {
+      avatarEl.innerHTML = `<span class="agent-cfg-avatar-symbol">${escapeHtml(formVals.emoji)}</span>`;
+    }
+  }
+
   if (titleEl) {
     titleEl.textContent = editingAgentId
       ? `${formVals.name || editingAgentId} 설정 및 하위 프롬프트 관리`
       : '새 커스텀 에이전트 추가';
   }
   if (subEl) {
-    subEl.textContent = editingAgentId
-      ? `ID: ${editingAgentId} · ${isBuiltin ? '기본 내장 에이전트' : '사용자 정의 에이전트'} — 하위 채팅 스폰 시 전달되는 프롬프트와 동작 규칙을 투명하게 제어합니다`
-      : '자신만의 전문 에이전트(예: 가계부 분석가, 독서 비서)의 역할, 작업 경로, 하위 채팅 전달 프롬프트를 정의합니다';
+    if (editingAgentId) {
+      const typeBadge = isBuiltin
+        ? `<span class="agent-cfg-type-pill builtin">기본 에이전트</span>`
+        : `<span class="agent-cfg-type-pill custom">커스텀 에이전트</span>`;
+      subEl.innerHTML = `
+        <span class="agent-cfg-id-badge">${escapeHtml(editingAgentId)}</span>
+        ${typeBadge}
+        <span class="agent-cfg-sub-desc">하위 세션 스폰 시 결합되는 프롬프트와 동작 정책을 투명하게 제어합니다</span>
+      `;
+    } else {
+      subEl.innerHTML = `
+        <span class="agent-cfg-type-pill new">신규 생성</span>
+        <span class="agent-cfg-sub-desc">새로운 전문 에이전트의 역할, 작업 경로, 하위 세션 전달 프롬프트를 정의합니다</span>
+      `;
+    }
   }
 
   const setVal = (id, val) => {
@@ -1827,9 +1865,9 @@ function populateAgentConfigForm(targetAgentId = null) {
     } else {
       parentSel.disabled = isBuiltin;
       parentSel.innerHTML = `
-        <option value="__core__">👑 마스터 직속 (__core__)</option>
-        <option value="__expert_vault__">🧠 세컨브레인 산하 (__expert_vault__)</option>
-        <option value="__expert_coding__">💻 봇개발 산하 (__expert_coding__)</option>
+        <option value="__core__">마스터 직속 (__core__)</option>
+        <option value="__expert_vault__">세컨브레인 산하 (__expert_vault__)</option>
+        <option value="__expert_coding__">봇개발 산하 (__expert_coding__)</option>
       `;
       parentSel.value = formVals.parentAgentId || CORE_ROOM_ID;
     }
@@ -1956,8 +1994,16 @@ function collectAgentConfigFormDraft() {
 
 function onAgentConfigFieldInput() {
   const draft = collectAgentConfigFormDraft();
-  const iconEl = document.getElementById('agent-cfg-modal-icon');
-  if (iconEl) iconEl.textContent = draft.emoji || '⚙️';
+  const avatarEl = document.getElementById('agent-cfg-modal-avatar');
+  if (avatarEl) {
+    if (!editingAgentId) {
+      avatarEl.innerHTML = `<svg class="i" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+    } else if (!draft.emoji || draft.emoji === '🤖' || ['👑', '🧠', '💻'].includes(draft.emoji)) {
+      avatarEl.innerHTML = getAgentMonolineIconSvg(editingAgentId);
+    } else {
+      avatarEl.innerHTML = `<span class="agent-cfg-avatar-symbol">${escapeHtml(draft.emoji)}</span>`;
+    }
+  }
 
   if (agentPromptPreviewTimer) clearTimeout(agentPromptPreviewTimer);
   agentPromptPreviewTimer = setTimeout(() => {
