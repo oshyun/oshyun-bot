@@ -701,6 +701,9 @@ function handleWsEvent(data) {
     return;
   }
   if (data.type === 'automation_updated' || data.type === 'scheduler_notice') {
+    if (data.type === 'scheduler_notice' && data.text && data.roomId !== currentRoomId) {
+      showToast(data.text, { roomId: data.roomId || CORE_ROOM_ID });
+    }
     if (currentView === 'automation' && typeof loadAutomationData === 'function') {
       loadAutomationData();
     }
@@ -835,7 +838,7 @@ function handleWsEvent(data) {
       let creatorLabel = '마스터 에이전트';
       if (resolvedParent === EXPERT_VAULT_ROOM_ID) creatorLabel = '세컨브레인 전문가';
       else if (resolvedParent === EXPERT_CODING_ROOM_ID) creatorLabel = '봇개발 전문가';
-      showToast(`${creatorLabel}가 새 세션 '${sRoom.title || rId}'을 생성했습니다.`);
+      showToast(`${creatorLabel}가 새 세션 '${sRoom.title || rId}'을 생성했습니다.`, { roomId: sRoom.id || rId });
     }
     return;
   }
@@ -958,6 +961,8 @@ function handleWsEvent(data) {
       setOrbState('thinking', liveState.feed);
       renderMessagesForCurrentRoom();
       updateSendButtonState();
+    } else if (targetRoom.isOrchestratorChild || data.channel === 'orchestrator' || data.channel === 'task_report' || targetRoom.byOrchestrator) {
+      showToast(`[${targetRoom.title}] 작업이 시작되었습니다.`, { roomId: targetRoom.id });
     }
   } else if (data.type === 'queued') {
     const qPos = data.position || data.queueSize || 1;
@@ -1178,7 +1183,7 @@ function handleWsEvent(data) {
       updateSessionBar();
       updateSendButtonState();
     } else {
-      showToast(`[${targetRoom.title}] 답변이 도착했습니다.`);
+      showToast(`[${targetRoom.title}] 답변이 도착했습니다.`, { roomId: targetRoom.id });
     }
 
     // 브라우저 및 시스템 레벨 알림 (백그라운드/다른 탭/다른 방)
@@ -1222,7 +1227,7 @@ function handleWsEvent(data) {
       renderMessagesForCurrentRoom();
       updateSendButtonState();
     } else {
-      showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`);
+      showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`, { roomId: targetRoom.id });
     }
     if (typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, errMsg, { isError: true });

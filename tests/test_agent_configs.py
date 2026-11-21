@@ -207,10 +207,23 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
                 "wait": False,
             }
         )
-        with (
+        import contextlib
+        import sys
+
+        patches = [
             mock.patch("web_execution.broadcast_ws_json", new=mock.AsyncMock()),
             mock.patch("web_execution.enqueue_room_turn", side_effect=fake_enqueue_room_turn),
-        ):
+        ]
+        if "web_server" in sys.modules:
+            ws_mod = sys.modules["web_server"]
+            if hasattr(ws_mod, "broadcast_ws_json"):
+                patches.append(mock.patch.object(ws_mod, "broadcast_ws_json", new=mock.AsyncMock()))
+            if hasattr(ws_mod, "enqueue_room_turn"):
+                patches.append(mock.patch.object(ws_mod, "enqueue_room_turn", side_effect=fake_enqueue_room_turn))
+
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             resp_disp = await web_orchestrator.handle_orchestrator_dispatch(req_dispatch)
         data_disp = json.loads(resp_disp.text)
         self.assertTrue(data_disp["ok"])
