@@ -426,6 +426,15 @@ async function selectRoom(roomId, options = {}) {
       updateMasterTopbarBadge();
     }
   }
+
+  // 대화방 단위 원장 읽음 처리 API 비동기 호출 (서버 영속 원장 동기화 보장)
+  if (roomId) {
+    fetch('/api/orchestrator/room/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId: roomId })
+    }).catch(err => console.warn('대화방 읽음 처리 서버 동기화 실패:', err));
+  }
   if (typeof syncRoomHistory === 'function') {
     const effectiveMode = (historyMode === 'push' && prevRoomId === roomId) ? 'replace' : historyMode;
     syncRoomHistory(roomId, effectiveMode);

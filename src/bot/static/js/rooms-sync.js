@@ -394,6 +394,14 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
         syncRoomHistory(currentRoomId, 'replace');
       }
 
+      // 현재 활성화된 방은 동기화 후에도 unread 가 부활하지 않도록 낙관적 상태 유지
+      if (currentRoomId) {
+        const curRoomObj = getRoomById(currentRoomId);
+        if (curRoomObj && curRoomObj.unread) {
+          curRoomObj.unread = false;
+        }
+      }
+
       if (Array.isArray(data.activeRuns)) {
         applyActiveRunsSnapshot(data.activeRuns, true);
       }
