@@ -86,5 +86,40 @@ class TestRunningIndicator(unittest.TestCase):
         self.assertNotIn("room-running", b)
 
 
+class TestUnreadClearOptimistic(unittest.TestCase):
+    def test_unread_clearing_logic_and_current_room_suppression(self):
+        b = read_static_bundle(STATIC_DIR)
+        # 1. selectRoom 내 낙관적 unread 해제 및 latestMasterTasks reviewed 처리 확인
+        self.assertIn("targetRoom.unread = false", b)
+        self.assertIn("t.reviewed = true", b)
+        self.assertIn("fetch('/api/orchestrator/task/update'", b)
+
+        # 2. 현재 선택된 방(isCur)은 읽음 점이 뜨지 않도록 억제하는 로직 확인
+        self.assertIn("const isCur = (r.id === currentRoomId);", b)
+        self.assertIn("const isUnread = !isCur && Boolean(r.unread || hasPendingTask);", b)
+
+        # 3. ws.js 응답 도착 시 현재 보고 있는 방이면 unread=false 유지 및 백그라운드 태스크 reviewed 동기화 확인
+        self.assertIn("targetRoom.unread = false;", b)
+        self.assertIn("targetRoom.unread = true;", b)
+
+
+
+class TestUnreadDotInstantClear(unittest.TestCase):
+    def test_unread_dot_instant_clear_logic(self):
+        b = read_static_bundle(STATIC_DIR)
+        # 1. selectRoom 에서 클릭 시 unread 및 tasks reviewed 즉시 해제 (낙관적 UI)
+        self.assertIn("targetRoom.unread = false;", b)
+        self.assertIn("t.reviewed = true;", b)
+        self.assertIn("/api/orchestrator/task/update", b)
+        
+        # 2. 현재 열려 있는 대화방(isCur)에서는 unread 및 pendingTask 파란 점이 생기지 않음
+        self.assertIn("const isCur = (r.id === currentRoomId);", b)
+        self.assertIn("const isUnread = !isCur && Boolean(r.unread || hasPendingTask);", b)
+        
+        # 3. ws.js result 수신 시 현재 보고 있는 방은 unread = false 유지, 다른 방은 unread = true
+        self.assertIn("if (targetRoom.id === currentRoomId) {", b)
+        self.assertIn("targetRoom.unread = false;", b)
+
+
 if __name__ == "__main__":
     unittest.main()

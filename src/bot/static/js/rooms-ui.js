@@ -402,6 +402,30 @@ async function selectRoom(roomId, options = {}) {
   // 방금 띄운 빈 새 대화방에서 아무런 말도 하지 않고 다른 대화방으로 이동할 때 목록에서 제거
   cleanUnusedEmptyRooms(roomId);
   currentRoomId = roomId;
+
+  // [낙관적 UI] 열람한 대화방의 읽음(unread) 및 연결된 태스크 검토(reviewed) 즉시 해제
+  const targetRoom = getRoomById(roomId);
+  if (targetRoom) {
+    targetRoom.unread = false;
+  }
+  if (Array.isArray(latestMasterTasks)) {
+    const tasksToReview = latestMasterTasks.filter(t => t && t.roomId === roomId && !t.reviewed);
+    tasksToReview.forEach(t => {
+      t.reviewed = true;
+      t.reviewedAt = Date.now() / 1000;
+      // 서버 동기화는 백그라운드로 안전하게 수행
+      if (t.id) {
+        fetch('/api/orchestrator/task/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: t.id, reviewed: true })
+        }).catch(err => console.warn('태스크 검토 서버 동기화 실패:', err));
+      }
+    });
+    if (tasksToReview.length > 0 && typeof updateMasterTopbarBadge === 'function') {
+      updateMasterTopbarBadge();
+    }
+  }
   if (typeof syncRoomHistory === 'function') {
     const effectiveMode = (historyMode === 'push' && prevRoomId === roomId) ? 'replace' : historyMode;
     syncRoomHistory(roomId, effectiveMode);
@@ -507,8 +531,9 @@ function renderMasterSubtaskTree(masterChildRooms) {
       const live = roomLiveStates[r.id];
       const isRunning = Boolean(live && live.isRunning);
       const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
-      const hasPendingTask = Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
-      const isUnread = Boolean(r.unread || hasPendingTask || isRunning);
+      const isCur = (r.id === currentRoomId);
+      const hasPendingTask = !isCur && Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
+      const isUnread = !isCur && Boolean(r.unread || hasPendingTask);
       const cls = [
         'sb-tree-item',
         r.id === currentRoomId ? 'active' : '',
@@ -589,6 +614,9 @@ function renderRoomList() {
         const isSelected = selectedRoomIds.has(String(r.id));
         const safeId = escapeHtml(r.id);
         const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
+        const isCur = (r.id === currentRoomId);
+        const hasPendingTask = !isCur && Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
+        const isUnread = !isCur && Boolean(r.unread || hasPendingTask);
 
         html.push(`
           <div class="room-item-wrap" data-room-id="${safeId}">
@@ -608,6 +636,7 @@ function renderRoomList() {
                   <span class="room-title">${escapeHtml(r.title || '새 대화')}</span>
                   ${queuedInRoom > 0 ? `<span class="room-queue-badge">대기 ${queuedInRoom}</span>` : ''}
                   ${relTime ? `<span class="room-time">${escapeHtml(relTime)}</span>` : ''}
+                  ${isUnread ? '<span class="sb-tree-dot" title="확인 필요"></span>' : ''}
                 </div>
                 ${r._searchSnippet ? `<div class="room-search-snippet">${escapeHtml(r._searchSnippet)}</div>` : ''}
               </div>
