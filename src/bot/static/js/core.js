@@ -30,7 +30,27 @@ const EXPERT_VAULT_ROOM_ID = '__expert_vault__';
 const EXPERT_VAULT_TITLE = '세컨브레인 에이전트';
 const EXPERT_CODING_ROOM_ID = '__expert_coding__';
 const EXPERT_CODING_TITLE = '봇개발 에이전트';
-const ORCHESTRATOR_ROOM_IDS = [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID];
+let ORCHESTRATOR_ROOM_IDS = [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID];
+let agentConfigs = [];
+let editingAgentId = null;
+
+function getAgentConfigById(agentId) {
+  if (!agentId) return null;
+  const clean = String(agentId).trim();
+  if (Array.isArray(agentConfigs)) {
+    const found = agentConfigs.find(a => a && a.id === clean);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isOrchestratorAgentRoomId(roomId) {
+  if (!roomId) return false;
+  const clean = String(roomId).trim();
+  if (ORCHESTRATOR_ROOM_IDS.includes(clean)) return true;
+  if (clean.startsWith('__custom_') && clean.endsWith('__')) return true;
+  return Boolean(getAgentConfigById(clean));
+}
 const CORE_ORCHESTRATOR_SUGGESTIONS = [
   { tag: '전체 세션 브리핑', title: '열려 있는 모든 채팅방(AGY 세션) 요약', prompt: '현재 열려 있는 모든 채팅방(AGY 세션) 목록을 조회하고 최근 진행 상황을 한눈에 브리핑해줘.' },
   { tag: '세션 상세 열람', title: '가장 최근 채팅방 대화 내용 분석', prompt: '가장 최근에 대화한 채팅방의 내용을 읽고 핵심 결론과 남은 할 일을 정리해줘.' },

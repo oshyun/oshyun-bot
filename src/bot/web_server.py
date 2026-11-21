@@ -225,6 +225,7 @@ from web_rooms import (
     handle_search_chat_rooms,
 )
 
+import agent_configs
 import web_orchestrator
 from web_orchestrator import (
     _WebServerSupervisorHost,
@@ -234,6 +235,10 @@ from web_orchestrator import (
     _is_room_currently_running,
     _resolve_orchestrator_target_room,
     ensure_core_orchestrator_room,
+    handle_orchestrator_agent_delete,
+    handle_orchestrator_agent_preview,
+    handle_orchestrator_agent_upsert,
+    handle_orchestrator_agents_get,
     handle_orchestrator_archive_session,
     handle_orchestrator_dispatch,
     handle_orchestrator_graph,
@@ -311,6 +316,8 @@ def build_status_payload() -> dict:
         ],
         "activeRuns": build_active_runs_payload(),
         "usage": get_cached_agy_usage(allow_refresh=True),
+        "agents": agent_configs.list_agent_configs(),
+        "orchestratorRoomIds": list(agent_configs.get_orchestrator_room_ids()),
     }
 
 
@@ -697,6 +704,12 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_post("/api/attachments/upload", handle_api_upload)
 
     # 총괄 에이전트 (Core Orchestrator) 모니터 REST API
+    web_app.router.add_get("/api/orchestrator/agents", handle_orchestrator_agents_get)
+    web_app.router.add_post("/api/orchestrator/agents", handle_orchestrator_agent_upsert)
+    web_app.router.add_post("/api/orchestrator/agents/delete", handle_orchestrator_agent_delete)
+    web_app.router.add_delete("/api/orchestrator/agents/{agent_id}", handle_orchestrator_agent_delete)
+    web_app.router.add_get("/api/orchestrator/agents/preview", handle_orchestrator_agent_preview)
+    web_app.router.add_post("/api/orchestrator/agents/preview", handle_orchestrator_agent_preview)
     web_app.router.add_get("/api/orchestrator/sessions", handle_orchestrator_sessions)
     web_app.router.add_get("/api/orchestrator/summaries", handle_orchestrator_summaries)
     web_app.router.add_get("/api/orchestrator/session/read", handle_orchestrator_read)

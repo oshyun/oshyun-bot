@@ -151,8 +151,29 @@ def _resolve_system_prompt(
     expert_coding: bool = False,
     coding: bool = False,
     web: bool = False,
+    agent_id: str | None = None,
 ) -> str:
     """실행 모드에 맞는 시스템 프롬프트를 반환한다."""
+    target_agent_id = agent_id
+    if not target_agent_id:
+        if orchestrator:
+            target_agent_id = "__core__"
+        elif expert_vault:
+            target_agent_id = "__expert_vault__"
+        elif expert_coding:
+            target_agent_id = "__expert_coding__"
+
+    if target_agent_id:
+        try:
+            import agent_configs
+            cfg = agent_configs.get_agent_config(target_agent_id)
+            if cfg and cfg.get("systemPrompt"):
+                common_content = _load_instruction_file("common")
+                agent_sys = str(cfg["systemPrompt"]).strip()
+                return f"{common_content}\n\n{agent_sys}".strip() if common_content else agent_sys
+        except Exception:
+            pass
+
     if orchestrator:
         return ORCHESTRATOR_SYSTEM_PROMPT
     if expert_vault:
@@ -348,6 +369,7 @@ class BaseEngine(ABC):
         expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
+        agent_id: str | None = None,
     ) -> dict:
         """반환 dict: {"cmd": list[str], "env": dict, "workdir": str}"""
         ...
@@ -402,10 +424,12 @@ class ClaudeEngine(BaseEngine):
         expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
+        agent_id: str | None = None,
     ) -> dict:
+        is_agent_mode = bool(orchestrator or expert_vault or expert_coding or agent_id)
         use_sandbox = (
             False
-            if (orchestrator or expert_vault or expert_coding)
+            if is_agent_mode
             else (SANDBOX_ENABLED if sandbox is None else sandbox)
         )
         claude_cmd = _resolve_claude_bin()
@@ -427,8 +451,9 @@ class ClaudeEngine(BaseEngine):
             expert_coding=expert_coding,
             coding=coding,
             web=web,
+            agent_id=agent_id,
         )
-        if not orchestrator and not expert_vault and not expert_coding:
+        if not is_agent_mode:
             quota_alert = get_quota_alert_prompt()
             if quota_alert:
                 system_prompt = f"{system_prompt}\n\n{quota_alert}" if system_prompt else quota_alert
@@ -453,7 +478,7 @@ class ClaudeEngine(BaseEngine):
         os.makedirs(_AGENT_TMP_DIR, exist_ok=True)
         env["AGENT_CODE_TMPDIR"] = _AGENT_TMP_DIR
         env["AGENT_CONFIG_DIR"] = _AGENT_HOME_DIR
-        if orchestrator or expert_vault or expert_coding:
+        if is_agent_mode:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             env["PATH"] = f"{scripts_dir}:{env.get('PATH', '')}"
         if extra_env:
@@ -535,8 +560,10 @@ class AGYEngine(BaseEngine):
         expert_coding: bool = False,
         web: bool = False,
         extra_env: dict[str, str] | None = None,
+        agent_id: str | None = None,
     ) -> dict:
         agy_cmd = _resolve_agy_bin()
+        is_agent_mode = bool(orchestrator or expert_vault or expert_coding or agent_id)
 
         cmd = [
             agy_cmd,
@@ -565,6 +592,17 @@ class AGYEngine(BaseEngine):
             )
         )
         mode_dir = get_instruction_dir(mode_name)
+        target_agent_id = agent_id or (
+            "__core__" if orchestrator else ("__expert_vault__" if expert_vault else ("__expert_coding__" if expert_coding else None))
+        )
+        if target_agent_id:
+            try:
+                import agent_configs
+                rt_dir = agent_configs.get_runtime_instruction_dir(target_agent_id)
+                if rt_dir and os.path.isdir(rt_dir):
+                    mode_dir = rt_dir
+            except Exception:
+                pass
 
         if os.path.isdir(common_dir):
             cmd += ["--add-dir", common_dir]
@@ -573,7 +611,7 @@ class AGYEngine(BaseEngine):
 
         if workdir:
             cmd += ["--add-dir", workdir]
-        if orchestrator or expert_vault or expert_coding:
+        if is_agent_mode:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             if os.path.isdir(scripts_dir):
                 cmd += ["--add-dir", scripts_dir]
@@ -589,7 +627,7 @@ class AGYEngine(BaseEngine):
             cmd += ["--effort", valid_effort]
 
         use_sandbox = True if sandbox is None else sandbox
-        if use_sandbox and not coding and not orchestrator and not expert_vault and not expert_coding:
+        if use_sandbox and not coding and not is_agent_mode:
             cmd += ["--sandbox"]
         if extra_args:
             cmd += extra_args
@@ -605,7 +643,7 @@ class AGYEngine(BaseEngine):
         ):
             env.pop(k, None)
 
-        if orchestrator or expert_vault or expert_coding:
+        if is_agent_mode:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")
             env["PATH"] = f"{scripts_dir}:{env.get('PATH', '')}"
         if extra_env:

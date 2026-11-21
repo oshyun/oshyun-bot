@@ -117,6 +117,7 @@ def _build_invocation(
     expert_coding: bool = False,
     web: bool = False,
     extra_env: dict[str, str] | None = None,
+    agent_id: str | None = None,
 ) -> dict:
     """엔진(claude / agy) 호출의 명령행·환경변수·정규화된 workdir 를 담은 dict 를 만든다."""
     workdir = os.path.realpath(workdir)
@@ -138,6 +139,7 @@ def _build_invocation(
         expert_coding=expert_coding,
         web=web,
         extra_env=extra_env,
+        agent_id=agent_id,
     )
 
 
@@ -203,12 +205,14 @@ def _inject_quota_alert_for_agy(
     orchestrator: bool = False,
     expert_vault: bool = False,
     expert_coding: bool = False,
+    agent_id: str | None = None,
 ) -> str:
     """AGY 엔진은 --append-system-prompt 가 없으므로 쿼터 부족 시 프롬프트 상단에 [QUOTA ALERT] 를 주입한다."""
     if (
         orchestrator
         or expert_vault
         or expert_coding
+        or agent_id
         or slash_commands
         or not prompt
         or prompt.lstrip().startswith(("/", "[QUOTA ALERT]"))
@@ -239,6 +243,7 @@ def spawn_agent(
     expert_coding: bool = False,
     web: bool = False,
     extra_env: dict[str, str] | None = None,
+    agent_id: str | None = None,
 ) -> subprocess.Popen:
     """에이전트를 **분리된 세션(setsid)** 으로 띄우고 stream-json 을 out_file 에 기록한다."""
     effective_prompt = _inject_quota_alert_for_agy(
@@ -247,6 +252,7 @@ def spawn_agent(
         orchestrator=orchestrator,
         expert_vault=expert_vault,
         expert_coding=expert_coding,
+        agent_id=agent_id,
     )
     invocation = _build_invocation(
         effective_prompt,
@@ -263,6 +269,7 @@ def spawn_agent(
         expert_coding=expert_coding,
         web=web,
         extra_env=extra_env,
+        agent_id=agent_id,
     )
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
     out_handle = open(out_file, "wb")
