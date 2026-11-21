@@ -173,7 +173,7 @@ class TestWebExecutionOnComplete(unittest.IsolatedAsyncioTestCase):
         mock_notify.assert_awaited_once()
         self.assertFalse(mock_notify.call_args.kwargs["is_success"])
 
-    async def test_execute_chat_turn_user_cancel_fires_on_complete_and_notifies(self):
+    async def test_execute_chat_turn_user_cancel_fires_on_complete_and_skips_notify(self):
         captured: list[dict] = []
 
         async def on_complete(ev: dict) -> None:
@@ -205,7 +205,8 @@ class TestWebExecutionOnComplete(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(captured), 1)
         self.assertFalse(captured[0]["ok"])
         self.assertEqual(captured[0]["status"], "cancelled")
-        mock_notify.assert_awaited_once_with("room-sub-cancel", "mt-cancel-1", "작업이 취소되었습니다.", is_success=False)
+        # 사용자가 명시적으로 중단한 작업은 상위 에이전트 강제 재실행을 막기 위해 부모 통지를 건너뛴다
+        mock_notify.assert_not_called()
 
     async def test_execute_chat_turn_shutdown_detach_skips_on_complete(self):
         captured: list[dict] = []

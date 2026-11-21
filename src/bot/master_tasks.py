@@ -39,6 +39,17 @@ ATTENTION_STATUSES = ("done", "failed", "stalled", "lost")
 TERMINAL_STATUSES = ("done", "failed", "lost", "cancelled", "closed")
 ALL_STATUSES = ACTIVE_STATUSES + ("done", "failed", "lost", "cancelled", "closed")
 
+
+def is_task_aborted(task: dict | None) -> bool:
+    """사용자가 명시적으로 중단(cancelled)했거나 중단 확인(user_confirmed/user_cancelled)된 작업인지 판별한다."""
+    if not isinstance(task, dict):
+        return False
+    return bool(
+        task.get("user_cancelled")
+        or task.get("user_confirmed")
+        or task.get("status") == "cancelled"
+    )
+
 # 종결 작업 및 채팅 요약은 최신 N건만 보존한다(원장 비대화 방지). 진행 중 작업은 항상 보존.
 MAX_TERMINAL_KEEP = 200
 MAX_NOTES = 10
@@ -291,11 +302,14 @@ def needs_attention(task: dict) -> bool:
     """마스터 LLM 개입/복구가 필요한 작업인지 판별한다.
 
     - reviewed=True 인 작업은 제외한다.
+    - 사용자가 명시적으로 중단(cancelled/user_cancelled/user_confirmed)한 작업은 어떤 경우에도 제외한다.
     - failed / stalled / lost 상태는 비정상·미응답이므로 항상 검토가 필요하다.
     - done 상태는 비동기 위임인데 아직 마스터에게 보고(reportedAt)되지 않은 경우에만 검토가 필요하다
       (이미 보고 완료되었거나 동기 호출 wait=True 인 정상 완료 작업은 제외).
     """
     if task.get("reviewed"):
+        return False
+    if is_task_aborted(task):
         return False
     status = task.get("status")
     if status in ("failed", "stalled", "lost"):
@@ -338,6 +352,8 @@ def create_task(
         "error": "",
         "reviewed": False,
         "reviewedAt": None,
+        "user_cancelled": False,
+        "user_confirmed": False,
         "notes": [],
     }
     with _lock:
@@ -376,6 +392,29 @@ def update_task(task_id: str, *, note: str | None = None, **fields: Any) -> dict
         new_status = fields.get("status")
         if new_status and new_status not in ALL_STATUSES:
             raise ValueError(f"알 수 없는 작업 상태: {new_status}")
+
+        # 사용자가 이미 명시적으로 중단한 작업은 force=True 가 아니면
+        # active(queued/running/stalled) 상태로 부활시키거나 덮어쓰지 못하도록 엄격히 차단한다.
+        if is_task_aborted(task) and not fields.get("force", False):
+            if new_status and new_status in ACTIVE_STATUSES:
+                fields.pop("status", None)
+                new_status = task.get("status")
+
+        # 작업이 cancelled 로 변경되거나 명시적 취소 플래그가 들어온 경우:
+        # user_cancelled, user_confirmed, reviewed 를 True 로 강제 확정하여
+        # 상위 에이전트 감독/재시도 루프에서 영구 배제한다.
+        if (
+            new_status == "cancelled"
+            or fields.get("user_cancelled")
+            or fields.get("user_confirmed")
+        ):
+            fields["status"] = "cancelled"
+            fields["user_cancelled"] = True
+            fields["user_confirmed"] = True
+            fields["reviewed"] = True
+            if "reviewedAt" not in fields:
+                fields["reviewedAt"] = now
+
         if new_status and new_status != task.get("status") and "reviewed" not in fields:
             # 새 결과(완료/실패/정체)가 나오면 이전 검토 완료 표시는 무효다.
             # 단, 이미 보고(reportedAt)되었거나 동기 대기(wait=True)로 결과를 전달한 done 작업은 자동 검토 완료.
@@ -455,6 +494,8 @@ def unreported_async_tasks(*, now: float, max_age: float, min_age: float = 20.0)
     """종결됐지만 마스터에게 아직 보고되지 않은 비동기 위임 작업(안전망 대상)."""
     out = []
     for t in _load()["tasks"].values():
+        if is_task_aborted(t) or t.get("status") == "cancelled" or t.get("reviewed"):
+            continue
         if t.get("status") not in ("done", "failed", "lost") or t.get("wait") or t.get("reportedAt"):
             continue
         if t.get("origin") != "dispatch":

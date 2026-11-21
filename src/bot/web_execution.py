@@ -280,6 +280,12 @@ async def _restore_pending_room_turns() -> None:
     for item in items:
         if not isinstance(item, dict) or not item.get("user_text"):
             continue
+        pending_tid = item.get("task_id")
+        if pending_tid:
+            t_rec = master_tasks.get_task(pending_tid)
+            if t_rec and _is_task_rec_aborted(t_rec):
+                logger.info("[web_jobs] 취소된 태스크(%s) 대기열 복원 제외", pending_tid)
+                continue
         try:
             await enqueue_room_turn(
                 room_id=item.get("room_id"),
@@ -650,10 +656,34 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
                     fut = item.get("result_future") if isinstance(item, dict) else None
                     if fut is not None and not fut.done():
                         fut.set_exception(asyncio.CancelledError("작업이 취소되었습니다."))
+                    queued_tid = item.get("task_id") if isinstance(item, dict) else None
+                    if queued_tid:
+                        master_tasks.update_task(
+                            queued_tid,
+                            status="cancelled",
+                            user_cancelled=True,
+                            user_confirmed=True,
+                            reviewed=True,
+                            error="대기열에서 취소됨",
+                            finishedAt=time.time(),
+                        )
                     q.task_done()
                     was_running = True
                 except Exception:
                     break
+
+        snap = _room_live_snapshots.get(r_key)
+        snap_tid = snap.get("taskId") if isinstance(snap, dict) else None
+        if snap_tid:
+            master_tasks.update_task(
+                snap_tid,
+                status="cancelled",
+                user_cancelled=True,
+                user_confirmed=True,
+                reviewed=True,
+                error="사용자에 의해 작업이 취소되었습니다.",
+                finishedAt=time.time(),
+            )
 
         pid = _active_agent_pids.pop(r_key, None)
         if pid is not None:
@@ -702,6 +732,17 @@ def is_room_completion_recently_reported(room_id: str | None, ttl: float = 120.0
     return False
 
 
+def _is_task_rec_aborted(rec: Any) -> bool:
+    """작업 레코드가 명시적으로 중단/취소되었는지 안전하게 판별한다(Mocking 내성)."""
+    if not isinstance(rec, dict):
+        return False
+    return bool(
+        rec.get("user_cancelled")
+        or rec.get("user_confirmed")
+        or rec.get("status") == "cancelled"
+    )
+
+
 async def _invoke_on_complete_hook(
     on_complete: Callable[[dict[str, Any]], Any] | None,
     event: dict[str, Any],
@@ -740,11 +781,25 @@ async def _finalize_orchestrator_completion(
 ) -> None:
     """턴 종료 시 작업 원장 갱신, 사용자 정의 on_complete 훅 호출, 부모 에이전트 자동 보고를 일원화한다."""
     is_wait = False
+    is_user_aborted = (status == "cancelled")
     if task_id:
         _rec = master_tasks.get_task(task_id) or {}
         is_wait = bool(_rec.get("wait"))
+        if not is_user_aborted and _is_task_rec_aborted(_rec):
+            is_user_aborted = True
         _now_done = time.time()
-        if status == "done":
+        if is_user_aborted:
+            master_tasks.update_task(
+                task_id,
+                status="cancelled",
+                user_cancelled=True,
+                user_confirmed=True,
+                reviewed=True,
+                reviewedAt=_now_done,
+                finishedAt=_now_done,
+                error=(error_text or result_text or "사용자에 의해 작업이 취소되었습니다.")[:400],
+            )
+        elif status == "done":
             done_fields: dict[str, Any] = {
                 "status": "done",
                 "finishedAt": _now_done,
@@ -768,8 +823,8 @@ async def _finalize_orchestrator_completion(
     await _invoke_on_complete_hook(
         on_complete,
         {
-            "ok": is_success,
-            "status": status,
+            "ok": is_success and not is_user_aborted,
+            "status": "cancelled" if is_user_aborted else status,
             "roomId": room_id,
             "taskId": task_id,
             "channel": channel,
@@ -780,8 +835,18 @@ async def _finalize_orchestrator_completion(
         },
     )
 
+    # 사용자가 명시적으로 중단(cancelled)한 작업은 부모 에이전트에게 오류 보고를 보내지 않는다.
+    # 부모 에이전트가 실패 보고를 받고 '재시도'를 수행하여 중단된 작업을 강제로 재실행하는 루프를 차단한다.
+    if is_user_aborted:
+        logger.info(
+            "[web_execution] 사용자에 의해 명시적으로 중단된 작업 — 부모 에이전트 재시도/보고 차단 (room=%s, task=%s)",
+            room_id,
+            task_id,
+        )
+        return
+
     # 비동기 위임(--async)은 마스터가 응답을 기다리지 않으므로 서버 내장 완료 훅이 직접 보고 턴을 건다.
-    # 실패(오류·중단·타임아웃·취소·잘못된 모델)는 사용자가 UI 에서 직접 띄운 하위 채팅(부모 지정 방)도 부모에게 보고한다.
+    # 실패(오류·중단·타임아웃·잘못된 모델)는 사용자가 UI 에서 직접 띄운 하위 채팅(부모 지정 방)도 부모에게 보고한다.
     # 부모/보고 턴 자체(is_orchestrator, task_report 채널)는 제외해 오류 보고의 재귀 루프를 차단한다.
     if is_orchestrator or is_wait or channel in child_error_report.NO_REPORT_CHANNELS:
         return
@@ -1221,6 +1286,15 @@ async def _watch_and_finish_web_job(
     session_id = rec.get("session_id")
     session_namespace = rec.get("session_namespace", "")
     task_id = rec.get("task_id")
+    task_rec = master_tasks.get_task(task_id) if task_id else None
+    if task_rec and _is_task_rec_aborted(task_rec):
+        logger.info("[web_jobs] 기동 시 복구 대상 작업이 이미 취소/중단됨 — 재실행 차단: %s (task=%s)", job_id, task_id)
+        if pid and detached_pid_alive(pid):
+            kill_job_fn = _get_mod_attr("kill_job", kill_job)
+            kill_job_fn(pid)
+        _remove_web_job(job_id)
+        _remove_job_files(out_file, err_file)
+        return
     is_orchestrator = (room_id in ORCHESTRATOR_ROOM_IDS)
 
     current_watch_agent = _get_mod_attr("watch_agent", watch_agent)
@@ -1538,6 +1612,15 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
         return
 
     task_id = rec.get("task_id")
+    task_rec = master_tasks.get_task(task_id) if task_id else None
+    if task_rec and _is_task_rec_aborted(task_rec):
+        logger.info("[web_jobs] 기동 시 복구 대상 작업이 이미 취소/중단됨 — 재실행 차단: %s (task=%s)", job_id, task_id)
+        if pid and detached_pid_alive(pid):
+            kill_job_fn = _get_mod_attr("kill_job", kill_job)
+            kill_job_fn(pid)
+        _remove_web_job(job_id)
+        _remove_job_files(out_file, err_file)
+        return
 
     if not out_file or not os.path.exists(out_file):
         if msg_id:
@@ -1676,8 +1759,21 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
         and not agent_output.get("interrupted")
         and reply_text not in ("⚠️ 서버 재시작으로 답변이 중단되었습니다.", "⚠️ 작업이 중단되었습니다.")
     )
+    is_user_cancelled_reply = bool(
+        reply_text and ("🛑" in reply_text or "사용자에 의해 실행이 중단되었습니다" in reply_text or "작업이 취소되었습니다" in reply_text)
+    )
     if task_id:
-        if is_success:
+        if is_user_cancelled_reply or (task_rec and _is_task_rec_aborted(task_rec)):
+            master_tasks.update_task(
+                task_id,
+                status="cancelled",
+                user_cancelled=True,
+                user_confirmed=True,
+                reviewed=True,
+                finishedAt=time.time(),
+                error="사용자에 의해 작업이 취소되었습니다.",
+            )
+        elif is_success:
             master_tasks.update_task(
                 task_id,
                 status="done",
@@ -1914,7 +2010,27 @@ async def reap_zombie_sessions(
                     logger.warning("[zombie_reaper] DB 메시지 회수 갱신 실패 (%s): %s", asst_msg_id, db_err)
 
         task_id = (snap.get("taskId") if snap else None) or (job_rec.get("task_id") if job_rec else None)
-        if task_id:
+        task_rec = master_tasks.get_task(task_id) if task_id else None
+        is_user_aborted = (
+            room_id in _user_cancelled_rooms
+            or (task_rec and _is_task_rec_aborted(task_rec))
+            or (stream_txt and ("🛑" in stream_txt or "사용자에 의해 실행이 중단되었습니다" in stream_txt))
+        )
+        if is_user_aborted:
+            if task_id:
+                try:
+                    master_tasks.update_task(
+                        task_id,
+                        status="cancelled",
+                        user_cancelled=True,
+                        user_confirmed=True,
+                        reviewed=True,
+                        finishedAt=now,
+                        error="사용자에 의해 취소된 작업 회수",
+                    )
+                except Exception:
+                    pass
+        elif task_id:
             try:
                 master_tasks.update_task(
                     task_id,
