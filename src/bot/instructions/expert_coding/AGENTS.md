@@ -11,10 +11,12 @@
 
 ## 2. 하위 코딩 세션 스폰 규격
 - **명령어 (비동기 필수, `--wait` 절대 금지)**:
-  `session-ctl spawn "<작업제목>" "<핵심 작업 요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`
+  `session-ctl spawn "<작업제목>" "<핵심 과업 목표 및 요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`
   - 모델 (12/31까지 Flash 50% 할인): 코딩 작업도 기본적으로 `gemini-3.8-flash (medium)` 사용 (12/31까지 Flash 토큰 50% 할인 중이므로 가능하면 Flash 우선 사용), 굉장히 복잡한 코딩에 한해서만 `gemini-4-argon (medium)` 사용.
-- **프롬프트 전달 원칙**:
-  - 하위 워커는 리포 루트의 `AGENTS.md`(워크트리 필수, 단위 테스트, `/simplify`, main merge, restart, push)를 자동 로드하므로 5대 원칙 전문을 중복 기재하지 말고, **작업 요구사항(기능, 증상, 대상 파일)**만 간결히 전달.
+- **프롬프트 전달 원칙 (정적 규칙 복사 금지)**:
+  - 하위 워커는 리포 루트의 `AGENTS.md`(워크트리 필수, 단위 테스트, `/simplify`, main merge, restart, push) 및 `rules/`를 자동 로드한다.
+  - 5대 원칙 전문이나 세부 명령어를 프롬프트 본문에 중복 기재하지 마라.
+  - 지시 시에는 **과업 목표, 핵심 요구사항, 대상 파일/파라미터** 등 필수 동적 컨텍스트만 간결히 전달한다.
 - **메모리 리밸런싱**: 항상 자기 자신 하위(`--parent __expert_coding__`)로 스폰.
 
 ## 3. 착수 및 완료 보고 검수

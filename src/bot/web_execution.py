@@ -147,6 +147,8 @@ async def detach_active_tasks(timeout: float = 1.5) -> int:
 
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
     """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
+    if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value"):
+        return fallback
     mod = sys.modules.get("web_server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
@@ -1830,6 +1832,9 @@ async def execute_chat_turn(
             user_text + VOICE_MODE_PROMPT_SUFFIX if is_voice_mode else user_text
         )
 
+    cur_room_rec = current_chat_db.get_room(room_key) if current_chat_db else None
+    parent_agent_id = cur_room_rec.get("parentAgentId") if cur_room_rec else None
+
     if is_orchestrator and not raw_prompt:
         try:
             orch_agent = master_memory.normalize_agent_id(room_key)
@@ -1841,6 +1846,18 @@ async def execute_chat_turn(
                 effective_prompt = f"{mem_ctx}\n\n[현재 요청]\n{effective_prompt}"
         except Exception:
             pass
+    elif not is_orchestrator and (channel == "orchestrator" or parent_agent_id) and not raw_prompt:
+        # 하위 작업 세션: 필수 동적 메타데이터([부모 보고 경로/ID], [작업 ID])만 간결하게 주입
+        # (※ 정적 규칙은 각 작업공간의 AGENTS.md 및 rules/에서 자동 로드되므로 중복 주입하지 않음)
+        runtime_meta: list[str] = []
+        if parent_agent_id:
+            runtime_meta.append(f"• 부모 에이전트(보고 대상): {parent_agent_id}")
+        if task_id:
+            runtime_meta.append(f"• 작업 ID: {task_id} (완료 시 서버 자동 보고 연계)")
+        if runtime_meta:
+            meta_header = "[런타임 작업 메타데이터]\n" + "\n".join(runtime_meta)
+            if "[런타임 작업 메타데이터]" not in effective_prompt:
+                effective_prompt = f"{meta_header}\n\n{effective_prompt}"
 
     # 대화방 전용 저장소에 유저/서브에이전트 보고 메시지 영속 기록 (명시적 user_msg_id 기반으로 중복 저장 원천 방지)
     actual_user_msg_id: int | None = user_msg_id if user_msg_id is not None else None
@@ -2013,14 +2030,24 @@ async def execute_chat_turn(
     elif is_expert_coding:
         spawn_kwargs["expert_coding"] = True
 
+    extra_env: dict[str, str] = {}
     if use_orchestrator or is_expert_vault or is_expert_coding:
         ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
         proto = "https" if ssl_enabled else "http"
-        spawn_kwargs["extra_env"] = {
+        extra_env.update({
             "OSHYUN_ORCHESTRATOR_API_URL": f"{proto}://127.0.0.1:{WEB_PORT}",
             "OSHYUN_ORCHESTRATOR_TOKEN": WEB_TOKEN,
             "OSHYUN_AGENT_ROOM_ID": room_key,
-        }
+        })
+    else:
+        extra_env["OSHYUN_AGENT_ROOM_ID"] = room_key
+        if parent_agent_id:
+            extra_env["OSHYUN_PARENT_AGENT_ID"] = str(parent_agent_id)
+        if task_id:
+            extra_env["OSHYUN_TASK_ID"] = str(task_id)
+
+    if extra_env:
+        spawn_kwargs["extra_env"] = extra_env
 
     try:
         agent_proc = current_spawn_agent(

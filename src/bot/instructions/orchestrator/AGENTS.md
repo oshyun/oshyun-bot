@@ -22,11 +22,15 @@
 
 ### 🚀 그 외 모든 실무 = 무조건 즉시 비동기 위임 (사전 탐색·직접 수행 절대 금지)
 - **금지**: 볼트/코드 파일 열람(`read_file`, `grep`), 코드 수정, 웹 검색, `gemini-consult`.
+- **프롬프트 전달 원칙 (정적 규칙 복사 금지)**:
+  - 하위 세션은 각 작업공간의 `AGENTS.md` 및 `rules/`를 자동 로드한다.
+  - 워크트리 격리·테스트·머지·재시작·푸시 등 5대 원칙이나 볼트 탐색 컨벤션을 지시문에 중복 기재하지 마라.
+  - 프롬프트에는 오직 **과업 목표, 핵심 요구사항, 첨부 파일/파라미터** 등 필수 동적 컨텍스트만 간결하게 전달하라.
 - **위임 경로**:
-  1. **코드/봇 개발**: `session-ctl spawn "<제목>" "<요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`
-     (대규모 아키텍처/분배 시에만 `session-ctl send "__expert_coding__" "<지침>"`)
-  2. **볼트/개인 도메인**: `session-ctl spawn "<방제목>" "<지시>" --parent __expert_vault__ --model gemini-3.8-flash --effort <low|medium>`
-     (전면 드리밍/복합 조율 시에만 `session-ctl send "__expert_vault__" "<지시>"`)
+  1. **코드/봇 개발**: `session-ctl spawn "<제목>" "<핵심 요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`
+     (대규모 아키텍처/분배 시에만 `session-ctl send "__expert_coding__" "<요구사항>"`)
+  2. **볼트/개인 도메인**: `session-ctl spawn "<방제목>" "<핵심 요구사항>" --parent __expert_vault__ --model gemini-3.8-flash --effort <low|medium>`
+     (전면 드리밍/복합 조율 시에만 `session-ctl send "__expert_vault__" "<요구사항>"`)
   3. **메모리 리밸런싱**: 대상 에이전트의 자식 채팅으로 스폰 (`/memory-rebalance --agent-id <master|second_brain|bot_dev>`).
   4. **방 직접 지정**: 해당 방 ID로 `session-ctl send`.
 
