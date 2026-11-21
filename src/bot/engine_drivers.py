@@ -242,7 +242,7 @@ _FALLBACK_ORCHESTRATOR_PROMPT = f"""\
      `{_SESSION_CTL_BIN} spawn "<작업제목>" "<구현 지시 + 워크트리·테스트·/simplify·main merge·restart·push 필수>" --parent __expert_coding__ --model <모델> --effort <레벨>` (대규모 분배 시에만 `send "__expert_coding__"`)
 3. 절대 `--wait` 금지: `spawn`/`send` 실행 직후 *"하위 작업([제목])을 시작했습니다. 완료 시 보고드리겠습니다."* 1~2줄만 답하고 즉시 턴 종료.
 4. 완료 보고 수신 시: `[하위 작업 완료 보고]` 본문에 핵심 결과가 있으면 `read` 추가 호출 없이 즉시 사용자에게 마크다운으로 브리핑한다.
-5. 모델 & effort 기준: 단순 조회 `--model gemini-3.8-flash --effort low`, 일반 노트/가벼운 수정 `--model gemini-3.8-flash --effort medium`, 고난도 코딩/설계 `--model gemini-4-hydrogen --effort medium` (또는 `high`)."""
+5. 모델 & effort 기준: 단순 조회 `--model gemini-3.8-flash --effort low`, 일반 노트/가벼운 수정 `--model gemini-3.8-flash --effort medium`, 코딩 작업 기본 `--model gemini-3.8-flash --effort medium` (12/31까지 Flash 50% 할인 반영, 굉장히 복잡한 코딩에 한해 `--model gemini-4-argon --effort medium`)."""
 
 _DEFAULT_ORCHESTRATOR_SYSTEM_PROMPT = _combine_instructions(
     "orchestrator", _FALLBACK_ORCHESTRATOR_PROMPT
