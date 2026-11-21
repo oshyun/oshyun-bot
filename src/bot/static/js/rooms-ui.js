@@ -520,7 +520,7 @@ function renderMasterSubtaskTree(masterChildRooms) {
           <svg class="i sb-tree-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span class="sb-tree-title">${escapeHtml(r.title || fallbackLabel)}</span>
           ${relTime ? `<span class="sb-tree-time">${escapeHtml(relTime)}</span>` : ''}
-          ${isUnread ? '<span class="sb-tree-dot"></span>' : ''}
+          ${isRunning ? '<span class="run-label">실행 중</span><span class="run-spinner" role="status" aria-label="실행 중"></span>' : (isUnread ? '<span class="sb-tree-dot"></span>' : '')}
           <button type="button" class="sb-tree-del-btn" onclick="event.stopPropagation();deleteRoom(event, '${safeId}')" title="삭제">✕</button>
         </div>
       `;
@@ -598,11 +598,11 @@ function renderRoomList() {
                 <span>삭제</span>
               </button>
             </div>
-            <div class="room-item ${r.id === currentRoomId ? 'active' : ''} ${isSelected ? 'selected' : ''}"
+            <div class="room-item ${r.id === currentRoomId ? 'active' : ''} ${isRunning ? 'running' : ''} ${isSelected ? 'selected' : ''}"
                  data-room-id="${safeId}"
                  onclick="onRoomItemClick(event, '${safeId}')">
               <span class="room-check" onclick="toggleRoomSelection('${safeId}', event)">${ICONS.check}</span>
-              ${isRunning ? '<span class="room-running"></span>' : ''}
+              ${isRunning ? '<span class="run-spinner" role="status" aria-label="실행 중"></span>' : ''}
               <div class="room-body">
                 <div class="room-row-top">
                   <span class="room-title">${escapeHtml(r.title || '새 대화')}</span>
