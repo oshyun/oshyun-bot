@@ -140,7 +140,7 @@ def get_quota_alert_prompt(
     return (
         f"[QUOTA ALERT] 현재 AGY Gemini 잔여 쿼터가 부족합니다({status_str}; 최저 {min_pct:.1f}% < {threshold:.0f}%). "
         "고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링 작업 시 자체 AGY 토큰을 소모하지 말고 "
-        "1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50`)를 호출하여 오프로드하세요."
+        "1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50 --effort medium`)를 호출하여 오프로드하세요."
     )
 
 

@@ -23,9 +23,9 @@
 > 마스터 및 전문가는 직접 파일을 읽지 않고 즉시 하위 세션을 스폰/위임한다.
 - **Vault-First (볼트 최우선)**: 볼트 정보로 답할 수 있으면 웹 검색 금지, 즉시 1회 답변 완료. (외부 정보 필요 시 말미에 제안만).
 - **웹 검색 제한**: 볼트에 전혀 없거나 사용자가 명시 요구 시에만 최소 쿼리(1~2회)로 수행.
-- **Gemini API (`gemini-consult`) 오프로드 (Hard Constraint)**:
-  - **AGY 잔여 쿼터 < 50% (또는 `[QUOTA ALERT]` 수신) 시**: 고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링·복잡한 디버깅 가설 수립 시 자체 AGY 토큰으로 길게 추론하지 말고 **1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50`) 호출을 강제**한다.
-  - **AGY 잔여 쿼터 ≥ 50% 시**: 중대 아키텍처/보안 교차검증에 한해 최소 페이로드(3~5줄 요약)로 제한 사용.
+- **Gemini API (`gemini-consult`) 의사결정 자문 모드 (테스트 기간 적극 호출)**:
+  - **토큰 현황 무관 적극 호출**: 테스트 기간 동안에는 AGY 잔여 쿼터와 관계없이 아키텍처/설계 결정, 라이브러리/자료구조 선택, 복잡한 로직/알고리즘 구현 방안, 리팩토링 방식, 디버깅 가설 검증, DB/API 인터페이스 변경 등 **대부분의 의사결정이 필요한 상황에서 선제적으로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py`)를 호출하여 외부 세컨드 오피니언을 얻고 진행**한다.
+  - **Flash Medium / Low 엄격 제한**: 모델은 반드시 Flash 계열(`gemini-flash-latest` 등)만 사용하고, 추론 강도는 `--effort low`(단순 양자택일) 또는 `--effort medium`(표준 아키텍처/분석)만 사용한다. (Pro 모델은 스크립트 가드레일로 원천 차단됨). 3~5줄 압축 페이로드 필수.
 
 ## 4. 모델 배정 기준 (12/31까지 Flash 50% 할인 정책)
 - **볼트/일반 실무**: 단순 조회 `gemini-3.8-flash (low)`, 일반 노트/동기화/수정 `gemini-3.8-flash (medium)`.
