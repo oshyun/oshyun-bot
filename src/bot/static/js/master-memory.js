@@ -323,7 +323,7 @@ async function rebalanceMasterMemory() {
       if (window.innerWidth <= 1024) {
         toggleMasterSidebar(false);
       }
-      showToast(`${agentLabel} 하위 세션(${parentRoomId})으로 메모리 리밸런싱을 시작했습니다.`);
+      showToast(`${agentLabel} 하위 세션(${parentRoomId})으로 메모리 리밸런싱을 시작했습니다.`, { roomId: data.roomId || parentRoomId });
       await loadChatRoomsFromServer();
       loadMasterGraphFromServer();
       loadMasterTasksFromServer();

@@ -1597,13 +1597,138 @@ function initUsagePolling() {
   });
 }
 
-function showToast(msg) {
+if (typeof window.openRoom !== 'function') {
+  window.openRoom = function(roomId, options) {
+    if (typeof selectRoom === 'function') {
+      return selectRoom(roomId, options);
+    }
+  };
+}
+
+function hideToast() {
   const toast = document.getElementById('toast');
   if (!toast) return;
-  toast.innerText = msg;
+  toast.classList.remove('show');
+  toast.classList.remove('clickable');
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+  }
+}
+
+function findRoomIdByTaskId(taskId) {
+  if (!taskId) return null;
+  const cleanId = String(taskId).trim();
+  if (typeof latestMasterTasks !== 'undefined' && Array.isArray(latestMasterTasks)) {
+    const task = latestMasterTasks.find(t => t && (t.id === cleanId || t.taskId === cleanId));
+    if (task && task.roomId) return task.roomId;
+  }
+  if (typeof chatRooms !== 'undefined' && Array.isArray(chatRooms)) {
+    const room = chatRooms.find(r => r && (r.id === cleanId || r.taskId === cleanId));
+    if (room && room.id) return room.id;
+  }
+  return null;
+}
+
+function showToast(msg, options = {}) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+
+  const opts = (typeof options === 'string') ? { type: options } : (options || {});
+  let targetRoomId = opts.roomId || null;
+  if (!targetRoomId && opts.taskId) {
+    targetRoomId = findRoomIdByTaskId(opts.taskId);
+  }
+
+  const textMsg = String(msg || '').trim();
+  if (!textMsg) return;
+
+  toast.innerHTML = '';
+
+  const contentEl = document.createElement('div');
+  contentEl.className = 'toast-content';
+
+  const msgEl = document.createElement('span');
+  msgEl.className = 'toast-message';
+  msgEl.textContent = textMsg;
+  contentEl.appendChild(msgEl);
+
+  const hasTargetRoom = Boolean(targetRoomId);
+
+  if (hasTargetRoom) {
+    const actionBadge = document.createElement('span');
+    actionBadge.className = 'toast-action-badge';
+    actionBadge.textContent = '이동 →';
+    contentEl.appendChild(actionBadge);
+    toast.classList.add('clickable');
+    toast.title = '클릭하여 해당 대화방으로 이동';
+  } else {
+    toast.classList.remove('clickable');
+    toast.removeAttribute('title');
+  }
+
+  toast.appendChild(contentEl);
+
+  // 닫기(X) 버튼 추가 — 방 이동 없이 토스트만 닫히도록 이벤트 버블링 분리(stopPropagation)
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'toast-close-btn';
+  closeBtn.setAttribute('aria-label', '닫기');
+  closeBtn.innerHTML = '&times;';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideToast();
+  });
+  toast.appendChild(closeBtn);
+
+  // 토스트 본체 클릭 이벤트 — 해당 채팅방으로 즉시 화면 전환
+  toast.onclick = (e) => {
+    if (hasTargetRoom) {
+      if (typeof selectRoom === 'function') {
+        selectRoom(targetRoomId);
+      } else if (typeof openRoom === 'function') {
+        openRoom(targetRoomId);
+      }
+      hideToast();
+    } else if (typeof opts.onClick === 'function') {
+      opts.onClick(e);
+      hideToast();
+    }
+  };
+
   toast.classList.add('show');
+
+  const duration = typeof opts.duration === 'number' ? opts.duration : (hasTargetRoom ? 4500 : 2800);
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+
+  let remainingMs = duration;
+  let timerStart = Date.now();
+
+  const startTimer = (ms) => {
+    toastTimer = setTimeout(() => {
+      hideToast();
+    }, ms);
+    timerStart = Date.now();
+    remainingMs = ms;
+  };
+
+  startTimer(duration);
+
+  // 마우스 호버 시 사라지지 않도록 일시정지, 마우스 나갈 때 재개
+  toast.onmouseenter = () => {
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+      remainingMs -= (Date.now() - timerStart);
+      if (remainingMs < 1000) remainingMs = 1000;
+    }
+  };
+
+  toast.onmouseleave = () => {
+    if (toast.classList.contains('show')) {
+      startTimer(remainingMs);
+    }
+  };
 }
 
 function copyToClipboard(text, label, raw = false) {
