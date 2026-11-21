@@ -272,14 +272,25 @@ function resolveDelegatedRoomInfo(raw) {
   let status = String(raw.status || 'done').toLowerCase();
   let reason = String(raw.reason || '').trim();
 
-  // roomId 로 실제 방 매칭
+  // roomId가 room-xxx 형식인지 엄격 검증 (일반 텍스트/제목 문자열 오염 차단)
+  const isValidRoomId = /^room-[a-zA-Z0-9_\-]+$/.test(roomId) || (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && ORCHESTRATOR_ROOM_IDS.includes(roomId));
+
   let matchedRoom = null;
-  if (roomId) {
+  if (isValidRoomId) {
     matchedRoom = getRoomById(roomId);
+  } else {
+    // 유효한 roomId가 아니면 title로 간주하고 roomId는 비움
+    if (!title && roomId) title = roomId;
+    roomId = '';
   }
-  // roomId 를 못 찾았고 title 이 있다면 chatRooms 에서 제목 일치 검색
+
+  // roomId를 아직 못 찾았고 title이 있다면 chatRooms에서 제목 정확 일치 검색
   if (!matchedRoom && title && Array.isArray(chatRooms)) {
-    matchedRoom = chatRooms.find(r => !ORCHESTRATOR_ROOM_IDS.includes(r.id) && (r.title === title || r.id === title));
+    const normTarget = title.trim().toLowerCase();
+    matchedRoom = chatRooms.find(r => r && !ORCHESTRATOR_ROOM_IDS.includes(r.id) && (
+      (r.title && r.title.trim().toLowerCase() === normTarget) ||
+      (r.id && r.id === title)
+    ));
     if (matchedRoom) {
       roomId = matchedRoom.id;
     }
@@ -291,17 +302,18 @@ function resolveDelegatedRoomInfo(raw) {
   }
 
   if (!roomId && !title) return null;
-  const finalRoomId = roomId || title;
-  if (ORCHESTRATOR_ROOM_IDS.includes(finalRoomId)) return null;
+  if (roomId && ORCHESTRATOR_ROOM_IDS.includes(roomId)) return null;
 
   // 실시간 실행 상태(running/done/error) 판정
-  const live = roomLiveStates[finalRoomId];
-  if (live && live.isRunning) {
-    status = 'running';
-    if (!reason || reason === '정상 완료') reason = live.feed || '백그라운드 실행 중...';
-  } else if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r.roomId === finalRoomId)) {
-    status = 'running';
-    if (!reason || reason === '정상 완료') reason = '백그라운드 실행 중...';
+  if (roomId) {
+    const live = roomLiveStates[roomId];
+    if (live && live.isRunning) {
+      status = 'running';
+      if (!reason || reason === '정상 완료') reason = live.feed || '백그라운드 실행 중...';
+    } else if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r && r.roomId === roomId)) {
+      status = 'running';
+      if (!reason || reason === '정상 완료') reason = '백그라운드 실행 중...';
+    }
   }
 
   if (!reason) {
@@ -311,8 +323,8 @@ function resolveDelegatedRoomInfo(raw) {
   }
 
   return {
-    roomId: finalRoomId,
-    title: title || finalRoomId,
+    roomId: roomId, // 유효한 room ID가 없는 경우 빈 문자열 (절대 일반 한글 제목으로 채우지 않음)
+    title: title || roomId,
     status: status,
     reason: reason
   };
@@ -320,8 +332,7 @@ function resolveDelegatedRoomInfo(raw) {
 
 function extractDelegatedRoomsFromSteps(steps) {
   if (!Array.isArray(steps) || steps.length === 0) return [];
-  const results = [];
-  const seenRoomIds = new Set();
+  const candidates = [];
 
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
@@ -392,7 +403,6 @@ function extractDelegatedRoomsFromSteps(steps) {
     }
 
     // 도구 실행 자체(spawn/send 명령) 결과에서 에러 검사
-    // 注意: 프롬프트 본문(detail)에 '오류' 단어가 포함된 것만으로 실패 처리하지 않는다!
     const resOutput = `${output}\n${nextResultText}`.trim();
     let cmdFailed = false;
     let cmdReason = '';
@@ -422,13 +432,54 @@ function extractDelegatedRoomsFromSteps(steps) {
       reason: initialReason
     });
 
-    if (item && item.roomId && !seenRoomIds.has(item.roomId) && !ORCHESTRATOR_ROOM_IDS.includes(item.roomId)) {
-      seenRoomIds.add(item.roomId);
-      results.push(item);
+    if (item && (item.roomId || item.title)) {
+      candidates.push(item);
     }
   }
 
-  return results;
+  // 중복 제거 및 동일 작업 병합 (동일 제목 또는 동일 roomId)
+  const groups = [];
+  candidates.forEach(cand => {
+    const normTitle = (cand.title || '').trim().toLowerCase();
+    let matchedGroup = null;
+    for (let g of groups) {
+      if (cand.roomId && g.roomId && cand.roomId === g.roomId) {
+        matchedGroup = g;
+        break;
+      }
+      if (normTitle && g.normTitle && normTitle === g.normTitle) {
+        matchedGroup = g;
+        break;
+      }
+    }
+
+    if (matchedGroup) {
+      if (!matchedGroup.roomId && cand.roomId) {
+        matchedGroup.roomId = cand.roomId;
+      }
+      if (cand.status === 'running' || matchedGroup.status !== 'running') {
+        if (cand.status === 'running' || cand.status === 'done') {
+          matchedGroup.status = cand.status;
+          matchedGroup.reason = cand.reason;
+        }
+      }
+    } else {
+      groups.push({
+        roomId: cand.roomId || '',
+        title: cand.title,
+        normTitle: normTitle,
+        status: cand.status,
+        reason: cand.reason
+      });
+    }
+  });
+
+  return groups.map(g => ({
+    roomId: g.roomId,
+    title: g.title,
+    status: g.status,
+    reason: g.reason
+  }));
 }
 
 function extractDelegatedRoomsFromMessage(m) {
@@ -459,15 +510,29 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
   const listEl = document.createElement('div');
   listEl.className = 'sub-agent-chips-list';
 
+  // 렌더링 전 중복 검사 (동일 roomId 또는 동일 title 2중 방지)
+  const seenKeys = new Set();
+  const uniqueRooms = [];
   delegatedRooms.forEach(item => {
-    if (!item || !item.roomId) return;
+    if (!item) return;
+    const key = item.roomId ? `id:${item.roomId}` : `title:${(item.title || '').trim().toLowerCase()}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    uniqueRooms.push(item);
+  });
+
+  uniqueRooms.forEach(item => {
+    if (!item || (!item.roomId && !item.title)) return;
     const chipBtn = document.createElement('button');
     chipBtn.type = 'button';
     chipBtn.className = `sub-agent-chip is-${item.status || 'done'}`;
     const statusLabel = item.status === 'running' ? '실행 중' : (item.status === 'error' ? '오류' : '완료');
     const reasonText = item.reason || statusLabel;
-    chipBtn.title = `[${item.title || item.roomId}] · 상태: ${statusLabel} (${reasonText})\n클릭 시 해당 채팅방으로 이동`;
-    chipBtn.setAttribute('data-room-id', item.roomId);
+    const displayTitle = item.title || item.roomId;
+    chipBtn.title = `[${displayTitle}] · 상태: ${statusLabel} (${reasonText})\n클릭 시 해당 채팅방으로 이동`;
+    if (item.roomId) {
+      chipBtn.setAttribute('data-room-id', item.roomId);
+    }
 
     let badgeHtml = '';
     if (item.status === 'running') {
@@ -484,7 +549,7 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
 
     chipBtn.innerHTML = `
       <span class="chip-icon">${chipIcon}</span>
-      <span class="chip-title">${escapeHtml(item.title || item.roomId)}</span>
+      <span class="chip-title">${escapeHtml(displayTitle)}</span>
       ${badgeHtml}
       <span class="chip-arrow">${ICONS.chevRight}</span>
     `;
@@ -492,7 +557,11 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
     chipBtn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      selectRoom(item.roomId);
+      if (item.roomId && /^room-[a-zA-Z0-9_\-]+$/.test(item.roomId)) {
+        selectRoom(item.roomId);
+      } else if (item.title) {
+        navigateToChatRoom(item.title);
+      }
     });
 
     listEl.appendChild(chipBtn);

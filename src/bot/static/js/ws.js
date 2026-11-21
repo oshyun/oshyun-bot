@@ -287,24 +287,36 @@ function findChatRoom(query) {
     if (matched) return matched;
   }
 
-  // 5. 제목 포함 관계 (단, 단어 길이가 4자 이상일 때만 서브스트링 매칭하여 오매칭 방지)
+  // 5. 제목 포함 관계 (엄격한 규칙 적용)
+  // 중요 버그 방지: cleanNorm이 길다고 해서 짧은 방 제목(rNorm)을 포함한다고 매칭하면,
+  // 흔한 짧은 단어(예: '스킨케어', '테스트')를 제목으로 가진 엉뚱한 대화방으로 잘못 이동하는 치명적 결함 발생!
+  // 따라서 정방향(방 제목 rNorm이 검색어 cleanNorm을 포함)만 허용하되, 최소 4자 이상일 때만 매칭한다.
   if (cleanNorm.length >= 4) {
     matched = chatRooms.find(r => {
       if (!r || !r.title) return false;
       const rNorm = stripTitle(r.title);
       if (rNorm.length < 3) return false;
-      return rNorm.includes(cleanNorm) || (cleanNorm.length >= 6 && cleanNorm.includes(rNorm));
+      if (rNorm.includes(cleanNorm)) return true;
+      if (cleanNorm.includes(rNorm)) {
+        // 역방향은 길이가 거의 같을 때(85% 이상 일치)만 엄격히 제한
+        return (rNorm.length / cleanNorm.length) >= 0.85;
+      }
+      return false;
     });
     if (matched) return matched;
   }
 
-  // 6. serverStatus.activeRuns 검사
+  // 6. serverStatus.activeRuns 검사 (엄격한 기준 적용)
+  // 중요 버그 방지: run.userText는 사용자의 긴 질문 본문이므로 이를 방 제목으로 간주해 매칭하면
+  // 그 시점 다른 곳에서 돌고 있던 엉뚱한 세션으로 오연결된다!
+  // 따라서 오직 run.roomId 일치 또는 명시적 run.title 일치만 허용한다.
   if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns)) {
     const active = serverStatus.activeRuns.find(run => {
       if (!run) return false;
       const rId = String(run.roomId || '').trim();
-      const rTitle = stripTitle(run.title || run.userText || '');
-      return rId === clean || (rTitle && (rTitle === cleanNorm || (cleanNorm.length >= 4 && rTitle.includes(cleanNorm))));
+      if (rId === clean) return true;
+      const rTitle = run.title ? stripTitle(run.title) : '';
+      return rTitle && (rTitle === cleanNorm || (cleanNorm.length >= 4 && rTitle.includes(cleanNorm)));
     });
     if (active) {
       return {
@@ -326,6 +338,13 @@ function navigateToChatRoom(roomIdOrTitle) {
   if (room && room.id) {
     selectRoom(room.id);
     showToast(`'${room.title || query}' 채팅방으로 이동했습니다.`);
+    return;
+  }
+
+  // 만약 query 자체가 room-xxx 형식인 경우
+  if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+    selectRoom(query);
+    showToast(`대화방(${query})으로 이동했습니다.`);
     return;
   }
 
@@ -351,6 +370,8 @@ function navigateToChatRoom(roomIdOrTitle) {
     });
   } else if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
     selectRoom(query);
+  } else {
+    showToast(`'${query}' 대화방을 찾을 수 없습니다.`);
   }
 }
 

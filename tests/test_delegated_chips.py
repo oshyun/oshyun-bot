@@ -289,6 +289,52 @@ class TestDelegatedSubagentChips(unittest.TestCase):
         self.assertEqual(res[0]["roomId"], "room-font-1")
         self.assertEqual(res[0]["title"], "웹 UI 폰트 크기 슬라이더 개편")
 
+    def test_retry_spawn_generates_single_chip_with_actual_room_id(self):
+        """동일 과업에 대해 최초 spawn 실패/미완료 스텝과 이후 spawn 성공 스텝이 공존할 때 1개만 반환되고 실제 roomId가 바인딩되는지 검증."""
+        steps = [
+            {
+                "kind": "tool_call",
+                "tool": "run_command",
+                "title": "session-ctl spawn: 스킨케어 동적 추천 체계 개편 및 스케줄러 연동",
+                "detail": "$ session-ctl spawn \"스킨케어 동적 추천 체계 개편 및 스케줄러 연동\" \"과업 지시...\" --parent __expert_vault__",
+                "status": "running",
+            },
+            {
+                "kind": "tool_call",
+                "tool": "run_command",
+                "title": "run_command: ./scripts/status.sh",
+                "detail": "$ ./scripts/status.sh",
+            },
+            {
+                "kind": "tool_call",
+                "tool": "run_command",
+                "title": "session-ctl spawn: 스킨케어 동적 추천 체계 개편 및 스케줄러 연동",
+                "detail": "$ WEB_SSL_ENABLED=0 session-ctl spawn \"스킨케어 동적 추천 체계 개편 및 스케줄러 연동\" \"과업 지시...\"\n결과:\n🚀 새 채팅방(AGY 세션) [스킨케어 동적 추천 체계 개편 및 스케줄러 연동] (Room ID: room-1795273462171-d73e)을 생성하고 백그라운드로 작업을 시작했습니다.",
+                "status": "done",
+            },
+        ]
+        res = extract_delegated_subagents(steps)
+        self.assertEqual(len(res), 1, "중복 칩 없이 단 1개만 반환되어야 함")
+        self.assertEqual(res[0]["roomId"], "room-1795273462171-d73e")
+        self.assertEqual(res[0]["title"], "스킨케어 동적 추천 체계 개편 및 스케줄러 연동")
+        self.assertIn(res[0]["status"], ("done", "running"))
+
+    def test_missing_room_id_never_puts_title_into_room_id(self):
+        """실제 room ID가 파싱되지 않고 DB에도 없는 경우 roomId 필드에 절대 제목 문자열이 주입되지 않는지 검증."""
+        steps = [
+            {
+                "kind": "tool_call",
+                "tool": "Bash",
+                "title": "session-ctl spawn: 아직 생성 전인 미지의 작업",
+                "detail": "$ session-ctl spawn \"아직 생성 전인 미지의 작업\" \"지시문...\"",
+                "status": "running",
+            }
+        ]
+        res = extract_delegated_subagents(steps)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["roomId"], "", "유효한 room ID가 없으면 빈 문자열이어야 함")
+        self.assertEqual(res[0]["title"], "아직 생성 전인 미지의 작업")
+
 
 if __name__ == "__main__":
     unittest.main()

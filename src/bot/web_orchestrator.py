@@ -2126,18 +2126,19 @@ def extract_delegated_subagents(
     master_tasks_module: Any = None,
     web_exec_module: Any = None,
 ) -> list[dict[str, Any]]:
-    """마스터 에이전트(__core__)의 실행 단계(steps) 및 본문에서 위임된 하위 에이전트 목록을 추출한다.
+    """마스터/전문가 에이전트의 실행 단계(steps) 및 본문에서 위임된 하위 에이전트 목록을 추출한다.
 
     각 반환 항목:
     {
-        "roomId": str,     # 하위 채팅방 ID (예: 'room-17412345-abcd')
+        "roomId": str,     # 하위 채팅방 ID (예: 'room-17412345-abcd', 확인 불가 시 '')
         "title": str,      # 하위 채팅방 제목 (예: '오늘 일정 조사')
         "status": str,     # 'running' | 'done' | 'error'
+        "reason": str,     # 상태 사유 ('정상 완료', '백그라운드 실행 중' 등)
     }
     """
     raw_steps = steps if isinstance(steps, list) else []
-    delegated: list[dict[str, Any]] = []
-    seen_room_ids: set[str] = set()
+    if not raw_steps:
+        return []
 
     db = chat_db_module or _get_mod_attr("chat_db", chat_db)
     tasks_mod = master_tasks_module or _get_mod_attr("master_tasks", master_tasks)
@@ -2147,7 +2148,23 @@ def extract_delegated_subagents(
     except Exception:
         exec_mod = web_exec_module
 
-    # 1. steps 순회하며 session-ctl spawn / send 탐색 (인접 tool_result 블록 결합)
+    def _is_valid_room_id(rid: str) -> bool:
+        if not rid:
+            return False
+        clean = rid.strip()
+        if _is_orchestrator_room_id(clean):
+            return False
+        return bool(re.match(r"^room-[a-zA-Z0-9_\-]+$", clean))
+
+    def _normalize_title(t: str) -> str:
+        s = str(t or "").strip()
+        s = re.sub(r"^[\"\'\[\]]+|[\"\'\[\]]+$", "", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s.lower()
+
+    # 1. steps 순회하며 후보 항목(candidate) 추출
+    candidates: list[dict[str, Any]] = []
+
     for idx, s in enumerate(raw_steps):
         if not isinstance(s, dict):
             continue
@@ -2246,44 +2263,121 @@ def extract_delegated_subagents(
         if not extracted_room_id and extracted_title and re.match(r'^\(\d+줄\)', extracted_title):
             continue
 
-        # E. room_id 매칭 및 title 보정
-        final_rid = extracted_room_id
-        final_title = extracted_title
+        # 유효하지 않은 roomId(예: 오케스트레이터 ID) 정제
+        if extracted_room_id and not _is_valid_room_id(extracted_room_id):
+            extracted_room_id = ""
 
-        # room_id를 아직 못 찾았고 title이 있다면 DB에서 방 검색
-        if not final_rid and final_title and db is not None:
-            try:
-                rooms = db.list_rooms(include_hidden=True)
-                for r in rooms:
-                    r_id = r.get("id") or ""
-                    r_title = r.get("title") or ""
-                    if r_id not in ORCHESTRATOR_ROOM_IDS and (r_title == final_title or final_title in r_title):
-                        final_rid = r_id
-                        final_title = r_title
-                        break
-            except Exception:
-                pass
+        # 도구 실행 자체(spawn/send 명령) 결과에서 에러 검사
+        res_output = f"{output}\n{next_result_text}".strip()
+        cmd_failed = False
+        cmd_err_msg = ""
+        if s.get("status") == "error":
+            cmd_failed = True
+            cmd_err_msg = str(s.get("error") or s.get("detail") or "도구 실행 실패")[:100]
+        elif res_output:
+            if re.search(r"Command exited with code\s+[1-9]", res_output):
+                cmd_failed = True
+                m_err = re.search(r"Command output:\s*(.*)", res_output, re.DOTALL)
+                cmd_err_msg = (m_err.group(1).strip() if m_err else "명령어 비정상 종료")[:100]
+            elif any(err_word in res_output for err_word in ("⚠️ 세션 목록 조회 실패", "⚠️ 작업 원장 조회 실패", "API 연결 실패", "세션 생성 실패", "세션 지시 실패")):
+                cmd_failed = True
+                cmd_err_msg = res_output.split("\n", 1)[0][:100]
 
-        # title이 아직 없거나 room_id와 같고 room_id가 있다면 DB에서 방 제목 조회
-        if final_rid and (not final_title or final_title == final_rid) and db is not None:
-            try:
-                r_info = db.get_room(final_rid)
-                if r_info and r_info.get("title"):
-                    final_title = r_info["title"]
-            except Exception:
-                pass
+        candidates.append({
+            "room_id": extracted_room_id,
+            "title": extracted_title,
+            "failed": cmd_failed,
+            "err_msg": cmd_err_msg,
+            "step_status": s.get("status") or "done",
+            "step_index": idx,
+        })
 
-        if not final_rid and not final_title:
+    if not candidates:
+        return []
+
+    # 2. DB 조회로 누락된 room_id / title 보강
+    if db is not None:
+        try:
+            rooms = db.get_rooms(limit=100, include_hidden=True) if hasattr(db, "get_rooms") else db.list_rooms(include_hidden=True)
+            for cand in candidates:
+                # room_id가 없고 title이 있을 때 DB에서 정확 일치 매칭
+                if not cand["room_id"] and cand["title"]:
+                    clean_cand_title = cand["title"].strip()
+                    cand_norm = _normalize_title(clean_cand_title)
+                    for r in rooms:
+                        r_id = r.get("id") or ""
+                        if not _is_valid_room_id(r_id):
+                            continue
+                        r_title = (r.get("title") or "").strip()
+                        if r_title == clean_cand_title or _normalize_title(r_title) == cand_norm:
+                            cand["room_id"] = r_id
+                            cand["title"] = r_title
+                            break
+
+                # room_id가 있고 title이 없거나 room_id와 같을 때 DB에서 title 보강
+                if cand["room_id"] and (not cand["title"] or cand["title"] == cand["room_id"]):
+                    for r in rooms:
+                        if r.get("id") == cand["room_id"] and r.get("title"):
+                            cand["title"] = r["title"]
+                            break
+        except Exception:
+            pass
+
+    # 3. 중복 제거 및 동일 작업 병합 (Deduplication & Merge)
+    # 동일한 title이거나 동일한 room_id를 가진 항목들을 하나로 통합한다.
+    groups: list[dict[str, Any]] = []
+
+    for cand in candidates:
+        r_id = cand["room_id"]
+        title_str = cand["title"]
+        norm_title = _normalize_title(title_str)
+
+        # 기존 그룹 중 매칭되는 그룹 탐색
+        matched_group = None
+        for g in groups:
+            # 1) room_id가 둘 다 있고 일치할 때
+            if r_id and g["room_id"] and r_id == g["room_id"]:
+                matched_group = g
+                break
+            # 2) 정규화된 title이 일치할 때 (재시도나 다른 스텝에서 room_id가 보강된 경우 포함)
+            if norm_title and g["norm_title"] and norm_title == g["norm_title"]:
+                matched_group = g
+                break
+
+        if matched_group is not None:
+            # 병합: 더 유효한 room_id가 있으면 업데이트
+            if not matched_group["room_id"] and r_id:
+                matched_group["room_id"] = r_id
+            if not matched_group["title"] and title_str:
+                matched_group["title"] = title_str
+                matched_group["norm_title"] = norm_title
+            matched_group["candidates"].append(cand)
+        else:
+            groups.append({
+                "room_id": r_id,
+                "title": title_str,
+                "norm_title": norm_title,
+                "candidates": [cand],
+            })
+
+    # 4. 각 그룹별 상태(status) 및 사유(reason) 판정
+    delegated: list[dict[str, Any]] = []
+
+    for g in groups:
+        final_rid = g["room_id"]
+        final_title = g["title"] or final_rid or "하위 에이전트"
+
+        # 오케스트레이터 ID 또는 자기 자신은 제외
+        if _is_orchestrator_room_id(final_rid) or _is_orchestrator_room_id(g["title"]) or _is_orchestrator_room_id(final_title):
+            continue
+        # 유효한 room_id도 없고 title도 없으면 제외
+        if not final_rid and not g["title"]:
             continue
 
-        resolved_rid = final_rid or final_title
-        if resolved_rid in seen_room_ids or _is_orchestrator_room_id(resolved_rid):
-            continue
-        seen_room_ids.add(resolved_rid)
-
-        # F. 상태 판단 (running / done / error) 및 사유 (reason)
         status = "done"
         reason = "정상 완료"
+
+        # A. 런타임 실행 중 여부 확인
         if exec_mod is not None and final_rid:
             try:
                 is_busy_fn = getattr(exec_mod, "is_room_busy", None)
@@ -2293,6 +2387,7 @@ def extract_delegated_subagents(
             except Exception:
                 pass
 
+        # B. master_tasks 원장에서 상태 확인
         if status != "running" and tasks_mod is not None and final_rid:
             try:
                 room_tasks = tasks_mod.list_tasks(include_closed=True, limit=50)
@@ -2318,31 +2413,20 @@ def extract_delegated_subagents(
             except Exception:
                 pass
 
-        # 도구 실행 자체(spawn/send 명령) 결과에서 에러 검사
-        # 注意: detail(프롬프트 본문)에 '오류' 단어가 포함된 것만으로 에러 처리하지 않는다!
-        # output과 next_result_text(실행 결과 출력)를 검사한다.
-        res_output = f"{output}\n{next_result_text}".strip()
-        cmd_failed = False
-        cmd_err_msg = ""
-        if s.get("status") == "error":
-            cmd_failed = True
-            cmd_err_msg = str(s.get("error") or s.get("detail") or "도구 실행 실패")[:100]
-        elif res_output:
-            if re.search(r"Command exited with code\s+[1-9]", res_output):
-                cmd_failed = True
-                m_err = re.search(r"Command output:\s*(.*)", res_output, re.DOTALL)
-                cmd_err_msg = (m_err.group(1).strip() if m_err else "명령어 비정상 종료")[:100]
-            elif any(err_word in res_output for err_word in ("⚠️ 세션 목록 조회 실패", "⚠️ 작업 원장 조회 실패", "API 연결 실패", "세션 생성 실패", "세션 지시 실패")):
-                cmd_failed = True
-                cmd_err_msg = res_output.split("\n", 1)[0][:100]
+        # C. 도구 실행 단계들의 실패 여부 반영 (모든 시도가 실패한 경우에만 error, 하나라도 성공했으면 done/running 유지)
+        if status != "running":
+            has_success = any(not c["failed"] for c in g["candidates"])
+            if not has_success:
+                status = "error"
+                last_err = next((c["err_msg"] for c in reversed(g["candidates"]) if c["err_msg"]), "명령 실행 오류")
+                reason = last_err
 
-        if cmd_failed and status != "running":
-            status = "error"
-            reason = cmd_err_msg or "명령 실행 오류"
+        # 안전망: final_rid가 유효한 room- 형식이 아니면 절대 roomId 필드에 문자열을 채우지 않는다!
+        clean_final_rid = final_rid if _is_valid_room_id(final_rid) else ""
 
         delegated.append({
-            "roomId": final_rid or resolved_rid,
-            "title": final_title or final_rid or "하위 에이전트",
+            "roomId": clean_final_rid,
+            "title": final_title,
             "status": status,
             "reason": reason,
         })
