@@ -246,7 +246,7 @@ class TestUsageHtmlUi(unittest.TestCase):
             responsive_css = f.read()
 
         # 1. Service Worker 캐시 이름이 업그레이드되었는지 (구버전 캐시 자동 퍼지)
-        self.assertRegex(sw_js, r"oshyun-hub-v[8-9]", "Service Worker 캐시 버전이 v8 이상으로 업그레이드되어야 함")
+        self.assertRegex(sw_js, r"oshyun-hub-v(?:[8-9]|\d{2,})", "Service Worker 캐시 버전이 v8 이상으로 업그레이드되어야 함")
         self.assertNotIn("oshyun-hub-v7", sw_js, "구버전 캐시 v7이 남아있지 않아야 함")
 
         # 2. index.html의 캐시 버스팅 파라미터가 갱신되었는지

@@ -44,6 +44,13 @@
   --ui-scale: 1;
   --chat-font-size: 15px;
   --body-font-size: var(--ui-font-size, 14px);
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--bg-subtle);
+  --bg-card: var(--bg-elevated);
+  --text-primary: var(--text);
+  --text-secondary: var(--text-2);
+  --text-tertiary: var(--text-3);
+  --border-color: var(--border);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -72,6 +79,13 @@
     --code-bg: #19191E;
     --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.42);
     --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.65);
+    --bg-primary: var(--bg);
+    --bg-secondary: var(--bg-subtle);
+    --bg-card: var(--bg-elevated);
+    --text-primary: var(--text);
+    --text-secondary: var(--text-2);
+    --text-tertiary: var(--text-3);
+    --border-color: var(--border);
     color-scheme: dark;
   }
 }
