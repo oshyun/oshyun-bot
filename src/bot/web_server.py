@@ -247,6 +247,7 @@ from web_orchestrator import (
     handle_orchestrator_sessions,
     handle_orchestrator_summaries,
     handle_orchestrator_summary_update,
+    handle_orchestrator_room_mark_read,
     handle_orchestrator_task_update,
     handle_orchestrator_tasks,
     handle_task_events_callback,
@@ -709,6 +710,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_post("/api/orchestrator/reset", handle_orchestrator_reset)
     web_app.router.add_get("/api/orchestrator/tasks", handle_orchestrator_tasks)
     web_app.router.add_post("/api/orchestrator/task/update", handle_orchestrator_task_update)
+    web_app.router.add_post("/api/orchestrator/room/mark-read", handle_orchestrator_room_mark_read)
     web_app.router.add_post("/api/orchestrator/patrol/trigger", handle_orchestrator_patrol_trigger)
     web_app.router.add_post("/api/orchestrator/session/archive", handle_orchestrator_archive_session)
     web_app.router.add_post("/v1/callbacks/task-events", handle_task_events_callback)

@@ -1140,6 +1140,11 @@ function handleWsEvent(data) {
         });
         if (typeof updateMasterTopbarBadge === 'function') updateMasterTopbarBadge();
       }
+      fetch('/api/orchestrator/room/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: targetRoom.id })
+      }).catch(() => {});
     } else {
       targetRoom.unread = true;
     }
