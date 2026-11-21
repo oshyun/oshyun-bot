@@ -391,6 +391,85 @@ class TestSessionCtlCli(unittest.TestCase):
         args_spawn_wait = parser.parse_args(["spawn", "새 작업방", "확인해줘", "--wait"])
         self.assertFalse(args_spawn_wait.async_mode)
 
+    @patch("session_ctl._api_request")
+    def test_cmd_delete_requires_yes_or_dry_run(self, mock_api):
+        """--yes 또는 --dry-run 없이 delete 호출 시 API 호출 없이 거부되는지 검증."""
+        import io
+        from contextlib import redirect_stderr
+
+        args = argparse.Namespace(targets=["room-1"], dry_run=False, yes=False, json=False)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            ret = session_ctl.cmd_delete(args)
+        self.assertEqual(ret, 1)
+        self.assertIn("--yes", buf.getvalue())
+        mock_api.assert_not_called()
+
+    @patch("session_ctl._api_request")
+    def test_cmd_delete_refuses_orchestrator_and_running(self, mock_api):
+        """오케스트레이터 방(__core__ 등) 및 실행 중인 방은 삭제를 거부하는지 검증."""
+        import io
+        from contextlib import redirect_stderr
+
+        mock_api.return_value = {
+            "ok": True,
+            "sessions": [
+                {"id": "__expert_coding__", "title": "봇개발 에이전트", "isRunning": False},
+                {"id": "room-running", "title": "실행중 방", "isRunning": True, "queueSize": 0},
+                {"id": "room-idle", "title": "대기 방", "isRunning": False, "queueSize": 0},
+            ],
+        }
+        for target in ("__core__", "__expert_coding__", "room-running"):
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                ret = session_ctl.cmd_delete(
+                    argparse.Namespace(targets=[target], dry_run=False, yes=True, json=False)
+                )
+            self.assertEqual(ret, 1)
+            self.assertIn("삭제 거부", buf.getvalue())
+        # 목록 조회(GET)만 호출되고 삭제(POST)는 호출되지 않아야 함
+        self.assertTrue(all(c[0][0] == "GET" for c in mock_api.call_args_list))
+
+    @patch("session_ctl._api_request")
+    def test_cmd_delete_dry_run_and_execute(self, mock_api):
+        """--dry-run 미리보기 및 --yes 실제 일괄 삭제 API 호출 검증."""
+        import io
+        from contextlib import redirect_stdout
+
+        sessions_payload = {
+            "ok": True,
+            "sessions": [
+                {"id": "room-1", "sessionId": "sess-1", "title": "완료된 작업 1", "isRunning": False},
+                {"id": "room-2", "sessionId": "sess-2", "title": "완료된 작업 2", "isRunning": False},
+            ],
+        }
+        # 1. --dry-run
+        mock_api.return_value = sessions_payload
+        buf_dry = io.StringIO()
+        with redirect_stdout(buf_dry):
+            ret_dry = session_ctl.cmd_delete(
+                argparse.Namespace(targets=["room-1", "완료된 작업 2"], dry_run=True, yes=False, json=False)
+            )
+        self.assertEqual(ret_dry, 0)
+        self.assertIn("DRY-RUN", buf_dry.getvalue())
+        mock_api.assert_called_once_with("GET", "/api/orchestrator/sessions?limit=500", timeout=20)
+
+        # 2. --yes 실제 삭제
+        mock_api.reset_mock()
+        mock_api.side_effect = [
+            sessions_payload,
+            {"ok": True, "roomIds": ["room-1", "room-2"]},
+        ]
+        buf_yes = io.StringIO()
+        with redirect_stdout(buf_yes):
+            ret_yes = session_ctl.cmd_delete(
+                argparse.Namespace(targets=["room-1", "완료된 작업 2"], dry_run=False, yes=True, json=False)
+            )
+        self.assertEqual(ret_yes, 0)
+        self.assertIn("2개 영구 삭제 완료", buf_yes.getvalue())
+        self.assertEqual(mock_api.call_args_list[1][0][:2], ("POST", "/api/session/batch-delete"))
+        self.assertEqual(mock_api.call_args_list[1][1]["payload"], {"roomIds": ["room-1", "room-2"]})
+
 
 if __name__ == "__main__":
     unittest.main()
