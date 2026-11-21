@@ -1122,6 +1122,27 @@ function handleWsEvent(data) {
     }, { beforeQueued: true, updateTimestamp: true });
     targetRoom.messageCount = targetRoom.messages.length;
     targetRoom.updatedAt = Date.now();
+    if (targetRoom.id === currentRoomId) {
+      targetRoom.unread = false;
+      if (Array.isArray(latestMasterTasks)) {
+        latestMasterTasks.forEach(t => {
+          if (t && t.roomId === targetRoom.id && !t.reviewed) {
+            t.reviewed = true;
+            t.reviewedAt = Date.now() / 1000;
+            if (t.id) {
+              fetch('/api/orchestrator/task/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taskId: t.id, reviewed: true })
+              }).catch(() => {});
+            }
+          }
+        });
+        if (typeof updateMasterTopbarBadge === 'function') updateMasterTopbarBadge();
+      }
+    } else {
+      targetRoom.unread = true;
+    }
     sortChatRooms();
     saveChatRoomsToStorage();
     renderRoomList();
