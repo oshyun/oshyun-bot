@@ -26,11 +26,18 @@ const ICONS = {
 
 const CORE_ROOM_ID = '__core__';
 const CORE_ROOM_TITLE = '마스터 에이전트';
+const EXPERT_GENERAL_ROOM_ID = '__expert_general__';
+const EXPERT_GENERAL_TITLE = '일반 대화';
 const EXPERT_VAULT_ROOM_ID = '__expert_vault__';
 const EXPERT_VAULT_TITLE = '세컨브레인 에이전트';
 const EXPERT_CODING_ROOM_ID = '__expert_coding__';
 const EXPERT_CODING_TITLE = '봇개발 에이전트';
-let ORCHESTRATOR_ROOM_IDS = [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID];
+let ORCHESTRATOR_ROOM_IDS = [
+  CORE_ROOM_ID,
+  EXPERT_GENERAL_ROOM_ID,
+  EXPERT_VAULT_ROOM_ID,
+  EXPERT_CODING_ROOM_ID,
+];
 let agentConfigs = [];
 let editingAgentId = null;
 

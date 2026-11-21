@@ -557,7 +557,9 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
     chipBtn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      if (item.roomId && /^room-[a-zA-Z0-9_\-]+$/.test(item.roomId)) {
+      if (typeof openThreadPanel === 'function') {
+        openThreadPanel(item.taskId || null, item.roomId || null, displayTitle);
+      } else if (item.roomId && /^room-[a-zA-Z0-9_\-]+$/.test(item.roomId)) {
         selectRoom(item.roomId);
       } else if (item.title) {
         navigateToChatRoom(item.title);
@@ -602,6 +604,18 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
       role: 'master',
       avatarCls: 'is-master',
       avatarIcon: ICONS.spark,
+      roleBadgeHtml: ''
+    };
+  }
+
+  // 2.5 일반 대화 전문가 에이전트 (__expert_general__)
+  if (rId === EXPERT_GENERAL_ROOM_ID) {
+    return {
+      name: '일반 대화',
+      fullName: '일반 대화 어시스턴트',
+      role: 'expert_general',
+      avatarCls: 'is-general',
+      avatarIcon: ICONS.bot,
       roleBadgeHtml: ''
     };
   }

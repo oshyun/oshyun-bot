@@ -42,10 +42,12 @@ from paths import (
 )
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 BUILTIN_AGENT_IDS: tuple[str, ...] = (
     CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
     EXPERT_VAULT_ROOM_ID,
     EXPERT_CODING_ROOM_ID,
 )
@@ -95,6 +97,27 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "isBuiltin": True,
             "order": 0,
         },
+        EXPERT_GENERAL_ROOM_ID: {
+            "id": EXPERT_GENERAL_ROOM_ID,
+            "name": "일반 대화",
+            "title": "일반 대화",
+            "emoji": "💬",
+            "color": "#64748b",
+            "parentAgentId": CORE_ORCHESTRATOR_ROOM_ID,
+            "memoryScope": "general",
+            "sessionNamespace": "general_",
+            "roleDescription": "특정 도메인 제약 없이 빠르고 자유롭게 대화하는 순수 범용 비서",
+            "workdir": vault_dir,
+            "model": "gemini-3.8-flash",
+            "effort": "medium",
+            "childModel": "gemini-3.8-flash",
+            "childEffort": "low",
+            "systemPrompt": "",
+            "childPromptTemplate": "",
+            "injectChildTemplate": False,
+            "isBuiltin": True,
+            "order": 1,
+        },
         EXPERT_VAULT_ROOM_ID: {
             "id": EXPERT_VAULT_ROOM_ID,
             "name": "세컨브레인",
@@ -119,7 +142,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             ),
             "injectChildTemplate": True,
             "isBuiltin": True,
-            "order": 1,
+            "order": 2,
         },
         EXPERT_CODING_ROOM_ID: {
             "id": EXPERT_CODING_ROOM_ID,
@@ -145,7 +168,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             ),
             "injectChildTemplate": True,
             "isBuiltin": True,
-            "order": 2,
+            "order": 3,
         },
     }
 
@@ -324,6 +347,7 @@ def _normalize_agent_record(
 
 _BUILTIN_REPO_MODE_MAP: dict[str, str] = {
     CORE_ORCHESTRATOR_ROOM_ID: "orchestrator",
+    EXPERT_GENERAL_ROOM_ID: "general",
     EXPERT_VAULT_ROOM_ID: "expert_vault",
     EXPERT_CODING_ROOM_ID: "expert_coding",
 }

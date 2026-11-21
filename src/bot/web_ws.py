@@ -20,9 +20,15 @@ from bot_logger import logger, vault_log
 from web_speech import deduplicate_speech_text
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
-ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
+ORCHESTRATOR_ROOM_IDS = (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+)
 
 
 def _get_mod_attr(attr_name: str, fallback: any) -> any:
@@ -100,6 +106,8 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                     if terminate_session:
                         if target_room == CORE_ORCHESTRATOR_ROOM_ID:
                             session_namespace = "core_"
+                        elif target_room == EXPERT_GENERAL_ROOM_ID:
+                            session_namespace = "general_"
                         elif target_room == EXPERT_VAULT_ROOM_ID:
                             session_namespace = "vault_"
                         elif target_room == EXPERT_CODING_ROOM_ID:
@@ -198,8 +206,9 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                     if target_room in ORCHESTRATOR_ROOM_IDS or (target_room and str(target_room).startswith("__custom_")):
                         ns = (
                             "core_" if target_room == CORE_ORCHESTRATOR_ROOM_ID
+                            else ("general_" if target_room == EXPERT_GENERAL_ROOM_ID
                             else ("vault_" if target_room == EXPERT_VAULT_ROOM_ID
-                            else ("coding_" if target_room == EXPERT_CODING_ROOM_ID else f"{str(target_room).strip('_')}_"))
+                            else ("coding_" if target_room == EXPERT_CODING_ROOM_ID else f"{str(target_room).strip('_')}_")))
                         )
                         clear_session_fn(ns=ns)
                         _room_session_ids.pop(target_room, None)

@@ -22,9 +22,10 @@ from paths import CHAT_DB_FILE, CHAT_ROOMS_FILE, CHATS_DIR, STATE_DIR
 logger = logging.getLogger("oshyun-chat-db")
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
-PROTECTED_ROOM_IDS = {CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID}
+PROTECTED_ROOM_IDS = {CORE_ORCHESTRATOR_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID}
 
 
 def _is_protected_room_id(room_id: str | None) -> bool:

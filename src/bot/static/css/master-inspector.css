@@ -537,3 +537,200 @@
 .sb-archived-list.open {
   display: flex;
 }
+
+/* ═══ 🧵 스레드 슬라이드오버 패널 (Thread Sidebar Panel) ═══ */
+.thread-sidebar {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  z-index: 25;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+}
+@media (min-width: 1025px) {
+  .thread-sidebar {
+    position: relative;
+    box-shadow: none;
+  }
+}
+.thread-sidebar.open {
+  display: flex;
+}
+.thread-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.thread-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(13px * var(--ui-scale, 1));
+  font-weight: 700;
+  color: var(--text);
+  min-width: 0;
+}
+.thread-sidebar-title span#thread-panel-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-status-badge {
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.thread-status-badge.running {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.thread-status-badge.done {
+  background: var(--success-soft, rgba(16, 185, 129, 0.15));
+  color: var(--success, #10b981);
+}
+.thread-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.thread-steps-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.thread-sec-title {
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.thread-step-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: calc(12px * var(--ui-scale, 1));
+  color: var(--text-2);
+}
+.thread-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.thread-step-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.thread-step-summary {
+  color: var(--text-3);
+  font-size: calc(11px * var(--ui-scale, 1));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.thread-msg-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.thread-msg-item.user {
+  background: var(--bg-hover);
+}
+.thread-msg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: calc(11px * var(--ui-scale, 1));
+  color: var(--text-3);
+}
+.thread-msg-role {
+  font-weight: 600;
+  color: var(--text-2);
+}
+.thread-msg-bubble {
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.thread-fullscreen-row {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+.thread-sidebar-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.thread-input-wrap {
+  display: flex;
+  gap: 8px;
+}
+.thread-user-input {
+  flex: 1;
+  background: var(--bg-input, var(--bg-main));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  color: var(--text);
+  outline: none;
+}
+.thread-user-input:focus {
+  border-color: var(--accent);
+}
+.thread-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: calc(12.5px * var(--ui-scale, 1));
+}
+.thread-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  color: var(--text-3);
+  font-size: calc(12.5px * var(--ui-scale, 1));
+}

@@ -134,6 +134,31 @@
 
           <!-- 🤖 에이전트 계층 트리 (모든 에이전트가 parentAgentId 계층에 맞춰 여기에 동적 중첩 렌더링됨) -->
           <div class="sb-agent-tree-container" id="sb-agent-tree-container">
+            <!-- 💬 일반 대화 전문가 에이전트 (기본 범용 비서) -->
+            <div class="expert-agent-node" id="expert-node-__expert_general__">
+              <div class="sb-expert-row">
+                <div class="core-agent-slot expert-slot" id="expert-general-slot" onclick="selectRoom('__expert_general__')" title="사전 제약 없이 자유롭게 대화하는 순수 범용 비서">
+                  <div class="core-agent-icon" id="expert-general-icon" style="background:rgba(100,116,139,0.15);color:#64748b;">
+                    <svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div class="core-agent-body">
+                    <div class="core-agent-top">
+                      <span class="core-agent-title" id="expert-general-title">일반 대화</span>
+                    </div>
+                    <div class="core-agent-sub" id="expert-general-sub">대기</div>
+                  </div>
+                </div>
+                <button type="button" class="core-agent-cfg-btn expert-cfg-btn" id="btn-expert-general-cfg" onclick="openAgentConfigModal('__expert_general__', event)" title="일반 대화 에이전트 설정">
+                  <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <button type="button" class="core-agent-reset-btn expert-reset-btn" id="btn-expert-general-reset" onclick="resetCoreOrchestratorRoom(event, '__expert_general__')" title="일반 대화 에이전트 세션 초기화">
+                  <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+              </div>
+              <div class="sb-core-tree sb-subtask-tree" id="expert-general-subtask-tree"></div>
+              <div class="sb-subagents-container" id="subagents-__expert_general__"></div>
+            </div>
+
             <!-- 🧠 세컨브레인 전문가 에이전트 초기 플레이스홀더 (JS 초기화 시 계층 트리에 따라 동적 갱신) -->
             <div class="expert-agent-node" id="expert-node-__expert_vault__">
               <div class="sb-expert-row">
@@ -756,6 +781,30 @@
 
       <!-- 모바일 드로어 백드롭 -->
       <div id="master-drawer-backdrop" class="master-drawer-backdrop" onclick="toggleMasterSidebar(false)"></div>
+
+      <!-- 🧵 우측 슬라이드 스레드 패널 (Thread Slide-over Panel) -->
+      <aside class="thread-sidebar" id="thread-slide-panel" aria-label="하위 작업 스레드 패널">
+        <div class="thread-sidebar-header">
+          <div class="thread-sidebar-title">
+            <span class="thread-icon">🧵</span>
+            <span id="thread-panel-title">스레드: 하위 작업</span>
+            <span class="thread-status-badge" id="thread-panel-status">대기</span>
+          </div>
+          <button class="drawer-close-btn" onclick="closeThreadPanel()" title="스레드 닫기" aria-label="닫기">
+            <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="thread-sidebar-body" id="thread-panel-body">
+          <div class="thread-empty">하위 작업을 선택하면 실행 단계와 상세 로그가 표시됩니다.</div>
+        </div>
+        <div class="thread-sidebar-footer" id="thread-panel-footer">
+          <div class="thread-input-wrap">
+            <input type="text" id="thread-user-input" class="thread-user-input" placeholder="하위 에이전트에게 추가 지시 전달…" onkeydown="handleThreadInputKeyDown(event)">
+            <button type="button" class="btn sm primary thread-send-btn" id="btn-thread-send" onclick="sendThreadMessage()">전송</button>
+          </div>
+        </div>
+      </aside>
+      <div id="thread-drawer-backdrop" class="master-drawer-backdrop" onclick="closeThreadPanel()"></div>
     </div> <!-- end of #main-views-wrap -->
 
     </div>

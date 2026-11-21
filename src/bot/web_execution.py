@@ -75,11 +75,18 @@ from web_speech import clean_text_for_speech, VOICE_MODE_PROMPT_SUFFIX
 WEB_JOBS_FILE = os.path.join(STATE_DIR, "web_jobs.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
+EXPERT_GENERAL_TITLE = "일반 대화"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
-ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
+ORCHESTRATOR_ROOM_IDS = (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+)
 IDLE_RESET_SECONDS = 6 * 3600
 
 
@@ -929,8 +936,9 @@ async def _notify_master_agent(
         str(parent_cfg.get("name"))
         if parent_cfg and parent_cfg.get("name")
         else (
-            "세컨브레인" if target_parent_id == EXPERT_VAULT_ROOM_ID
-            else ("봇개발" if target_parent_id == EXPERT_CODING_ROOM_ID else "마스터")
+            "일반 대화" if target_parent_id == EXPERT_GENERAL_ROOM_ID
+            else ("세컨브레인" if target_parent_id == EXPERT_VAULT_ROOM_ID
+            else ("봇개발" if target_parent_id == EXPERT_CODING_ROOM_ID else "마스터"))
         )
     )
 
@@ -2123,6 +2131,8 @@ async def execute_chat_turn(
     is_coding = get_coding_mode() or (room_key == EXPERT_CODING_ROOM_ID)
     if room_key == CORE_ORCHESTRATOR_ROOM_ID:
         session_namespace = "core_"
+    elif room_key == EXPERT_GENERAL_ROOM_ID:
+        session_namespace = "general_"
     elif room_key == EXPERT_VAULT_ROOM_ID:
         session_namespace = "vault_"
     elif room_key == EXPERT_CODING_ROOM_ID:
@@ -2138,7 +2148,7 @@ async def execute_chat_turn(
         target_workdir = str(agent_cfg["workdir"]).strip() or curr_workdir
     elif room_key == EXPERT_CODING_ROOM_ID:
         target_workdir = curr_codedir or curr_workdir
-    elif room_key in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
+    elif room_key in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID):
         target_workdir = curr_workdir
     else:
         target_workdir = (curr_codedir or curr_workdir) if is_coding else curr_workdir
@@ -2291,6 +2301,8 @@ async def execute_chat_turn(
     if not existing_title or existing_title in ("새 대화", "대화방"):
         if room_key == CORE_ORCHESTRATOR_ROOM_ID:
             new_title = CORE_ORCHESTRATOR_TITLE
+        elif room_key == EXPERT_GENERAL_ROOM_ID:
+            new_title = EXPERT_GENERAL_TITLE
         elif room_key == EXPERT_VAULT_ROOM_ID:
             new_title = EXPERT_VAULT_TITLE
         elif room_key == EXPERT_CODING_ROOM_ID:

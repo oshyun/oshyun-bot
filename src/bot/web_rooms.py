@@ -24,11 +24,18 @@ from paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdi
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
+EXPERT_GENERAL_TITLE = "일반 대화"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
-ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
+ORCHESTRATOR_ROOM_IDS = (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+)
 
 
 def _all_orchestrator_room_ids() -> tuple[str, ...]:
@@ -356,6 +363,8 @@ def _load_chat_rooms_index() -> list[dict]:
         agent_cfg = agent_configs.get_agent_config(canonical_id) if canonical_id in all_orch_ids_set else None
         if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
             merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or CORE_ORCHESTRATOR_TITLE
+        elif canonical_id == EXPERT_GENERAL_ROOM_ID:
+            merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or EXPERT_GENERAL_TITLE
         elif canonical_id == EXPERT_VAULT_ROOM_ID:
             merged["title"] = (agent_cfg.get("title") if agent_cfg else None) or EXPERT_VAULT_TITLE
         elif canonical_id == EXPERT_CODING_ROOM_ID:
@@ -403,6 +412,8 @@ def _load_chat_rooms_index() -> list[dict]:
         if not merged["title"]:
             if canonical_id == CORE_ORCHESTRATOR_ROOM_ID:
                 merged["title"] = CORE_ORCHESTRATOR_TITLE
+            elif canonical_id == EXPERT_GENERAL_ROOM_ID:
+                merged["title"] = EXPERT_GENERAL_TITLE
             elif canonical_id == EXPERT_VAULT_ROOM_ID:
                 merged["title"] = EXPERT_VAULT_TITLE
             elif canonical_id == EXPERT_CODING_ROOM_ID:
@@ -417,7 +428,7 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["workdir"] = str(agent_cfg["workdir"]).strip()
             elif canonical_id == EXPERT_CODING_ROOM_ID:
                 merged["workdir"] = paths.CODEDIR or paths.WORKDIR
-            elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID):
+            elif canonical_id in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID):
                 merged["workdir"] = paths.WORKDIR
             elif child_default_workdir(merged.get("parentAgentId")):
                 merged["workdir"] = child_default_workdir(merged.get("parentAgentId"))
@@ -487,6 +498,8 @@ def _update_room_metadata(
             return
     if clean_rid == CORE_ORCHESTRATOR_ROOM_ID:
         title = CORE_ORCHESTRATOR_TITLE
+    elif clean_rid == EXPERT_GENERAL_ROOM_ID:
+        title = EXPERT_GENERAL_TITLE
     elif clean_rid == EXPERT_VAULT_ROOM_ID:
         title = EXPERT_VAULT_TITLE
     elif clean_rid == EXPERT_CODING_ROOM_ID:

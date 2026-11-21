@@ -33,11 +33,18 @@ from paths import MASTER_STATE_FILE, WORKDIR, child_default_workdir
 AGY_BRAIN_DIR = os.path.expanduser("~/.gemini/antigravity/brain")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
+EXPERT_GENERAL_ROOM_ID = "__expert_general__"
+EXPERT_GENERAL_TITLE = "일반 대화"
 EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
 EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
-ORCHESTRATOR_ROOM_IDS = (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID)
+ORCHESTRATOR_ROOM_IDS = (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+)
 _master_state_lock = threading.Lock()
 
 
@@ -1389,7 +1396,8 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
         if parent_cfg and parent_cfg.get("sessionNamespace")
         else (
             "core_" if parent_agent_id == CORE_ORCHESTRATOR_ROOM_ID
-            else ("vault_" if parent_agent_id == EXPERT_VAULT_ROOM_ID else "coding_")
+            else ("general_" if parent_agent_id == EXPERT_GENERAL_ROOM_ID
+            else ("vault_" if parent_agent_id == EXPERT_VAULT_ROOM_ID else "coding_"))
         )
     )
     target_sid = _room_session_ids.get(parent_agent_id) or get_session(ns=parent_ns)
@@ -1680,6 +1688,11 @@ def ensure_orchestrator_room(
         workdir = str(cfg.get("workdir") or "").strip() or None
         eff_model = model if model is not None else cfg.get("model")
         eff_effort = effort if effort is not None else cfg.get("effort")
+    elif clean_rid == EXPERT_GENERAL_ROOM_ID:
+        title = EXPERT_GENERAL_TITLE
+        rid = EXPERT_GENERAL_ROOM_ID
+        workdir = None
+        eff_model, eff_effort = model, effort
     elif clean_rid == EXPERT_VAULT_ROOM_ID:
         title = EXPERT_VAULT_TITLE
         rid = EXPERT_VAULT_ROOM_ID
@@ -1728,7 +1741,11 @@ async def reset_core_orchestrator_state(
         target_rid = CORE_ORCHESTRATOR_ROOM_ID
 
     cfg = agent_configs.get_agent_config(target_rid)
-    if target_rid == EXPERT_VAULT_ROOM_ID:
+    if target_rid == EXPERT_GENERAL_ROOM_ID:
+        ns = "general_"
+        agent_id = "general"
+        agent_name = (cfg.get("name") if cfg else None) or "일반 대화"
+    elif target_rid == EXPERT_VAULT_ROOM_ID:
         ns = "vault_"
         agent_id = "vault"
         agent_name = (cfg.get("name") if cfg else None) or "세컨브레인"

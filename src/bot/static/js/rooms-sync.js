@@ -50,6 +50,7 @@ function ensureCoreRoom() {
   const defaultCodeDir = (serverStatus && (serverStatus.codeDir || serverStatus.codedir || serverStatus.vaultDir)) || '';
 
   const coreCfg = getAgentConfigById(CORE_ROOM_ID);
+  const generalCfg = getAgentConfigById(EXPERT_GENERAL_ROOM_ID);
   const vaultCfg = getAgentConfigById(EXPERT_VAULT_ROOM_ID);
   const codingCfg = getAgentConfigById(EXPERT_CODING_ROOM_ID);
 
@@ -59,6 +60,13 @@ function ensureCoreRoom() {
     (coreCfg && coreCfg.roleDescription) || '전체 AGY 세션 열람 · 지시 · 스폰',
     (coreCfg && coreCfg.workdir) || defaultVaultDir,
     coreCfg || {}
+  );
+  ensureAgent(
+    EXPERT_GENERAL_ROOM_ID,
+    (generalCfg && generalCfg.name) || EXPERT_GENERAL_TITLE,
+    (generalCfg && generalCfg.roleDescription) || '사전 제약 없이 자유롭게 대화하는 순수 범용 비서',
+    (generalCfg && generalCfg.workdir) || defaultVaultDir,
+    generalCfg || {}
   );
   ensureAgent(
     EXPERT_VAULT_ROOM_ID,
@@ -81,7 +89,7 @@ function ensureCoreRoom() {
       if (!ORCHESTRATOR_ROOM_IDS.includes(cfg.id)) {
         ORCHESTRATOR_ROOM_IDS.push(cfg.id);
       }
-      if ([CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(cfg.id)) continue;
+      if ([CORE_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(cfg.id)) continue;
       ensureAgent(
         cfg.id,
         cfg.name || cfg.id,
@@ -123,6 +131,7 @@ function updateCoreAgentSlotUi() {
   const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
     ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
     : [
+        { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화', roleDescription: '사전 제약 없이 자유롭게 대화하는 순수 범용 비서', emoji: '💬', color: '#64748b', parentAgentId: CORE_ROOM_ID, builtin: true },
         { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', roleDescription: 'Obsidian 볼트 지식·5대 도메인 동기화 전문 에이전트', emoji: '🧠', color: '#d97706', parentAgentId: CORE_ROOM_ID, builtin: true },
         { id: EXPERT_CODING_ROOM_ID, name: '봇개발', roleDescription: 'oshyun-bot 소스코드 개발·테스트·토큰버닝 전문 에이전트', emoji: '💻', color: '#3b82f6', parentAgentId: CORE_ROOM_ID, builtin: true },
       ];
@@ -151,22 +160,25 @@ function updateCoreAgentSlotUi() {
       const name = escapeHtml(agent.name || agent.id);
       const desc = escapeHtml(agent.roleDescription || '전문 에이전트');
 
+      const isGeneral = (agent.id === EXPERT_GENERAL_ROOM_ID);
       const isVault = (agent.id === EXPERT_VAULT_ROOM_ID);
       const isCoding = (agent.id === EXPERT_CODING_ROOM_ID);
 
-      const slotId = isVault ? 'expert-vault-slot' : (isCoding ? 'expert-coding-slot' : `custom-slot-${safeId}`);
-      const titleId = isVault ? 'expert-vault-title' : (isCoding ? 'expert-coding-title' : '');
-      const subId = isVault ? 'expert-vault-sub' : (isCoding ? 'expert-coding-sub' : `custom-sub-${safeId}`);
-      const cfgBtnId = isVault ? 'btn-expert-vault-cfg' : (isCoding ? 'btn-expert-coding-cfg' : `btn-agent-cfg-${safeId}`);
-      const resetBtnId = isVault ? 'btn-expert-vault-reset' : (isCoding ? 'btn-expert-coding-reset' : `btn-agent-reset-${safeId}`);
-      const treeId = isVault ? 'expert-vault-subtask-tree' : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${safeId}`);
+      const slotId = isGeneral ? 'expert-general-slot' : (isVault ? 'expert-vault-slot' : (isCoding ? 'expert-coding-slot' : `custom-slot-${safeId}`));
+      const titleId = isGeneral ? 'expert-general-title' : (isVault ? 'expert-vault-title' : (isCoding ? 'expert-coding-title' : ''));
+      const subId = isGeneral ? 'expert-general-sub' : (isVault ? 'expert-vault-sub' : (isCoding ? 'expert-coding-sub' : `custom-sub-${safeId}`));
+      const cfgBtnId = isGeneral ? 'btn-expert-general-cfg' : (isVault ? 'btn-expert-vault-cfg' : (isCoding ? 'btn-expert-coding-cfg' : `btn-agent-cfg-${safeId}`));
+      const resetBtnId = isGeneral ? 'btn-expert-general-reset' : (isVault ? 'btn-expert-vault-reset' : (isCoding ? 'btn-expert-coding-reset' : `btn-agent-reset-${safeId}`));
+      const treeId = isGeneral ? 'expert-general-subtask-tree' : (isVault ? 'expert-vault-subtask-tree' : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${safeId}`));
 
       const colorStyle = agent.color
         ? `background:${escapeHtml(agent.color)}26;color:${escapeHtml(agent.color)};`
-        : (isVault ? 'background:rgba(217,119,6,0.15);color:#d97706;' : (isCoding ? 'background:rgba(59,130,246,0.15);color:#3b82f6;' : 'background:rgba(16,185,129,0.15);color:#10b981;'));
+        : (isGeneral ? 'background:rgba(100,116,139,0.15);color:#64748b;' : (isVault ? 'background:rgba(217,119,6,0.15);color:#d97706;' : (isCoding ? 'background:rgba(59,130,246,0.15);color:#3b82f6;' : 'background:rgba(16,185,129,0.15);color:#10b981;')));
 
       let iconHtml;
-      if (isVault) {
+      if (isGeneral) {
+        iconHtml = `<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+      } else if (isVault) {
         iconHtml = `<svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>`;
       } else if (isCoding) {
         iconHtml = `<svg class="i" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
@@ -242,6 +254,8 @@ function applyOrchestratorSessionResetLocal(targetRoomId, data = {}) {
     room.messageCount = 0;
     if (cfg && cfg.roleDescription) {
       room.preview = cfg.roleDescription;
+    } else if (rid === EXPERT_GENERAL_ROOM_ID) {
+      room.preview = '사전 제약 없이 자유롭게 대화하는 순수 범용 비서';
     } else if (rid === EXPERT_VAULT_ROOM_ID) {
       room.preview = '옵시디언 볼트 지식 · 개인 기록 전담';
     } else if (rid === EXPERT_CODING_ROOM_ID) {
@@ -274,14 +288,16 @@ function applyMasterSessionResetLocal(data = {}) {
 async function resetCoreOrchestratorRoom(event, targetRoomId = CORE_ROOM_ID) {
   if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
   const targetId = targetRoomId || CORE_ROOM_ID;
+  const isGeneral = targetId === EXPERT_GENERAL_ROOM_ID;
   const isVault = targetId === EXPERT_VAULT_ROOM_ID;
   const isCoding = targetId === EXPERT_CODING_ROOM_ID;
   const cfg = getAgentConfigById(targetId);
   let agentScope = 'master';
-  if (isVault) agentScope = 'vault';
+  if (isGeneral) agentScope = 'general';
+  else if (isVault) agentScope = 'vault';
   else if (isCoding) agentScope = 'coding';
   else if (targetId !== CORE_ROOM_ID) agentScope = targetId;
-  const agentLabel = (cfg && cfg.name) || (isVault ? '세컨브레인' : (isCoding ? '봇개발' : '마스터'));
+  const agentLabel = (cfg && cfg.name) || (isGeneral ? '일반 대화' : (isVault ? '세컨브레인' : (isCoding ? '봇개발' : '마스터')));
 
   const doReset = async (clearDoneTasks = false) => {
     applyOrchestratorSessionResetLocal(targetId, {});
@@ -482,6 +498,7 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
 
         let title = sRoom.title || '새 대화';
         if (canonId === CORE_ROOM_ID) title = CORE_ROOM_TITLE;
+        else if (canonId === EXPERT_GENERAL_ROOM_ID) title = EXPERT_GENERAL_TITLE;
         else if (canonId === EXPERT_VAULT_ROOM_ID) title = EXPERT_VAULT_TITLE;
         else if (canonId === EXPERT_CODING_ROOM_ID) title = EXPERT_CODING_TITLE;
         newChatRooms.push({
@@ -1835,7 +1852,7 @@ function syncAgentConfigsState(agentsList, orchestratorIds = null) {
   if (Array.isArray(agentsList)) {
     agentConfigs = agentsList.filter(a => a && typeof a === 'object' && a.id);
   }
-  const nextOrchIds = new Set([CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID]);
+  const nextOrchIds = new Set([CORE_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID]);
   if (Array.isArray(orchestratorIds)) {
     orchestratorIds.forEach(id => {
       if (id) nextOrchIds.add(String(id).trim());
@@ -1933,6 +1950,7 @@ function renderAgentConfigSelectorBar(activeId) {
     ? agentConfigs
     : [
         { id: CORE_ROOM_ID, name: '마스터 오케스트레이터', builtin: true },
+        { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화', builtin: true },
         { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인', builtin: true },
         { id: EXPERT_CODING_ROOM_ID, name: '봇개발', builtin: true },
       ];
@@ -1965,7 +1983,7 @@ function renderAgentConfigSelectorBar(activeId) {
 function populateAgentConfigForm(targetAgentId = null) {
   editingAgentId = targetAgentId ? String(targetAgentId).trim() : null;
   const cfg = editingAgentId ? getAgentConfigById(editingAgentId) : null;
-  const isBuiltin = Boolean(cfg && cfg.builtin) || [CORE_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(editingAgentId);
+  const isBuiltin = Boolean(cfg && cfg.builtin) || [CORE_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, EXPERT_CODING_ROOM_ID].includes(editingAgentId);
   const isCustomExisting = Boolean(editingAgentId && !isBuiltin && cfg);
 
   renderAgentConfigSelectorBar(editingAgentId);

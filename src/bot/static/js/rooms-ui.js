@@ -393,12 +393,22 @@ function createNewChat(force = false, options = {}) {
   cleanUnusedEmptyRooms();
   const now = Date.now();
   const newId = 'room-' + now;
+
+  // 현재 머물고 있는 에이전트가 있으면 그 에이전트 하위로, 없으면 기본 '일반 대화' 에이전트 하위로 생성
+  let targetParent = EXPERT_GENERAL_ROOM_ID;
+  if (cur && cur.id && isOrchestratorAgentRoomId(cur.id) && cur.id !== CORE_ROOM_ID) {
+    targetParent = cur.id;
+  } else if (cur && cur.parentAgentId && cur.parentAgentId !== CORE_ROOM_ID) {
+    targetParent = cur.parentAgentId;
+  }
+
   chatRooms.unshift({
     id: newId,
     title: '새 대화',
     messages: [],
     isNewSession: true,
     userCreatedEmpty: true,
+    parentAgentId: targetParent,
     sessionId: null,
     updatedAt: now,
     createdAt: now
@@ -527,18 +537,7 @@ function onRoomItemClick(event, roomId) {
 
 function isMasterSubtaskRoom(r) {
   if (!r || !r.id || ORCHESTRATOR_ROOM_IDS.includes(r.id)) return false;
-  const pid = String(r.parentAgentId || '').trim();
-  if (pid && ORCHESTRATOR_ROOM_IDS.includes(pid)) return true;
-  if (r.isOrchestratorChild || r.channel === 'orchestrator') return true;
-  if (Array.isArray(r.messages) && r.messages.some(m => m && m.channel === 'orchestrator')) return true;
-  if (Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id)) return true;
-  if (latestMasterGraph && Array.isArray(latestMasterGraph.nodes)) {
-    const node = latestMasterGraph.nodes.find(n => n && n.id === r.id);
-    if (node && node.dispatched) return true;
-  }
-  const live = roomLiveStates[r.id];
-  if (live && live.channel === 'orchestrator') return true;
-  return false;
+  return true; // 모든 대화방이 에이전트 계층 트리(일반대화/세컨브레인/봇개발/마스터/커스텀)에 일원화 렌더링됨
 }
 
 function renderMasterSubtaskTree(masterChildRooms) {
@@ -549,7 +548,7 @@ function renderMasterSubtaskTree(masterChildRooms) {
       treeEl.innerHTML = '';
       return;
     }
-    treeEl.innerHTML = rooms.slice(0, 30).map(r => {
+    treeEl.innerHTML = rooms.slice(0, 50).map(r => {
       const safeId = escapeHtml(r.id);
       const live = roomLiveStates[r.id];
       const isRunning = Boolean(live && live.isRunning);
@@ -575,23 +574,33 @@ function renderMasterSubtaskTree(masterChildRooms) {
     }).join('');
   };
 
-  const masterRooms = masterChildRooms.filter(r => !r.parentAgentId || r.parentAgentId === CORE_ROOM_ID);
+  // 마스터 직속: 명시적으로 parentAgentId가 '__core__'이거나 채널이 orchestrator인 방들
+  const masterRooms = masterChildRooms.filter(r => r.parentAgentId === CORE_ROOM_ID || r.isOrchestratorChild);
   renderTree('master-subtask-tree', masterRooms, '마스터 직속 채팅');
 
   const allAgents = Array.isArray(agentConfigs) && agentConfigs.length > 0
     ? agentConfigs.filter(a => a && a.id && a.id !== CORE_ROOM_ID)
     : [
+        { id: EXPERT_GENERAL_ROOM_ID, name: '일반 대화' },
         { id: EXPERT_VAULT_ROOM_ID, name: '세컨브레인' },
         { id: EXPERT_CODING_ROOM_ID, name: '봇개발' },
       ];
 
   for (const agent of allAgents) {
+    const isGeneral = (agent.id === EXPERT_GENERAL_ROOM_ID);
     const isVault = (agent.id === EXPERT_VAULT_ROOM_ID);
     const isCoding = (agent.id === EXPERT_CODING_ROOM_ID);
-    const containerId = isVault
-      ? 'expert-vault-subtask-tree'
-      : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${agent.id}`);
-    const agentRooms = masterChildRooms.filter(r => r.parentAgentId === agent.id);
+    const containerId = isGeneral
+      ? 'expert-general-subtask-tree'
+      : (isVault
+        ? 'expert-vault-subtask-tree'
+        : (isCoding ? 'expert-coding-subtask-tree' : `custom-subtask-tree-${agent.id}`));
+
+    // 일반 대화의 경우, parentAgentId === EXPERT_GENERAL_ROOM_ID 뿐 아니라 부모가 없는 기존 고아 방들도 흡수
+    const agentRooms = isGeneral
+      ? masterChildRooms.filter(r => r.parentAgentId === agent.id || (!r.parentAgentId && !r.isOrchestratorChild))
+      : masterChildRooms.filter(r => r.parentAgentId === agent.id);
+
     renderTree(containerId, agentRooms, `${agent.name || agent.id} 직속 채팅`);
   }
 }
@@ -603,88 +612,43 @@ function renderRoomList() {
   const archivedRooms = uniqueRooms.filter(r => Boolean(r.isArchived));
 
   const masterChildRooms = activeRooms.filter(isMasterSubtaskRoom);
-  const generalRooms = activeRooms.filter(r => !isMasterSubtaskRoom(r));
   renderMasterSubtaskTree(masterChildRooms);
 
   const listPc = document.getElementById('room-list-pc');
   if (listPc) {
-    if (generalRooms.length === 0) {
-      const emptyMsg = roomSearchQuery.trim() ? '검색 결과가 없습니다.' : (masterChildRooms.length > 0 ? '일반 대화가 없습니다.' : '대화가 없습니다.');
-      listPc.innerHTML = `
-        <div class="sb-general-header">
-          <div class="sb-general-header-left">
-            <span>일반 채팅</span>
-            <button type="button" class="new-chat-inline-btn" onclick="createNewChat()" title="새 일반 대화 시작 (⇧⌘O)">
-              <svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              <span>새 대화</span>
-            </button>
-          </div>
-        </div>
-        <div class="sb-empty">${emptyMsg}</div>
-      `;
-    } else {
-      let lastGroup = '';
-      const html = [
-        '<div class="sb-general-header">' +
-          '<div class="sb-general-header-left">' +
-            '<span>일반 채팅</span>' +
-            '<button type="button" class="new-chat-inline-btn" onclick="createNewChat()" title="새 일반 대화 시작 (⇧⌘O)">' +
-              '<svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>' +
-              '<span>새 대화</span>' +
-              '<kbd class="desktop-only" id="kbd-new-chat">⇧⌘O</kbd>' +
-            '</button>' +
-          '</div>' +
-          '<span>최근 사용순</span>' +
-        '</div>'
-      ];
-      for (const r of generalRooms) {
-        const group = r.pinned ? '고정됨' : getDateGroupLabel(r.updatedAt || r.createdAt);
-        if (group !== lastGroup) {
-          lastGroup = group;
-          html.push(`<div class="sb-group-label"><span>${group}</span></div>`);
-        }
-        const live = roomLiveStates[r.id];
-        const isRunning = Boolean(live && live.isRunning);
-        const queuedInRoom = getQueuedMessagesCount(r);
-        const isSelected = selectedRoomIds.has(String(r.id));
-        const safeId = escapeHtml(r.id);
-        const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
-        const isCur = (r.id === currentRoomId);
-        const hasPendingTask = !isCur && Array.isArray(latestMasterTasks) && latestMasterTasks.some(t => t && t.roomId === r.id && isPendingMasterTask(t));
-        const isUnread = !isCur && Boolean(r.unread || hasPendingTask);
-
-        html.push(`
-          <div class="room-item-wrap" data-room-id="${safeId}">
-            <div class="room-swipe-actions">
-              <button type="button" class="room-swipe-del-btn" onclick="event.stopPropagation();deleteRoom(event, '${safeId}')" title="대화 삭제">
-                ${ICONS.trash}
-                <span>삭제</span>
-              </button>
-            </div>
-            <div class="room-item ${r.id === currentRoomId ? 'active' : ''} ${isRunning ? 'running' : ''} ${isSelected ? 'selected' : ''}"
-                 data-room-id="${safeId}"
-                 onclick="onRoomItemClick(event, '${safeId}')">
-              <span class="room-check" onclick="toggleRoomSelection('${safeId}', event)">${ICONS.check}</span>
-              ${isRunning ? '<span class="run-spinner" role="status" aria-label="실행 중"></span>' : ''}
-              <div class="room-body">
-                <div class="room-row-top">
-                  <span class="room-title">${escapeHtml(r.title || '새 대화')}</span>
-                  ${queuedInRoom > 0 ? `<span class="room-queue-badge">대기 ${queuedInRoom}</span>` : ''}
-                  ${relTime ? `<span class="room-time">${escapeHtml(relTime)}</span>` : ''}
-                  ${isUnread ? '<span class="sb-tree-dot" title="확인 필요"></span>' : ''}
+    // 검색어가 있을 때만 통합 검색 결과 리스트로 보여주고, 평소에는 에이전트 트리로 100% 일원화
+    if (roomSearchQuery.trim()) {
+      if (activeRooms.length === 0) {
+        listPc.innerHTML = `<div class="sb-empty">검색 결과가 없습니다.</div>`;
+      } else {
+        const html = [
+          '<div class="sb-general-header">' +
+            '<div class="sb-general-header-left"><span>검색 결과</span></div>' +
+          '</div>'
+        ];
+        for (const r of activeRooms) {
+          const safeId = escapeHtml(r.id);
+          const relTime = formatRelativeTime(r.updatedAt || r.createdAt);
+          html.push(`
+            <div class="room-item-wrap" data-room-id="${safeId}">
+              <div class="room-item ${r.id === currentRoomId ? 'active' : ''}" data-room-id="${safeId}" onclick="onRoomItemClick(event, '${safeId}')">
+                <div class="room-body">
+                  <div class="room-row-top">
+                    <span class="room-title">${escapeHtml(r.title || '대화')}</span>
+                    ${relTime ? `<span class="room-time">${escapeHtml(relTime)}</span>` : ''}
+                  </div>
+                  ${r._searchSnippet ? `<div class="room-search-snippet">${escapeHtml(r._searchSnippet)}</div>` : ''}
                 </div>
-                ${r._searchSnippet ? `<div class="room-search-snippet">${escapeHtml(r._searchSnippet)}</div>` : ''}
-              </div>
-              <div class="room-actions-inline">
-                <button type="button" class="room-del" onclick="event.stopPropagation();toggleArchiveRoom('${safeId}', true)" title="대화 보관"><svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></button>
-                <button type="button" class="room-del" onclick="event.stopPropagation();openRenameRoomModal('${safeId}')" title="이름 변경">${ICONS.edit}</button>
-                <button type="button" class="room-del" onclick="deleteRoom(event, '${safeId}')" title="삭제">${ICONS.trash}</button>
               </div>
             </div>
-          </div>
-        `);
+          `);
+        }
+        listPc.innerHTML = html.join('');
       }
-      listPc.innerHTML = html.join('');
+      listPc.style.display = 'block';
+    } else {
+      listPc.innerHTML = '';
+      listPc.style.display = 'none';
     }
   }
 
@@ -972,5 +936,172 @@ function bindRoomLongPressEvents() {
         closeSwipedRoom();
       }
     }, true);
+  }
+}
+
+// ─── 🧵 마스터 에이전트 하위 작업 스레드(Thread) 오케스트레이션 패널 ───
+let currentThreadRoomId = null;
+let currentThreadTaskId = null;
+
+async function openThreadPanel(taskId, roomId, title = '') {
+  const panel = document.getElementById('thread-slide-panel');
+  const backdrop = document.getElementById('thread-drawer-backdrop');
+  if (!panel) return;
+
+  currentThreadRoomId = roomId;
+  currentThreadTaskId = taskId;
+
+  const titleEl = document.getElementById('thread-panel-title');
+  const statusEl = document.getElementById('thread-panel-status');
+  const bodyEl = document.getElementById('thread-panel-body');
+
+  const targetRoom = roomId ? getRoomById(roomId) : null;
+  const displayTitle = title || (targetRoom ? targetRoom.title : '하위 작업');
+  if (titleEl) titleEl.textContent = `🧵 ${displayTitle}`;
+
+  const live = roomId ? roomLiveStates[roomId] : null;
+  const isRunning = Boolean(live && live.isRunning);
+  if (statusEl) {
+    statusEl.textContent = isRunning ? '실행 중' : '완료';
+    statusEl.className = `thread-status-badge ${isRunning ? 'running' : 'done'}`;
+  }
+
+  if (bodyEl) {
+    bodyEl.innerHTML = '<div class="thread-loading"><span class="run-spinner"></span> 대화 및 실행 단계 불러오는 중…</div>';
+    if (roomId && (!targetRoom || !targetRoom.messages || targetRoom.messages.length === 0)) {
+      try {
+        if (typeof loadChatHistoryFromServer === 'function') {
+          await loadChatHistoryFromServer(roomId, targetRoom ? targetRoom.sessionId : null);
+        }
+      } catch (err) {
+        console.warn('스레드 대화 로드 실패:', err);
+      }
+    }
+    renderThreadPanelBody();
+  }
+
+  panel.classList.add('open');
+  if (backdrop) backdrop.classList.add('open');
+  const inputEl = document.getElementById('thread-user-input');
+  if (inputEl) inputEl.focus();
+}
+
+function closeThreadPanel() {
+  const panel = document.getElementById('thread-slide-panel');
+  const backdrop = document.getElementById('thread-drawer-backdrop');
+  if (panel) panel.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  currentThreadRoomId = null;
+  currentThreadTaskId = null;
+}
+
+function renderThreadPanelBody() {
+  const bodyEl = document.getElementById('thread-panel-body');
+  if (!bodyEl || !currentThreadRoomId) return;
+
+  const room = getRoomById(currentThreadRoomId);
+  const msgs = (room && Array.isArray(room.messages)) ? room.messages : [];
+  const live = roomLiveStates[currentThreadRoomId];
+
+  let html = [];
+
+  // 도구 실행 단계(activeSteps) 렌더링
+  if (live && Array.isArray(live.activeSteps) && live.activeSteps.length > 0) {
+    html.push('<div class="thread-steps-section"><div class="thread-sec-title">실행 단계 (Live Steps)</div>');
+    live.activeSteps.forEach(s => {
+      const stepName = escapeHtml(s.name || s.tool || '도구 실행');
+      const stepSummary = escapeHtml(s.summary || s.argPreview || '');
+      html.push(`
+        <div class="thread-step-item">
+          <span class="thread-step-dot"></span>
+          <span class="thread-step-name">${stepName}</span>
+          ${stepSummary ? `<span class="thread-step-summary">${stepSummary}</span>` : ''}
+        </div>
+      `);
+    });
+    html.push('</div>');
+  }
+
+  // 메시지 렌더링
+  if (msgs.length === 0) {
+    html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 지시를 보낼 수 있습니다.</div>');
+  } else {
+    html.push('<div class="thread-messages-list">');
+    msgs.forEach(m => {
+      if (!m) return;
+      const role = m.role === 'user' ? 'user' : 'assistant';
+      const text = escapeHtml(m.text || m.content || '');
+      const time = m.timestamp ? formatTime(m.timestamp) : '';
+      html.push(`
+        <div class="thread-msg-item ${role}">
+          <div class="thread-msg-header">
+            <span class="thread-msg-role">${role === 'user' ? '나' : (m.agentName || '하위 전문가')}</span>
+            ${time ? `<span class="thread-msg-time">${time}</span>` : ''}
+          </div>
+          <div class="thread-msg-bubble">${text}</div>
+        </div>
+      `);
+    });
+    html.push('</div>');
+  }
+
+  // 전체 화면으로 이동 버튼
+  html.push(`
+    <div class="thread-fullscreen-row">
+      <button type="button" class="btn sm ghost" onclick="selectRoom('${escapeHtml(currentThreadRoomId)}'); closeThreadPanel();">
+        <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <span>이 대화방 전체 화면으로 열기</span>
+      </button>
+    </div>
+  `);
+
+  bodyEl.innerHTML = html.join('');
+  bodyEl.scrollTop = bodyEl.scrollHeight;
+}
+
+async function sendThreadMessage() {
+  const inputEl = document.getElementById('thread-user-input');
+  if (!inputEl || !currentThreadRoomId) return;
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+
+  const targetRoom = getRoomById(currentThreadRoomId);
+  const sid = targetRoom ? targetRoom.sessionId : null;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId: currentThreadRoomId,
+        message: text,
+        sessionId: sid,
+        channel: 'orchestrator'
+      })
+    });
+    const data = await res.json();
+    if (data && data.ok) {
+      if (targetRoom && Array.isArray(targetRoom.messages)) {
+        targetRoom.messages.push({
+          id: 'user-' + Date.now(),
+          role: 'user',
+          text: text,
+          timestamp: Date.now() / 1000
+        });
+      }
+      renderThreadPanelBody();
+    }
+  } catch (err) {
+    console.error('스레드 메시지 전송 실패:', err);
+    showToast('메시지 전송에 실패했습니다.');
+  }
+}
+
+function handleThreadInputKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendThreadMessage();
   }
 }

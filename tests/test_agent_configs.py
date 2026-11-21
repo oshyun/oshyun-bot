@@ -63,6 +63,7 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
         configs = agent_configs.list_agent_configs()
         ids = [c["id"] for c in configs]
         self.assertIn("__core__", ids)
+        self.assertIn("__expert_general__", ids)
         self.assertIn("__expert_vault__", ids)
         self.assertIn("__expert_coding__", ids)
 
