@@ -73,6 +73,16 @@ class TestThreadOrchestration(unittest.TestCase):
         self.assertIn(".thread-msg-bubble", css)
         self.assertIn(".thread-msg-bubble.markdown-body", css)
 
+    def test_thread_backdrop_no_blur(self):
+        """스레드 백드롭이 마스터 대화창을 가리거나 블러 처리하지 않고 투명하게 유지되는지 검증."""
+        css_path = os.path.join(self.static_dir, "css", "master-inspector.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+
+        self.assertIn(".thread-drawer-backdrop", css)
+        self.assertIn("backdrop-filter: none !important", css)
+        self.assertIn("background: transparent", css)
+
     def test_thread_js_functions_defined(self):
         """rooms-ui.js 에 스레드 패널 제어 함수들이 올바르게 정의되어 있는지 검증."""
         js_path = os.path.join(self.static_dir, "js", "rooms-ui.js")
