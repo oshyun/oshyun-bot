@@ -1009,10 +1009,14 @@ def archive_room(
     is_archived: bool = True,
     db_path: str | None = None,
 ) -> bool:
-    """대화방을 아카이브(보관)하거나 보관 해제한다."""
+    """대화방을 아카이브(보관)하거나 보관 해제한다 (마스터 및 전문가 에이전트는 보관 불가)."""
     target = str(room_id_or_session_id).strip()
     if not target:
         return False
+    # 보관 처리 시 보호 대상 룸은 보관 거부
+    if is_archived and _is_protected_room_id(target):
+        return False
+
     archived_val = 1 if is_archived else 0
     with get_connection(db_path) as conn:
         cur = conn.cursor()
@@ -1022,6 +1026,57 @@ def archive_room(
         )
         conn.commit()
         return cur.rowcount > 0
+
+
+def archive_rooms_bulk(
+    targets: list[str],
+    is_archived: bool = True,
+    db_path: str | None = None,
+) -> int:
+    """여러 대화방(방 ID 또는 세션 ID 목록)을 단일 트랜잭션으로 일괄 아카이브(보관) 또는 해제 처리한다 (마스터/전문가는 자동 제외)."""
+    cleaned = [str(t).strip() for t in targets if t and str(t).strip()]
+    cleaned = list(dict.fromkeys(cleaned))
+    if not cleaned:
+        return 0
+
+    if is_archived:
+        # 보관 처리 시 보호 대상 ID 제외
+        cleaned = [t for t in cleaned if not _is_protected_room_id(t)]
+        if not cleaned:
+            return 0
+
+        # 보호 대상 룸의 세션 ID도 제외
+        protected_sids: set[str] = set()
+        all_protected = set(PROTECTED_ROOM_IDS)
+        try:
+            import agent_configs
+            all_protected.update(agent_configs.get_orchestrator_room_ids())
+        except Exception:
+            pass
+        for pid in all_protected:
+            try:
+                p_room = get_room(pid, db_path=db_path)
+                if p_room and p_room.get("sessionId"):
+                    protected_sids.add(str(p_room["sessionId"]).strip())
+            except Exception:
+                pass
+        if protected_sids:
+            cleaned = [t for t in cleaned if t not in protected_sids]
+        if not cleaned:
+            return 0
+
+    archived_val = 1 if is_archived else 0
+    placeholders = ", ".join("?" for _ in cleaned)
+    params = [archived_val] + cleaned + cleaned
+    with get_connection(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"UPDATE rooms SET is_archived = ? WHERE id IN ({placeholders}) OR session_id IN ({placeholders});",
+            params,
+        )
+        updated_count = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        conn.commit()
+        return updated_count
 
 
 def get_message(message_id: int, db_path: str | None = None) -> dict | None:
