@@ -248,13 +248,17 @@ claude 는 단일 Mach-O 바이너리라 심링크 우회 위해 `realpath` 로 
 가상환경: `.venv` (의존성 `requirements.txt`). 로그·PID 는 `data/logs/`, 영속 상태는 `data/state/` 에 모인다.
 **코드/.env 변경 후에는 반드시 `./scripts/restart.sh`** 로 적용.
 
-## 주요 .env 키
+## 주요 .env 키 (도메인__키 네이밍 규약)
 
-`TELEGRAM_BOT_TOKEN`(필수) · `ALLOWED_CHAT_IDS`(허용 chat_id, 보안상 필수 권장) ·
-`AGENT_WORKDIR`(볼트 경로) · `AGENT_MODEL`(기본 모델) · `AGENT_EXTRA_ARGS` · `AGENT_TIMEOUT` ·
-`ANTHROPIC_DEFAULT_{HAIKU,SONNET,OPUS}_MODEL`(/model 패널 후보 자동 구성 · API 프록시 설정) ·
-`DATA_DIR`(운영 산출물 위치, 기본 `<루트>/data`) ·
-`OSHYUN_BOT_SANDBOX`(0=격리 끔) · `OSHYUN_BOT_SYSTEM_PROMPT`(시스템 프롬프트 덮어쓰기).
+환경변수의 소속과 역할을 한눈에 구분할 수 있도록 `도메인__키=값` 형식을 사용하며, 기존 레거시 키(단일 언더스코어)도 100% 하위 호환된다.
+
+- **텔레그램 (`TELEGRAM__`)**: `TELEGRAM__BOT_TOKEN`(봇 토큰) · `TELEGRAM__ALLOWED_CHAT_IDS`(접근 허용 chat_id)
+- **에이전트 (`AGENT__`)**: `AGENT__WORKDIR`(볼트 경로) · `AGENT__CODEDIR`(코드 리포지토리) · `AGENT__MODEL`(기본 모델) · `AGENT__TIMEOUT`(에이전트 타임아웃) · `AGENT__EXTRA_ARGS`
+- **LLM/프록시 (`ANTHROPIC__`)**: `ANTHROPIC__MODEL` · `ANTHROPIC__AUTH_TOKEN` · `ANTHROPIC__BASE_URL` · `ANTHROPIC__API_TIMEOUT_MS` · `ANTHROPIC__DEFAULT_{HAIKU,SONNET,OPUS}_MODEL`
+- **캘린더 (`CALENDAR__`)**: `CALENDAR__ICAL_URL`(구글 캘린더 iCal 주소) · `CALENDAR__NOTE_PATH`
+- **웹 서버 (`WEB__`)**: `WEB__ENABLED` · `WEB__HOST` · `WEB__PORT` · `WEB__AUTH_REQUIRED` · `WEB__TOKEN`
+- **도메인 (`DUCKDNS__`)**: `DUCKDNS__DOMAIN` · `DUCKDNS__TOKEN`
+- **시스템 (`SYSTEM__` / `DATA_DIR`)**: `SYSTEM__DATA_DIR` 또는 `DATA_DIR`(운영 산출물 위치, 기본 `<루트>/data`) · `AGENT__SANDBOX`(0=격리 끔) · `AGENT__SYSTEM_PROMPT`(시스템 프롬프트 덮어쓰기).
 
 ## 텔레그램 명령어 추가 절차
 

@@ -25,6 +25,17 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 load_dotenv(os.path.join(_ROOT, ".env.defaults"))
 load_dotenv(os.path.join(_ROOT, ".env"), override=True)
 
+# 도메인 기반 환경변수(DOMAIN__KEY) 호환 동기화
+import sys
+_BOT_DIR = os.path.join(_ROOT, "src", "bot")
+if _BOT_DIR not in sys.path:
+    sys.path.insert(0, _BOT_DIR)
+try:
+    from env_compat import sync_domain_env
+    sync_domain_env()
+except ImportError:
+    pass
+
 # 운영 산출물 디렉토리(로그). telegram-bot 의 paths.py / 셸 common.sh 과 같은 규칙
 # (DATA_DIR 환경변수 또는 <루트>/data). cal-sync 는 별개 컴포넌트라 paths.py 를 쓰지 않는다.
 _DATA_DIR = os.path.abspath(

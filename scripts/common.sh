@@ -7,6 +7,65 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${PROJECT_ROOT}/.env.defaults" 2>/dev/null || true
 source "${PROJECT_ROOT}/.env" 2>/dev/null || true
 
+# 도메인 기반 환경변수(DOMAIN__KEY)와 레거시 환경변수(KEY) 간 양방향 동기화
+_sync_env_pair() {
+  local d_key="$1" l_key="$2"
+  local d_val l_val
+  eval "d_val=\${${d_key}:-}"
+  eval "l_val=\${${l_key}:-}"
+  if [ -n "$d_val" ] && [ -z "$l_val" ]; then
+    eval "export ${l_key}=\"\$d_val\""
+  elif [ -n "$l_val" ] && [ -z "$d_val" ]; then
+    eval "export ${d_key}=\"\$l_val\""
+  elif [ -n "$d_val" ] && [ -n "$l_val" ]; then
+    eval "export ${l_key}=\"\$d_val\""
+  fi
+}
+
+_sync_domain_env() {
+  _sync_env_pair "TELEGRAM__BOT_TOKEN" "TELEGRAM_BOT_TOKEN"
+  _sync_env_pair "TELEGRAM__ALLOWED_CHAT_IDS" "ALLOWED_CHAT_IDS"
+  _sync_env_pair "TELEGRAM__LOG_PATH" "BOT_LOG_PATH"
+  _sync_env_pair "AGENT__WORKDIR" "AGENT_WORKDIR"
+  _sync_env_pair "AGENT__CODEDIR" "AGENT_CODEDIR"
+  _sync_env_pair "AGENT__TIMEOUT" "AGENT_TIMEOUT"
+  _sync_env_pair "AGENT__MODEL" "AGENT_MODEL"
+  _sync_env_pair "AGENT__EXTRA_ARGS" "AGENT_EXTRA_ARGS"
+  _sync_env_pair "AGENT__CODE_EFFORT_LEVEL" "AGENT_CODE_EFFORT_LEVEL"
+  _sync_env_pair "AGENT__CODE_EXPERIMENTAL_AGENT_TEAMS" "AGENT_CODE_EXPERIMENTAL_AGENT_TEAMS"
+  _sync_env_pair "AGENT__CODE_AUTO_COMPACT_WINDOW" "AGENT_CODE_AUTO_COMPACT_WINDOW"
+  _sync_env_pair "AGENT__CODE_DISABLE_NONESSENTIAL_TRAFFIC" "AGENT_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+  _sync_env_pair "AGENT__LOG_PATH" "BOT_LOG_PATH"
+  _sync_env_pair "ANTHROPIC__MODEL" "ANTHROPIC_MODEL"
+  _sync_env_pair "ANTHROPIC__AUTH_TOKEN" "ANTHROPIC_AUTH_TOKEN"
+  _sync_env_pair "ANTHROPIC__BASE_URL" "ANTHROPIC_BASE_URL"
+  _sync_env_pair "ANTHROPIC__API_TIMEOUT_MS" "API_TIMEOUT_MS"
+  _sync_env_pair "ANTHROPIC__DEFAULT_HAIKU_MODEL" "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+  _sync_env_pair "ANTHROPIC__DEFAULT_SONNET_MODEL" "ANTHROPIC_DEFAULT_SONNET_MODEL"
+  _sync_env_pair "ANTHROPIC__DEFAULT_OPUS_MODEL" "ANTHROPIC_DEFAULT_OPUS_MODEL"
+  _sync_env_pair "CALENDAR__ICAL_URL" "GOOGLE_ICAL_URL"
+  _sync_env_pair "CALENDAR__NOTE_PATH" "CAL_NOTE_PATH"
+  _sync_env_pair "CALENDAR__YEARS_AHEAD" "CAL_YEARS_AHEAD"
+  _sync_env_pair "CALENDAR__YEARS_BACK" "CAL_YEARS_BACK"
+  _sync_env_pair "CALENDAR__INTERVAL" "CAL_INTERVAL"
+  _sync_env_pair "CALENDAR__REFRESH_TRIGGER" "CAL_REFRESH_TRIGGER"
+  _sync_env_pair "CALENDAR__REFRESH_POLL" "CAL_REFRESH_POLL"
+  _sync_env_pair "CALENDAR__CREDENTIALS_FILE" "GOOGLE_CREDENTIALS_FILE"
+  _sync_env_pair "CALENDAR__TOKEN_FILE" "GOOGLE_TOKEN_FILE"
+  _sync_env_pair "WEB__ENABLED" "WEB_ENABLED"
+  _sync_env_pair "WEB__HOST" "WEB_HOST"
+  _sync_env_pair "WEB__PORT" "WEB_PORT"
+  _sync_env_pair "WEB__AUTH_REQUIRED" "WEB_AUTH_REQUIRED"
+  _sync_env_pair "WEB__TOKEN" "WEB_TOKEN"
+  _sync_env_pair "WEB__SSL_ENABLED" "WEB_SSL_ENABLED"
+  _sync_env_pair "WEB__AIOHTTP_NOSENDFILE" "AIOHTTP_NOSENDFILE"
+  _sync_env_pair "WEB__MASTER_PATROL_INTERVAL" "MASTER_PATROL_INTERVAL"
+  _sync_env_pair "DUCKDNS__DOMAIN" "DUCKDNS_DOMAIN"
+  _sync_env_pair "DUCKDNS__TOKEN" "DUCKDNS_TOKEN"
+  _sync_env_pair "SYSTEM__DATA_DIR" "DATA_DIR"
+}
+_sync_domain_env
+
 # macOS aiohttp FileResponse sendfile 커널 버그 방지 (HTTP 헤더 누락 및 HTTP/0.9 오류 방지)
 export AIOHTTP_NOSENDFILE="${AIOHTTP_NOSENDFILE:-1}"
 

@@ -19,6 +19,10 @@ ROOT_DIR = _ROOT_DIR
 load_dotenv(os.path.join(_ROOT_DIR, ".env.defaults"))
 load_dotenv(os.path.join(_ROOT_DIR, ".env"), override=True)
 
+# 도메인 기반 환경변수(DOMAIN__KEY)와 레거시 환경변수(KEY) 간 양방향 호환 동기화
+from env_compat import sync_domain_env
+sync_domain_env()
+
 # 운영 산출물 디렉토리. DATA_DIR 로 다른 위치로 분리 가능(기본: <리포 루트>/data).
 DATA_DIR = os.path.abspath(
     os.path.expanduser(os.getenv("DATA_DIR", "").strip() or os.path.join(_ROOT_DIR, "data"))
@@ -46,18 +50,24 @@ DEFAULT_SSL_KEY_FILE = os.path.join(LETSENCRYPT_DIR, "config", "live", f"{_DUCKD
 
 
 def _resolve_workdir() -> str:
-    """볼트(작업공간) 경로 해석. AGENT_WORKDIR -> VAULT_DIR -> CLAUDE_WORKDIR -> 기본값 ~"""
-    for key in ("AGENT_WORKDIR", "VAULT_DIR", "CLAUDE_WORKDIR"):
+    """볼트(작업공간) 경로 해석. AGENT_WORKDIR -> AGENT__WORKDIR -> VAULT_DIR -> CLAUDE_WORKDIR -> 기본값 ~"""
+    for key in ("AGENT_WORKDIR", "AGENT__WORKDIR", "VAULT_DIR", "CLAUDE_WORKDIR"):
         v = (os.getenv(key) or "").strip()
         if v and v != "~":
             return os.path.expanduser(v)
-    raw = (os.getenv("AGENT_WORKDIR") or os.getenv("VAULT_DIR") or os.getenv("CLAUDE_WORKDIR") or "").strip()
+    raw = (
+        os.getenv("AGENT_WORKDIR")
+        or os.getenv("AGENT__WORKDIR")
+        or os.getenv("VAULT_DIR")
+        or os.getenv("CLAUDE_WORKDIR")
+        or ""
+    ).strip()
     return os.path.expanduser(raw or "~")
 
 
 def _resolve_codedir() -> str | None:
-    """코드 작업공간 경로 해석. AGENT_CODEDIR -> CODE_DIR -> CLAUDE_CODEDIR"""
-    for key in ("AGENT_CODEDIR", "CODE_DIR", "CLAUDE_CODEDIR"):
+    """코드 작업공간 경로 해석. AGENT_CODEDIR -> AGENT__CODEDIR -> CODE_DIR -> CLAUDE_CODEDIR"""
+    for key in ("AGENT_CODEDIR", "AGENT__CODEDIR", "CODE_DIR", "CLAUDE_CODEDIR"):
         v = (os.getenv(key) or "").strip()
         if v:
             return os.path.expanduser(v)

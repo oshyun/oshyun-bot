@@ -58,6 +58,7 @@ class TestPaths(unittest.TestCase):
         # 2. AGENT_WORKDIR 가 없을 때 VAULT_DIR
         env_without_agent = os.environ.copy()
         env_without_agent.pop("AGENT_WORKDIR", None)
+        env_without_agent.pop("AGENT__WORKDIR", None)
         env_without_agent["VAULT_DIR"] = "/custom/vault"
         env_without_agent["CLAUDE_WORKDIR"] = "/custom/claude"
         with patch.dict(os.environ, env_without_agent, clear=True):
@@ -78,6 +79,10 @@ class TestPaths(unittest.TestCase):
         with patch.dict(os.environ, {"AGENT_WORKDIR": "~"}, clear=True):
             self.assertEqual(paths._resolve_workdir(), os.path.expanduser("~"))
 
+        # 6. 도메인 키 AGENT__WORKDIR 지원
+        with patch.dict(os.environ, {"AGENT__WORKDIR": "/domain/agent/vault"}, clear=True):
+            self.assertEqual(paths._resolve_workdir(), "/domain/agent/vault")
+
     def test_resolve_codedir_precedence(self):
         """_resolve_codedir: AGENT_CODEDIR -> CODE_DIR -> CLAUDE_CODEDIR -> None"""
         # 1. AGENT_CODEDIR 우선
@@ -92,7 +97,11 @@ class TestPaths(unittest.TestCase):
         ):
             self.assertEqual(paths._resolve_codedir(), "/code/agent")
 
-        # 2. CODE_DIR
+        # 2. 도메인 키 AGENT__CODEDIR 지원
+        with patch.dict(os.environ, {"AGENT__CODEDIR": "/domain/code/agent"}, clear=True):
+            self.assertEqual(paths._resolve_codedir(), "/domain/code/agent")
+
+        # 3. CODE_DIR
         env_code_dir = {"CODE_DIR": "/code/dir", "CLAUDE_CODEDIR": "/code/claude"}
         with patch.dict(os.environ, env_code_dir, clear=True):
             self.assertEqual(paths._resolve_codedir(), "/code/dir")
