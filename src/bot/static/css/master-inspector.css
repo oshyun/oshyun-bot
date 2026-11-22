@@ -624,6 +624,10 @@
   background: var(--success-soft, rgba(16, 185, 129, 0.15));
   color: var(--success, #10b981);
 }
+.thread-status-badge.error {
+  background: var(--danger-soft, rgba(239, 68, 68, 0.15));
+  color: var(--danger, #ef4444);
+}
 .thread-sidebar-body {
   flex: 1;
   overflow-y: auto;
@@ -708,6 +712,42 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.thread-msg-bubble.markdown-body {
+  white-space: normal;
+}
+.thread-msg-bubble.markdown-body p {
+  margin: 3px 0;
+}
+.thread-msg-bubble.markdown-body p:first-child {
+  margin-top: 0;
+}
+.thread-msg-bubble.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.thread-msg-bubble.markdown-body pre {
+  background: var(--bg-hover);
+  padding: 6px 8px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 11.5px;
+  margin: 4px 0;
+}
+.thread-msg-bubble.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.thread-msg-bubble.markdown-body ul,
+.thread-msg-bubble.markdown-body ol {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+.thread-msg-item.assistant.streaming {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
 }
 .thread-fullscreen-row {
   margin-top: auto;

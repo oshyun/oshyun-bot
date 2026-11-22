@@ -932,6 +932,7 @@ function handleWsEvent(data) {
     return;
   }
   const isCurrentRoom = targetRoom.id === currentRoomId;
+  const isThreadRoom = Boolean(typeof currentThreadRoomId !== 'undefined' && currentThreadRoomId && (targetRoom.id === currentThreadRoomId || targetRoom.roomId === currentThreadRoomId));
   const liveState = ensureRoomLiveState(targetRoom.id);
 
   if (data.type === 'started') {
@@ -978,6 +979,9 @@ function handleWsEvent(data) {
     syncLiveElapsedTimer();
     setAgentAvatarStatus('thinking', '생각하는 중…');
     renderRoomList();
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed);
       renderMessagesForCurrentRoom();
@@ -1047,6 +1051,9 @@ function handleWsEvent(data) {
       appendLiveAgentStepToDom(stepObj);
       updateLiveFeedDom(liveState.feed);
     }
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
   } else if (data.type === 'agent_step_update') {
     const stepObj = data.step || {};
     const sIdx = typeof data.stepIndex === 'number' ? data.stepIndex : (liveState.steps.length - 1);
@@ -1062,6 +1069,9 @@ function handleWsEvent(data) {
       updateLiveAgentStepInDom(sIdx, stepObj, liveState.steps);
       updateLiveFeedDom(liveState.feed);
     }
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
   } else if (data.type === 'stream_delta') {
     const delta = data.delta || '';
     if (!delta) return;
@@ -1074,6 +1084,9 @@ function handleWsEvent(data) {
       updateLiveStreamMarkdownDom(liveState.streamText);
       updateLiveFeedDom(liveState.feed);
     }
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
   } else if (data.type === 'progress') {
     liveState.isRunning = true;
     const nextFeed = data.feed || data.text || '';
@@ -1084,6 +1097,9 @@ function handleWsEvent(data) {
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed || '실행 중…');
       updateLiveFeedDom(liveState.feed);
+    }
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
     }
   } else if (data.type === 'cancelled') {
     liveState.isRunning = false;
@@ -1100,6 +1116,9 @@ function handleWsEvent(data) {
     setAgentAvatarStatus('idle', '대기 중');
     if (data.sessionTerminated && targetRoom) targetRoom.sessionId = null;
     renderRoomList();
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
     if (isCurrentRoom) {
       setOrbState('idle', '취소됨');
       renderMessagesForCurrentRoom();
@@ -1197,6 +1216,9 @@ function handleWsEvent(data) {
     sortChatRooms();
     saveChatRoomsToStorage();
     renderRoomList();
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
 
     if (targetRoom.id === currentRoomId) {
       setOrbState(remainingQueued > 0 ? 'thinking' : 'idle', remainingQueued > 0 ? liveState.feed : '답변 완료');

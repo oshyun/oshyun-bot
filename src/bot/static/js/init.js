@@ -26,6 +26,9 @@ window.addEventListener('keydown', (e) => {
     closeModal('modal-task-note');
     closeModal('modal-agent-config');
     closeImageLightbox();
+    if (typeof closeThreadPanel === 'function') {
+      closeThreadPanel();
+    }
     if (isRoomSelectionMode) {
       exitRoomSelectionMode();
       return;

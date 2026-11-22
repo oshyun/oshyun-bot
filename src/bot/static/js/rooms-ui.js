@@ -1007,7 +1007,9 @@ async function openThreadPanel(taskId, roomId, title = '') {
   panel.classList.add('open');
   if (backdrop) backdrop.classList.add('open');
   const inputEl = document.getElementById('thread-user-input');
-  if (inputEl) inputEl.focus();
+  if (inputEl) {
+    setTimeout(() => { inputEl.focus(); }, 120);
+  }
 }
 
 function closeThreadPanel() {
@@ -1023,20 +1025,32 @@ function renderThreadPanelBody() {
   const bodyEl = document.getElementById('thread-panel-body');
   if (!bodyEl || !currentThreadRoomId) return;
 
+  const statusEl = document.getElementById('thread-panel-status');
   const room = getRoomById(currentThreadRoomId);
   const msgs = (room && Array.isArray(room.messages)) ? room.messages : [];
   const live = roomLiveStates[currentThreadRoomId];
+  const isRunning = Boolean(live && live.isRunning);
+
+  if (statusEl) {
+    statusEl.textContent = isRunning ? '실행 중' : '완료';
+    statusEl.className = `thread-status-badge ${isRunning ? 'running' : 'done'}`;
+  }
 
   let html = [];
 
-  // 도구 실행 단계(activeSteps) 렌더링
-  if (live && Array.isArray(live.activeSteps) && live.activeSteps.length > 0) {
+  // 도구 실행 단계(live.steps 또는 live.activeSteps) 렌더링
+  const rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
+  const steps = (typeof filterToolSteps === 'function') ? filterToolSteps(rawSteps) : rawSteps;
+
+  if (steps.length > 0) {
     html.push('<div class="thread-steps-section"><div class="thread-sec-title">실행 단계 (Live Steps)</div>');
-    live.activeSteps.forEach(s => {
-      const stepName = escapeHtml(s.name || s.tool || '도구 실행');
-      const stepSummary = escapeHtml(s.summary || s.argPreview || '');
+    steps.forEach(s => {
+      if (!s) return;
+      const stepName = escapeHtml(s.title || s.name || s.tool || '도구 실행');
+      const stepSummary = escapeHtml(s.summary || s.argPreview || s.outputSummary || '');
+      const isStepDone = Boolean(s.done || s.status === 'done');
       html.push(`
-        <div class="thread-step-item">
+        <div class="thread-step-item ${isStepDone ? 'done' : 'active'}">
           <span class="thread-step-dot"></span>
           <span class="thread-step-name">${stepName}</span>
           ${stepSummary ? `<span class="thread-step-summary">${stepSummary}</span>` : ''}
@@ -1047,25 +1061,46 @@ function renderThreadPanelBody() {
   }
 
   // 메시지 렌더링
-  if (msgs.length === 0) {
-    html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 지시를 보낼 수 있습니다.</div>');
+  if (msgs.length === 0 && (!live || !live.streamText)) {
+    html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 추가 지시를 보낼 수 있습니다.</div>');
   } else {
     html.push('<div class="thread-messages-list">');
     msgs.forEach(m => {
       if (!m) return;
       const role = m.role === 'user' ? 'user' : 'assistant';
-      const text = escapeHtml(m.text || m.content || '');
+      const rawText = m.text || m.content || '';
+      const textHtml = (role === 'assistant' && typeof renderMarkdown === 'function')
+        ? renderMarkdown(rawText)
+        : escapeHtml(rawText).replace(/\n/g, '<br>');
       const time = m.timestamp ? formatTime(m.timestamp) : '';
+      const senderName = role === 'user' ? '나' : (m.agentName || (room ? room.title : '하위 전문가'));
       html.push(`
         <div class="thread-msg-item ${role}">
           <div class="thread-msg-header">
-            <span class="thread-msg-role">${role === 'user' ? '나' : (m.agentName || '하위 전문가')}</span>
+            <span class="thread-msg-role">${escapeHtml(senderName)}</span>
             ${time ? `<span class="thread-msg-time">${time}</span>` : ''}
           </div>
-          <div class="thread-msg-bubble">${text}</div>
+          <div class="thread-msg-bubble ${role === 'assistant' ? 'markdown-body' : ''}">${textHtml}</div>
         </div>
       `);
     });
+
+    // 실시간 스트리밍 중인 텍스트 표시
+    if (isRunning && live && live.streamText) {
+      const streamHtml = (typeof renderMarkdown === 'function')
+        ? renderMarkdown(live.streamText)
+        : escapeHtml(live.streamText).replace(/\n/g, '<br>');
+      html.push(`
+        <div class="thread-msg-item assistant streaming">
+          <div class="thread-msg-header">
+            <span class="thread-msg-role">하위 전문가 (작성 중…)</span>
+            <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
+          </div>
+          <div class="thread-msg-bubble markdown-body">${streamHtml}</div>
+        </div>
+      `);
+    }
+
     html.push('</div>');
   }
 
@@ -1079,17 +1114,26 @@ function renderThreadPanelBody() {
     </div>
   `);
 
+  const prevScrollHeight = bodyEl.scrollHeight;
+  const prevScrollTop = bodyEl.scrollTop;
+  const isNearBottom = (prevScrollTop + bodyEl.clientHeight >= prevScrollHeight - 60);
+
   bodyEl.innerHTML = html.join('');
-  bodyEl.scrollTop = bodyEl.scrollHeight;
+
+  if (isNearBottom || isRunning) {
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
 }
 
 async function sendThreadMessage() {
   const inputEl = document.getElementById('thread-user-input');
+  const sendBtn = document.getElementById('btn-thread-send');
   if (!inputEl || !currentThreadRoomId) return;
   const text = inputEl.value.trim();
   if (!text) return;
 
   inputEl.value = '';
+  if (sendBtn) sendBtn.disabled = true;
 
   const targetRoom = getRoomById(currentThreadRoomId);
   const sid = targetRoom ? targetRoom.sessionId : null;
@@ -1116,10 +1160,16 @@ async function sendThreadMessage() {
         });
       }
       renderThreadPanelBody();
+    } else {
+      showToast((data && data.error) || '메시지 전송에 실패했습니다.');
+      inputEl.value = text;
     }
   } catch (err) {
     console.error('스레드 메시지 전송 실패:', err);
     showToast('메시지 전송에 실패했습니다.');
+    inputEl.value = text;
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
   }
 }
 
