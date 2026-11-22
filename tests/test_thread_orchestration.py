@@ -322,3 +322,40 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         # 바이패스 메시지 헤더 인라인 스레드 열기 버튼 확인
         self.assertIn("btn-open-thread-inline", messages_content)
         self.assertIn("스레드 열기", messages_content)
+
+    def test_thread_panel_loading_freeze_prevention_and_safe_format(self):
+        """rooms-ui.js 및 rooms-sync.js에서 로딩 고착 방지, safe formatTime, 마크다운 렌더링 및 예외 방어가 완전한지 검증."""
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "static", "js", "rooms-ui.js")
+        with open(rooms_ui_js, "r", encoding="utf-8") as f:
+            rooms_ui_content = f.read()
+
+        # 1. formatTime ReferenceError 방지 함수 및 window 폴백 존재 확인
+        self.assertIn("function _safeFormatThreadTime(", rooms_ui_content)
+        self.assertIn("window.formatTime = _safeFormatThreadTime", rooms_ui_content)
+        self.assertIn("function _safeRenderMarkdown(", rooms_ui_content)
+
+        # 2. 미정의 formatTime 직접 호출이 없고 _safeFormatThreadTime을 사용하는지 확인
+        self.assertIn("_safeFormatThreadTime(firstUserMsg.timestamp", rooms_ui_content)
+        self.assertIn("_safeFormatThreadTime(m.timestamp", rooms_ui_content)
+
+        # 3. 마크다운 렌더링 시 _safeRenderMarkdown 사용 확인
+        self.assertIn("_safeRenderMarkdown(rawPrompt)", rooms_ui_content)
+        self.assertIn("_safeRenderMarkdown(rawText)", rooms_ui_content)
+
+        # 4. openThreadPanel 레이스 컨디션 방어 및 title 기반 fallback 매칭 확인
+        self.assertIn("_threadReqCounter", rooms_ui_content)
+        self.assertIn("findChatRoom(title)", rooms_ui_content)
+
+        # 5. renderThreadPanelBody 예외 방어 및 에러 시 로딩 해제 보장
+        self.assertIn("try {", rooms_ui_content)
+        self.assertIn("스레드 패널 렌더링 실패:", rooms_ui_content)
+        self.assertIn("하위 대화방 정보를 찾을 수 없습니다.", rooms_ui_content)
+
+        # 6. rooms-sync.js 에서 스레드 패널 동기화 연동 확인
+        rooms_sync_js = os.path.join(base_dir, "src", "bot", "static", "js", "rooms-sync.js")
+        with open(rooms_sync_js, "r", encoding="utf-8") as f:
+            rooms_sync_content = f.read()
+
+        self.assertIn("currentThreadRoomId", rooms_sync_content)
+        self.assertIn("renderThreadPanelBody()", rooms_sync_content)

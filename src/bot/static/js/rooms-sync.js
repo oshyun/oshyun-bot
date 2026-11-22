@@ -824,6 +824,11 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
           updateRoomConfigBar();
           focusChatInput();
         }
+        if (typeof currentThreadRoomId !== 'undefined' && currentThreadRoomId && (room.id === currentThreadRoomId || room.sessionId === currentThreadRoomId)) {
+          if (typeof renderThreadPanelBody === 'function') {
+            renderThreadPanelBody();
+          }
+        }
         renderRoomList();
       }
     } else if (room && room.id === currentRoomId) {
@@ -836,6 +841,11 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
     const room = getRoomById(roomId) || getRoomById(sessionId);
     if (room && room.id === currentRoomId) {
       renderMessagesForCurrentRoom(true);
+    }
+    if (typeof currentThreadRoomId !== 'undefined' && currentThreadRoomId && (roomId === currentThreadRoomId || sessionId === currentThreadRoomId)) {
+      if (typeof renderThreadPanelBody === 'function') {
+        renderThreadPanelBody();
+      }
     }
   }
 }
