@@ -15,7 +15,11 @@ from paths import GOOGLE_CREDENTIALS_FILE, GOOGLE_TOKEN_FILE
 
 logger = logging.getLogger("oshyun-bot.google_auth")
 
+# Google OAuth2 응답 시 구글이 openid 등을 자동으로 추가할 때 Scope has changed 예외 방지
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+
 DEFAULT_GOOGLE_SCOPES = [
+    "openid",
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
