@@ -978,6 +978,40 @@ function bindRoomLongPressEvents() {
 // ─── 마스터 에이전트 하위 작업 스레드(Thread) 오케스트레이션 패널 ───
 let currentThreadRoomId = null;
 let currentThreadTaskId = null;
+let _threadReqCounter = 0;
+
+function _safeFormatThreadTime(ts) {
+  if (!ts) return '';
+  if (typeof formatMessageTime === 'function') {
+    try { return formatMessageTime(ts); } catch (_) {}
+  }
+  if (typeof formatTime === 'function') {
+    try { return formatTime(ts); } catch (_) {}
+  }
+  try {
+    const num = typeof ts === 'number' ? (ts < 1e11 ? ts * 1000 : ts) : Number(ts);
+    const d = new Date(num);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (_) {
+    return '';
+  }
+}
+
+// 혹시 전역에서 formatTime을 호출하더라도 절대 ReferenceError가 터지지 않도록 전역 폴백 등록
+if (typeof window !== 'undefined' && typeof window.formatTime !== 'function') {
+  window.formatTime = _safeFormatThreadTime;
+}
+
+function _safeRenderMarkdown(text) {
+  if (!text) return '';
+  if (typeof formatMarkdown === 'function') {
+    try { return formatMarkdown(text); } catch (_) {}
+  }
+  if (typeof renderMarkdown === 'function') {
+    try { return renderMarkdown(text); } catch (_) {}
+  }
+  return typeof escapeHtml === 'function' ? escapeHtml(text).replace(/\n/g, '<br>') : String(text).replace(/\n/g, '<br>');
+}
 
 async function openThreadPanel(taskId, roomId, title = '') {
   const panel = document.getElementById('thread-slide-panel');
@@ -987,6 +1021,8 @@ async function openThreadPanel(taskId, roomId, title = '') {
   // 1. 패널과 백드롭을 최우선으로 즉시 열어서 시각적 반응 보장!
   panel.classList.add('open');
   if (backdrop) backdrop.classList.add('open');
+
+  const reqSeq = ++_threadReqCounter;
 
   // 2. taskId와 roomId 상호 보완
   if (!roomId && taskId && Array.isArray(latestMasterTasks)) {
@@ -1002,8 +1038,17 @@ async function openThreadPanel(taskId, roomId, title = '') {
     }
   }
 
-  currentThreadRoomId = roomId;
-  currentThreadTaskId = taskId;
+  // roomId를 여전히 못 찾았고 title이 있다면 chatRooms 및 findChatRoom 검색
+  if (!roomId && title) {
+    const roomByTitle = (typeof findChatRoom === 'function' ? findChatRoom(title) : null) ||
+      (Array.isArray(chatRooms) ? chatRooms.find(r => r && (r.title === title || (r.title && r.title.trim().toLowerCase() === title.trim().toLowerCase()))) : null);
+    if (roomByTitle && roomByTitle.id) {
+      roomId = roomByTitle.id;
+    }
+  }
+
+  currentThreadRoomId = roomId || null;
+  currentThreadTaskId = taskId || null;
 
   const titleEl = document.getElementById('thread-panel-title');
   const statusEl = document.getElementById('thread-panel-status');
@@ -1021,19 +1066,21 @@ async function openThreadPanel(taskId, roomId, title = '') {
   }
 
   if (bodyEl) {
-    if (!targetRoom || !Array.isArray(targetRoom.messages) || targetRoom.messages.length === 0) {
+    const hasMessages = Boolean(targetRoom && Array.isArray(targetRoom.messages) && targetRoom.messages.length > 0);
+    if (!hasMessages && roomId) {
       bodyEl.innerHTML = '<div class="thread-loading"><span class="run-spinner"></span> 대화 및 실행 단계 불러오는 중…</div>';
-      if (roomId) {
-        try {
-          if (typeof loadChatHistoryFromServer === 'function') {
-            await loadChatHistoryFromServer(roomId, targetRoom ? targetRoom.sessionId : null);
-          }
-        } catch (err) {
-          console.warn('스레드 대화 로드 실패:', err);
+      try {
+        if (typeof loadChatHistoryFromServer === 'function') {
+          await loadChatHistoryFromServer(roomId, targetRoom ? targetRoom.sessionId : null);
         }
+      } catch (err) {
+        console.warn('스레드 대화 로드 실패:', err);
       }
     }
-    renderThreadPanelBody();
+    // 다른 칩을 연이어 클릭했으면 이전 요청의 완료 콜백 무시
+    if (_threadReqCounter === reqSeq) {
+      renderThreadPanelBody();
+    }
   }
 
   const inputEl = document.getElementById('thread-user-input');
@@ -1063,149 +1110,163 @@ function closeThreadPanel() {
 
 function renderThreadPanelBody() {
   const bodyEl = document.getElementById('thread-panel-body');
-  if (!bodyEl || !currentThreadRoomId) return;
+  if (!bodyEl) return;
 
-  const statusEl = document.getElementById('thread-panel-status');
-  const room = getRoomById(currentThreadRoomId);
-  const msgs = (room && Array.isArray(room.messages)) ? room.messages : [];
-  const live = roomLiveStates[currentThreadRoomId];
-  const isRunning = Boolean(live && live.isRunning);
-
-  if (statusEl) {
-    statusEl.textContent = isRunning ? '실행 중' : '완료';
-    statusEl.className = `thread-status-badge ${isRunning ? 'running' : 'done'}`;
+  // roomId와 taskId가 모두 없는 경우 -> 로딩 제거 후 명확한 안내 표시
+  if (!currentThreadRoomId && !currentThreadTaskId) {
+    bodyEl.innerHTML = '<div class="thread-empty">하위 대화방 정보를 찾을 수 없습니다.</div>';
+    return;
   }
 
-  let html = [];
+  try {
+    const statusEl = document.getElementById('thread-panel-status');
+    const room = currentThreadRoomId ? getRoomById(currentThreadRoomId) : null;
+    const msgs = (room && Array.isArray(room.messages)) ? room.messages : [];
+    const live = currentThreadRoomId ? roomLiveStates[currentThreadRoomId] : null;
+    const isRunning = Boolean(live && live.isRunning);
 
-  // 1. [상식적 순서 1단계] 하위 세션이 수신한 과업 지시 프롬프트(첫 번째 user 메시지)를 최상단에 배치
-  const firstUserIdx = msgs.findIndex(m => m && (m.role === 'user' || m.sender === 'user'));
-  const firstUserMsg = firstUserIdx >= 0 ? msgs[firstUserIdx] : null;
+    if (statusEl) {
+      statusEl.textContent = isRunning ? '실행 중' : '완료';
+      statusEl.className = `thread-status-badge ${isRunning ? 'running' : 'done'}`;
+    }
 
-  if (firstUserMsg) {
-    const rawPrompt = firstUserMsg.text || firstUserMsg.content || '';
-    const promptHtml = (typeof renderMarkdown === 'function')
-      ? renderMarkdown(rawPrompt)
-      : escapeHtml(rawPrompt).replace(/\n/g, '<br>');
-    const promptTime = firstUserMsg.timestamp ? formatTime(firstUserMsg.timestamp) : (firstUserMsg.createdAt ? formatTime(firstUserMsg.createdAt) : '');
-    html.push(`
-      <div class="thread-prompt-card">
-        <div class="thread-prompt-header">
-          <span class="thread-prompt-badge">지시 프롬프트</span>
-          ${promptTime ? `<span class="thread-prompt-time">${escapeHtml(promptTime)}</span>` : ''}
+    let html = [];
+
+    // 1. [상식적 순서 1단계] 하위 세션이 수신한 과업 지시 프롬프트(첫 번째 user 메시지)를 최상단에 배치
+    const firstUserIdx = msgs.findIndex(m => m && (m.role === 'user' || m.sender === 'user'));
+    const firstUserMsg = firstUserIdx >= 0 ? msgs[firstUserIdx] : null;
+
+    if (firstUserMsg) {
+      const rawPrompt = firstUserMsg.text || firstUserMsg.content || '';
+      const promptHtml = _safeRenderMarkdown(rawPrompt);
+      const promptTime = _safeFormatThreadTime(firstUserMsg.timestamp || firstUserMsg.createdAt);
+      html.push(`
+        <div class="thread-prompt-card">
+          <div class="thread-prompt-header">
+            <span class="thread-prompt-badge">지시 프롬프트</span>
+            ${promptTime ? `<span class="thread-prompt-time">${escapeHtml(promptTime)}</span>` : ''}
+          </div>
+          <div class="thread-prompt-body markdown-body">${promptHtml}</div>
         </div>
-        <div class="thread-prompt-body markdown-body">${promptHtml}</div>
-      </div>
-    `);
-  }
+      `);
+    }
 
-  // 2. [상식적 순서 2단계] 지시 수행을 위한 도구 실행 단계 (Live Steps)
-  let rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
-  // 완료된 상태라면 메시지 내 steps 에서 복원
-  if (rawSteps.length === 0 && Array.isArray(msgs)) {
-    for (const m of msgs) {
-      if (m && Array.isArray(m.steps) && m.steps.length > 0) {
-        rawSteps = m.steps;
-        break;
+    // 2. [상식적 순서 2단계] 지시 수행을 위한 도구 실행 단계 (Live Steps)
+    let rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
+    // 완료된 상태라면 메시지 내 steps 에서 복원
+    if (rawSteps.length === 0 && Array.isArray(msgs)) {
+      for (const m of msgs) {
+        if (m && Array.isArray(m.steps) && m.steps.length > 0) {
+          rawSteps = m.steps;
+          break;
+        }
       }
     }
-  }
-  const steps = (typeof filterToolSteps === 'function') ? filterToolSteps(rawSteps) : rawSteps;
+    const steps = (typeof filterToolSteps === 'function') ? filterToolSteps(rawSteps) : rawSteps;
 
-  if (steps.length > 0) {
-    html.push('<div class="thread-steps-section"><div class="thread-sec-title">실행 단계 (Live Steps)</div>');
-    steps.forEach(s => {
-      if (!s) return;
-      const stepName = escapeHtml(s.title || s.name || s.tool || '도구 실행');
-      const stepSummary = escapeHtml(s.summary || s.argPreview || s.outputSummary || '');
-      const isStepDone = Boolean(s.done || s.status === 'done');
-      html.push(`
-        <div class="thread-step-item ${isStepDone ? 'done' : 'active'}">
-          <span class="thread-step-dot"></span>
-          <span class="thread-step-name">${stepName}</span>
-          ${stepSummary ? `<span class="thread-step-summary">${stepSummary}</span>` : ''}
-        </div>
-      `);
-    });
-    html.push('</div>');
-  }
-
-  // 3. [상식적 순서 3단계] 하위 에이전트 답변 및 후속 대화 (첫 번째 프롬프트를 제외한 나머지 메시지)
-  const remainingMsgs = firstUserMsg ? msgs.filter((_, idx) => idx !== firstUserIdx) : msgs;
-
-  if (remainingMsgs.length === 0 && (!live || !live.streamText)) {
-    if (!firstUserMsg && steps.length === 0) {
-      html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 추가 지시를 보낼 수 있습니다.</div>');
-    } else if (isRunning) {
-      html.push(`
-        <div class="thread-msg-item assistant streaming">
-          <div class="thread-msg-header">
-            <span class="thread-msg-role">하위 전문가 (작업 수행 중…)</span>
-            <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
+    if (steps.length > 0) {
+      html.push('<div class="thread-steps-section"><div class="thread-sec-title">실행 단계 (Live Steps)</div>');
+      steps.forEach(s => {
+        if (!s) return;
+        const stepName = escapeHtml(s.title || s.name || s.tool || '도구 실행');
+        const stepSummary = escapeHtml(s.summary || s.argPreview || s.outputSummary || '');
+        const isStepDone = Boolean(s.done || s.status === 'done');
+        html.push(`
+          <div class="thread-step-item ${isStepDone ? 'done' : 'active'}">
+            <span class="thread-step-dot"></span>
+            <span class="thread-step-name">${stepName}</span>
+            ${stepSummary ? `<span class="thread-step-summary">${stepSummary}</span>` : ''}
           </div>
-          <div class="thread-msg-bubble markdown-body" style="color:var(--text-2);">지시 프롬프트에 따른 작업을 진행하고 있습니다…</div>
+        `);
+      });
+      html.push('</div>');
+    }
+
+    // 3. [상식적 순서 3단계] 하위 에이전트 답변 및 후속 대화 (첫 번째 프롬프트를 제외한 나머지 메시지)
+    const remainingMsgs = firstUserMsg ? msgs.filter((_, idx) => idx !== firstUserIdx) : msgs;
+
+    if (remainingMsgs.length === 0 && (!live || !live.streamText)) {
+      if (!firstUserMsg && steps.length === 0) {
+        html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 추가 지시를 보낼 수 있습니다.</div>');
+      } else if (isRunning) {
+        html.push(`
+          <div class="thread-msg-item assistant streaming">
+            <div class="thread-msg-header">
+              <span class="thread-msg-role">하위 전문가 (작업 수행 중…)</span>
+              <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
+            </div>
+            <div class="thread-msg-bubble markdown-body" style="color:var(--text-2);">지시 프롬프트에 따른 작업을 진행하고 있습니다…</div>
+          </div>
+        `);
+      }
+    } else {
+      html.push('<div class="thread-messages-list">');
+      remainingMsgs.forEach(m => {
+        if (!m) return;
+        const role = (m.role === 'user' || m.sender === 'user') ? 'user' : 'assistant';
+        const rawText = m.text || m.content || '';
+        const textHtml = (role === 'assistant')
+          ? _safeRenderMarkdown(rawText)
+          : escapeHtml(rawText).replace(/\n/g, '<br>');
+        const time = _safeFormatThreadTime(m.timestamp || m.createdAt);
+        const senderName = role === 'user' ? '추가 지시' : (m.agentName || (room ? room.title : '하위 전문가'));
+        html.push(`
+          <div class="thread-msg-item ${role}">
+            <div class="thread-msg-header">
+              <span class="thread-msg-role">${escapeHtml(senderName)}</span>
+              ${time ? `<span class="thread-msg-time">${time}</span>` : ''}
+            </div>
+            <div class="thread-msg-bubble ${role === 'assistant' ? 'markdown-body' : ''}">${textHtml}</div>
+          </div>
+        `);
+      });
+
+      // 실시간 스트리밍 중인 텍스트 표시
+      if (isRunning && live && live.streamText) {
+        const streamHtml = _safeRenderMarkdown(live.streamText);
+        html.push(`
+          <div class="thread-msg-item assistant streaming">
+            <div class="thread-msg-header">
+              <span class="thread-msg-role">하위 전문가 (작성 중…)</span>
+              <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
+            </div>
+            <div class="thread-msg-bubble markdown-body">${streamHtml}</div>
+          </div>
+        `);
+      }
+
+      html.push('</div>');
+    }
+
+    // 전체 화면으로 이동 버튼
+    if (currentThreadRoomId) {
+      html.push(`
+        <div class="thread-fullscreen-row">
+          <button type="button" class="btn sm ghost" onclick="selectRoom('${escapeHtml(currentThreadRoomId)}'); closeThreadPanel();">
+            <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            <span>이 대화방 전체 화면으로 열기</span>
+          </button>
         </div>
       `);
     }
-  } else {
-    html.push('<div class="thread-messages-list">');
-    remainingMsgs.forEach(m => {
-      if (!m) return;
-      const role = (m.role === 'user' || m.sender === 'user') ? 'user' : 'assistant';
-      const rawText = m.text || m.content || '';
-      const textHtml = (role === 'assistant' && typeof renderMarkdown === 'function')
-        ? renderMarkdown(rawText)
-        : escapeHtml(rawText).replace(/\n/g, '<br>');
-      const time = m.timestamp ? formatTime(m.timestamp) : (m.createdAt ? formatTime(m.createdAt) : '');
-      const senderName = role === 'user' ? '추가 지시' : (m.agentName || (room ? room.title : '하위 전문가'));
-      html.push(`
-        <div class="thread-msg-item ${role}">
-          <div class="thread-msg-header">
-            <span class="thread-msg-role">${escapeHtml(senderName)}</span>
-            ${time ? `<span class="thread-msg-time">${time}</span>` : ''}
-          </div>
-          <div class="thread-msg-bubble ${role === 'assistant' ? 'markdown-body' : ''}">${textHtml}</div>
-        </div>
-      `);
-    });
 
-    // 실시간 스트리밍 중인 텍스트 표시
-    if (isRunning && live && live.streamText) {
-      const streamHtml = (typeof renderMarkdown === 'function')
-        ? renderMarkdown(live.streamText)
-        : escapeHtml(live.streamText).replace(/\n/g, '<br>');
-      html.push(`
-        <div class="thread-msg-item assistant streaming">
-          <div class="thread-msg-header">
-            <span class="thread-msg-role">하위 전문가 (작성 중…)</span>
-            <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
-          </div>
-          <div class="thread-msg-bubble markdown-body">${streamHtml}</div>
-        </div>
-      `);
+    const prevScrollHeight = bodyEl.scrollHeight;
+    const prevScrollTop = bodyEl.scrollTop;
+    const isNearBottom = (prevScrollTop + bodyEl.clientHeight >= prevScrollHeight - 60);
+
+    bodyEl.innerHTML = html.join('');
+
+    if (isNearBottom || isRunning) {
+      bodyEl.scrollTop = bodyEl.scrollHeight;
     }
-
-    html.push('</div>');
-  }
-
-  // 전체 화면으로 이동 버튼
-  html.push(`
-    <div class="thread-fullscreen-row">
-      <button type="button" class="btn sm ghost" onclick="selectRoom('${escapeHtml(currentThreadRoomId)}'); closeThreadPanel();">
-        <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-        <span>이 대화방 전체 화면으로 열기</span>
-      </button>
-    </div>
-  `);
-
-  const prevScrollHeight = bodyEl.scrollHeight;
-  const prevScrollTop = bodyEl.scrollTop;
-  const isNearBottom = (prevScrollTop + bodyEl.clientHeight >= prevScrollHeight - 60);
-
-  bodyEl.innerHTML = html.join('');
-
-  if (isNearBottom || isRunning) {
-    bodyEl.scrollTop = bodyEl.scrollHeight;
+  } catch (err) {
+    console.error('스레드 패널 렌더링 실패:', err);
+    bodyEl.innerHTML = `
+      <div class="thread-empty" style="color:var(--text-3);padding:24px 16px;text-align:center;">
+        <p style="margin-bottom:10px;font-size:13px;">대화 및 실행 단계를 표시하는 중 문제가 발생했습니다.</p>
+        <button type="button" class="btn sm ghost" onclick="renderThreadPanelBody()">다시 시도</button>
+      </div>
+    `;
   }
 }
 
