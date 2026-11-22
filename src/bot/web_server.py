@@ -237,6 +237,7 @@ from web_rooms import (
     handle_chat_rooms_backup_save,
     handle_get_attachment,
     handle_archive_chat_room,
+    handle_batch_archive_chat_rooms,
     handle_search_chat_rooms,
 )
 
@@ -732,6 +733,8 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_post("/api/settings", handle_settings)
     web_app.router.add_post("/api/session/delete", handle_api_delete_session)
     web_app.router.add_post("/api/session/batch-delete", handle_api_delete_session)
+    web_app.router.add_post("/api/session/batch-archive", handle_batch_archive_chat_rooms)
+    web_app.router.add_post("/api/chat/rooms/batch-archive", handle_batch_archive_chat_rooms)
     web_app.router.add_post("/api/chat/room/rename", handle_api_rename_room)
     web_app.router.add_post("/api/chat/room/settings", handle_api_room_settings)
     web_app.router.add_get("/api/tts", handle_tts)

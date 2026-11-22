@@ -470,6 +470,88 @@ class TestSessionCtlCli(unittest.TestCase):
         self.assertEqual(mock_api.call_args_list[1][0][:2], ("POST", "/api/session/batch-delete"))
         self.assertEqual(mock_api.call_args_list[1][1]["payload"], {"roomIds": ["room-1", "room-2"]})
 
+    @patch("session_ctl._api_request")
+    def test_cmd_archive_requires_yes_or_dry_run(self, mock_api):
+        """--yes 또는 --dry-run 없이 archive 호출 시 거부되는지 검증."""
+        import io
+        from contextlib import redirect_stderr
+
+        args = argparse.Namespace(targets=["room-1"], auto=False, unarchive=False, dry_run=False, yes=False, json=False)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            ret = session_ctl.cmd_archive(args)
+        self.assertEqual(ret, 1)
+        self.assertIn("--yes", buf.getvalue())
+        mock_api.assert_not_called()
+
+    def test_resolve_archive_targets_auto(self):
+        """session-ctl archive --auto 자동 선별 필터링 테스트."""
+        sessions = [
+            {"id": "__core__", "title": "마스터", "isRunning": False, "isArchived": False},
+            {"id": "__expert_coding__", "title": "봇개발", "isRunning": False, "isArchived": False},
+            {"id": "room-running", "title": "실행 중 방", "isRunning": True, "isArchived": False},
+            {"id": "room-done-1", "title": "완료 방 1", "isRunning": False, "isArchived": False},
+            {"id": "room-done-2", "title": "완료 방 2", "isRunning": False, "isArchived": False},
+            {"id": "room-already-archived", "title": "기보관 방", "isRunning": False, "isArchived": True},
+        ]
+
+        matched, refused, not_found = session_ctl._resolve_archive_targets([], sessions, auto_mode=True)
+        self.assertEqual(len(refused), 0)
+        self.assertEqual(len(not_found), 0)
+        matched_ids = [s["id"] for s in matched]
+        self.assertEqual(matched_ids, ["room-done-1", "room-done-2"])
+
+    def test_resolve_archive_targets_protect_core(self):
+        """session-ctl archive 에 코어 세션 수동 지정 시 거부 확인."""
+        sessions = [
+            {"id": "__core__", "title": "마스터", "isRunning": False, "isArchived": False},
+            {"id": "room-w1", "title": "일반 방", "isRunning": False, "isArchived": False},
+        ]
+        matched, refused, not_found = session_ctl._resolve_archive_targets(["__core__", "room-w1"], sessions)
+        self.assertEqual(len(refused), 1)
+        self.assertEqual(refused[0]["target"], "__core__")
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["id"], "room-w1")
+
+    @patch("session_ctl._api_request")
+    def test_cmd_archive_dry_run_and_execute(self, mock_api):
+        """archive --dry-run 및 --yes 실제 API 호출 검증."""
+        import io
+        from contextlib import redirect_stdout
+
+        sessions_payload = {
+            "ok": True,
+            "sessions": [
+                {"id": "room-1", "sessionId": "sess-1", "title": "완료 작업 1", "isRunning": False, "isArchived": False},
+                {"id": "room-2", "sessionId": "sess-2", "title": "완료 작업 2", "isRunning": False, "isArchived": False},
+            ],
+        }
+        # 1. --dry-run
+        mock_api.return_value = sessions_payload
+        buf_dry = io.StringIO()
+        with redirect_stdout(buf_dry):
+            ret_dry = session_ctl.cmd_archive(
+                argparse.Namespace(targets=[], auto=True, unarchive=False, dry_run=True, yes=False, json=False)
+            )
+        self.assertEqual(ret_dry, 0)
+        self.assertIn("DRY-RUN", buf_dry.getvalue())
+
+        # 2. --yes 실제 보관
+        mock_api.reset_mock()
+        mock_api.side_effect = [
+            sessions_payload,
+            {"ok": True, "archivedCount": 2, "isArchived": True},
+        ]
+        buf_yes = io.StringIO()
+        with redirect_stdout(buf_yes):
+            ret_yes = session_ctl.cmd_archive(
+                argparse.Namespace(targets=[], auto=True, unarchive=False, dry_run=False, yes=True, json=False)
+            )
+        self.assertEqual(ret_yes, 0)
+        self.assertIn("2개 보관(아카이브) 완료", buf_yes.getvalue())
+        self.assertEqual(mock_api.call_args_list[1][0][:2], ("POST", "/api/chat/rooms/batch-archive"))
+        self.assertEqual(mock_api.call_args_list[1][1]["payload"], {"roomIds": ["room-1", "room-2"], "isArchived": True})
+
 
 if __name__ == "__main__":
     unittest.main()

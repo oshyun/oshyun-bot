@@ -1034,7 +1034,7 @@ async def handle_archive_chat_room(request: web.Request) -> web.Response:
     if not room_id:
         return web.json_response({"ok": False, "error": "roomId 가 필요합니다."}, status=400)
 
-    if room_id in ORCHESTRATOR_ROOM_IDS:
+    if room_id in ORCHESTRATOR_ROOM_IDS or (room_id.startswith("__custom_") and room_id.endswith("__")):
         return web.json_response({"ok": False, "error": "마스터 및 전문가 에이전트 방은 아카이브할 수 없습니다."}, status=400)
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
@@ -1048,7 +1048,7 @@ async def handle_archive_chat_room(request: web.Request) -> web.Response:
 
     ok = current_chat_db.archive_room(room_id, is_archived=is_archived)
     if not ok:
-        return web.json_response({"ok": False, "error": "방을 찾을 수 없거나 아카이브 갱신 실패"}, status=404)
+        return web.json_response({"ok": False, "error": "방을 찾을 수 없거나 아카이브 갱신 실패(보호 대상 방 등)"}, status=404)
 
     # WebSocket 브로드캐스트
     broadcast_fn = _get_mod_attr("broadcast_ws_json", None)
@@ -1065,4 +1065,69 @@ async def handle_archive_chat_room(request: web.Request) -> web.Response:
         supervisor.poke()
 
     return web.json_response({"ok": True, "roomId": room_id, "isArchived": is_archived})
+
+
+async def handle_batch_archive_chat_rooms(request: web.Request) -> web.Response:
+    """POST /api/chat/rooms/batch-archive (및 /api/session/batch-archive) — 대화방 일괄 아카이브(보관) 또는 복원."""
+    payload: dict = {}
+    try:
+        payload = await request.json()
+    except Exception:
+        pass
+    if not isinstance(payload, dict):
+        payload = {}
+
+    raw_targets = payload.get("targets") or payload.get("roomIds") or payload.get("sessionIds") or payload.get("rooms") or []
+    target_ids: list[str] = []
+    if isinstance(raw_targets, list):
+        for t in raw_targets:
+            if isinstance(t, dict):
+                tid = str(t.get("roomId") or t.get("id") or t.get("sessionId") or "").strip()
+                if tid and tid not in target_ids:
+                    target_ids.append(tid)
+            elif isinstance(t, str) and t.strip():
+                clean_t = t.strip()
+                if clean_t not in target_ids:
+                    target_ids.append(clean_t)
+    single_target = str(payload.get("roomId") or payload.get("sessionId") or "").strip()
+    if single_target and single_target not in target_ids:
+        target_ids.append(single_target)
+
+    if not target_ids:
+        return web.json_response({"ok": False, "error": "보관 대상(targets 또는 roomIds)이 필요합니다."}, status=400)
+
+    if "isArchived" in payload:
+        is_archived = bool(payload["isArchived"])
+    elif "archive" in payload:
+        is_archived = bool(payload["archive"])
+    else:
+        is_archived = True
+
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    archived_count = current_chat_db.archive_rooms_bulk(target_ids, is_archived=is_archived)
+
+    # WebSocket 브로드캐스트
+    broadcast_fn = _get_mod_attr("broadcast_ws_json", None)
+    if broadcast_fn:
+        for tid in target_ids:
+            try:
+                await broadcast_fn({
+                    "type": "room_archived",
+                    "roomId": tid,
+                    "isArchived": is_archived,
+                })
+            except Exception:
+                pass
+
+    from web_execution import _master_supervisor
+    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    if supervisor is not None:
+        supervisor.poke()
+
+    return web.json_response({
+        "ok": True,
+        "archivedCount": archived_count,
+        "isArchived": is_archived,
+        "targets": target_ids,
+    })
 
