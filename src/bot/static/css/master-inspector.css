@@ -514,7 +514,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 10px 12px;
   font-size: calc(12px * var(--ui-scale, 1));
   font-weight: 600;
   color: var(--text-3);
@@ -528,14 +528,33 @@
 }
 .sb-archived-list {
   display: none;
-  max-height: 220px;
+  max-height: 260px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 4px 8px 10px;
+  overscroll-behavior: contain;
+  padding: 4px 6px 12px;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .sb-archived-list.open {
   display: flex;
+}
+.sb-archived-list .room-item-wrap {
+  flex-shrink: 0;
+  width: 100%;
+}
+.sb-archived-list .room-item {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: background .14s, border-color .14s;
+}
+.sb-archived-list .room-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.sb-archived-list .room-item.active {
+  background: var(--selection-bg);
+  border-color: var(--selection-border);
 }
 
 /* ═══ 🧵 스레드 슬라이드오버 패널 (Thread Sidebar Panel) ═══ */

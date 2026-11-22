@@ -3,14 +3,25 @@ let latestMasterGraph = null;
 let latestMasterTasks = [];
 let latestMasterMemory = null;
 let currentMsbMemoryTier = 'hot'; // 'hot', 'warm', 'cold', 'freeze'
+const STORAGE_KEY_ARCHIVED_OPEN = 'oshyun_archived_open';
 let isArchivedSectionOpen = false;
+try {
+  isArchivedSectionOpen = localStorage.getItem(STORAGE_KEY_ARCHIVED_OPEN) === 'true';
+} catch (_) {}
 
-function toggleArchivedSection() {
-  isArchivedSectionOpen = !isArchivedSectionOpen;
+function updateArchivedSectionDom() {
   const listEl = document.getElementById('sb-archived-list');
   const arrowEl = document.getElementById('sb-archived-arrow');
   if (listEl) listEl.classList.toggle('open', isArchivedSectionOpen);
   if (arrowEl) arrowEl.style.transform = isArchivedSectionOpen ? 'rotate(180deg)' : '';
+}
+
+function toggleArchivedSection() {
+  isArchivedSectionOpen = !isArchivedSectionOpen;
+  try {
+    localStorage.setItem(STORAGE_KEY_ARCHIVED_OPEN, String(isArchivedSectionOpen));
+  } catch (_) {}
+  updateArchivedSectionDom();
 }
 
 async function toggleArchiveRoom(roomId, forceState = null) {

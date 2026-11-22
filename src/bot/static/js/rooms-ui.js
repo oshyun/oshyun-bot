@@ -693,18 +693,25 @@ function renderRoomList() {
             <div class="room-item ${r.id === currentRoomId ? 'active' : ''}" style="padding:6px 10px;min-height:38px;" data-room-id="${safeId}" onclick="onRoomItemClick(event, '${safeId}')">
               <div class="room-body">
                 <div class="room-row-top">
-                  <span class="room-title" style="font-size:12.5px;color:var(--text-2);">${escapeHtml(r.title || '보관된 대화')}</span>
+                  <span class="room-title" style="font-size:12.5px;color:var(--text);font-weight:500;">${escapeHtml(r.title || '보관된 대화')}</span>
                   ${relTime ? `<span class="room-time" style="font-size:10.5px;">${escapeHtml(relTime)}</span>` : ''}
                 </div>
               </div>
-              <div class="room-actions-inline">
-                <button type="button" class="room-del" onclick="event.stopPropagation();toggleArchiveRoom('${safeId}', false)" title="보관 해제">↩️</button>
-                <button type="button" class="room-del" onclick="deleteRoom(event, '${safeId}')" title="삭제">${ICONS.trash}</button>
+              <div class="room-actions-inline" style="display:inline-flex;gap:4px;">
+                <button type="button" class="room-del" onclick="event.stopPropagation();toggleArchiveRoom('${safeId}', false)" title="보관 해제" aria-label="보관 해제">
+                  <svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                </button>
+                <button type="button" class="room-del" onclick="event.stopPropagation();deleteRoom(event, '${safeId}')" title="삭제" aria-label="삭제">
+                  ${ICONS.trash}
+                </button>
               </div>
             </div>
           </div>
         `;
       }).join('');
+      if (typeof updateArchivedSectionDom === 'function') {
+        updateArchivedSectionDom();
+      }
     }
   }
 
