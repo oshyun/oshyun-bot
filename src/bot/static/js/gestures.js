@@ -575,7 +575,7 @@ function initVisualViewportHandler() {
   });
 }
 
-// ─── 메시지 말풍선 롱프레스 복사 제스처 연계 ───
+// ─── 메시지 말풍선 롱프레스 (브라우저 기본 텍스트 선택 보존) ───
 function initMessageLongPressCopy() {
   if (typeof bindMessageLongPressEvents === 'function') {
     bindMessageLongPressEvents();
