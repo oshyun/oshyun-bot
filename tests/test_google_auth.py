@@ -79,7 +79,7 @@ class TestGoogleAuthManager(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.mgr.get_auth_url("http://localhost:8765/callback")
 
-    @patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file")
+    @patch("google_auth_oauthlib.flow.Flow.from_client_secrets_file")
     def test_get_auth_url_success(self, mock_flow_from_file):
         with open(self.cred_file, "w") as f:
             f.write(json.dumps({"installed": {"client_id": "123"}}))
@@ -97,7 +97,7 @@ class TestGoogleAuthManager(unittest.TestCase):
             state="mystate",
         )
 
-    @patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file")
+    @patch("google_auth_oauthlib.flow.Flow.from_client_secrets_file")
     def test_exchange_code_success(self, mock_flow_from_file):
         with open(self.cred_file, "w") as f:
             f.write(json.dumps({"installed": {"client_id": "123"}}))

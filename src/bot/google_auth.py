@@ -114,12 +114,13 @@ class GoogleAuthManager:
                 f"OAuth 클라이언트 설정 파일이 없습니다: {self.credentials_file}\n"
                 "Google Cloud Console에서 OAuth 2.0 클라이언트 ID JSON을 설정해주세요."
             )
-        from google_auth_oauthlib.flow import InstalledAppFlow
+        from google_auth_oauthlib.flow import Flow
 
-        flow = InstalledAppFlow.from_client_secrets_file(
+        flow = Flow.from_client_secrets_file(
             self.credentials_file,
             scopes=self.scopes,
             redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False,
         )
         kwargs: dict[str, Any] = {
             "access_type": "offline",
@@ -136,12 +137,13 @@ class GoogleAuthManager:
         """인증 코드로 토큰을 교환하고 저장."""
         if not self.has_credentials:
             raise FileNotFoundError(f"OAuth 설정 파일이 없습니다: {self.credentials_file}")
-        from google_auth_oauthlib.flow import InstalledAppFlow
+        from google_auth_oauthlib.flow import Flow
 
-        flow = InstalledAppFlow.from_client_secrets_file(
+        flow = Flow.from_client_secrets_file(
             self.credentials_file,
             scopes=self.scopes,
             redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False,
         )
         flow.fetch_token(code=code.strip())
         creds = flow.credentials
