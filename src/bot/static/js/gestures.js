@@ -574,3 +574,10 @@ function initVisualViewportHandler() {
     }
   });
 }
+
+// ─── 메시지 말풍선 롱프레스 복사 제스처 연계 ───
+function initMessageLongPressCopy() {
+  if (typeof bindMessageLongPressEvents === 'function') {
+    bindMessageLongPressEvents();
+  }
+}

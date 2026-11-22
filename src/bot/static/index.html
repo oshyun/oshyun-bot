@@ -38,13 +38,13 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/css/automation.css?v=15">
-  <link rel="stylesheet" href="/css/base.css?v=15">
-  <link rel="stylesheet" href="/css/layout.css?v=15">
-  <link rel="stylesheet" href="/css/chat.css?v=15">
-  <link rel="stylesheet" href="/css/views-modals.css?v=15">
-  <link rel="stylesheet" href="/css/responsive.css?v=15">
-  <link rel="stylesheet" href="/css/master-inspector.css?v=16">
+  <link rel="stylesheet" href="/css/automation.css?v=17">
+  <link rel="stylesheet" href="/css/base.css?v=17">
+  <link rel="stylesheet" href="/css/layout.css?v=17">
+  <link rel="stylesheet" href="/css/chat.css?v=17">
+  <link rel="stylesheet" href="/css/views-modals.css?v=17">
+  <link rel="stylesheet" href="/css/responsive.css?v=17">
+  <link rel="stylesheet" href="/css/master-inspector.css?v=17">
 </head>
 <body>
   <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeRoomDrawer()"></div>
@@ -904,30 +904,6 @@
     </div>
   </div>
 
-  <!-- ═══ 모바일 메시지 길게 누르기 액션 바텀시트 ═══ -->
-  <div id="sheet-msg-actions" class="bottom-sheet-overlay" onclick="onMsgSheetBackdropClick(event)">
-    <div class="bottom-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-preview" id="sheet-msg-preview">메시지</div>
-      <button type="button" class="sheet-item" onclick="onSheetActionCopy()">
-        <svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        <span>내용 복사하기</span>
-      </button>
-      <button type="button" class="sheet-item" onclick="onSheetActionSpeak()">
-        <svg class="i" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-        <span>음성으로 듣기 (TTS)</span>
-      </button>
-      <button type="button" class="sheet-item" onclick="onSheetActionEditToInput()">
-        <svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        <span>입력창으로 가져와 편집</span>
-      </button>
-      <button type="button" class="sheet-item" onclick="onSheetActionRetry()">
-        <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        <span>이 내용으로 다시 질문하기</span>
-      </button>
-    </div>
-  </div>
-
   <!-- ═══ 이미지 라이트박스 모달 ═══ -->
   <div id="image-lightbox-modal" class="image-lightbox" onclick="closeImageLightbox()">
     <button type="button" class="image-lightbox-close" onclick="closeImageLightbox()">✕</button>
@@ -1213,19 +1189,19 @@
 
   <div id="toast"></div>
 
-  <script src="/js/core.js?v=15"></script>
-  <script src="/js/rooms-sync.js?v=15"></script>
-  <script src="/js/master-memory.js?v=15"></script>
-  <script src="/js/ws.js?v=15"></script>
-  <script src="/js/markdown.js?v=15"></script>
-  <script src="/js/composer.js?v=15"></script>
-  <script src="/js/rooms-ui.js?v=15"></script>
-  <script src="/js/messages.js?v=15"></script>
-  <script src="/js/gestures.js?v=15"></script>
-  <script src="/js/voice.js?v=15"></script>
-  <script src="/js/vault.js?v=15"></script>
-  <script src="/js/settings.js?v=15"></script>
-  <script src="/js/init.js?v=15"></script>
-  <script src="/js/automation.js?v=15"></script>
+  <script src="/js/core.js?v=17"></script>
+  <script src="/js/rooms-sync.js?v=17"></script>
+  <script src="/js/master-memory.js?v=17"></script>
+  <script src="/js/ws.js?v=17"></script>
+  <script src="/js/markdown.js?v=17"></script>
+  <script src="/js/composer.js?v=17"></script>
+  <script src="/js/rooms-ui.js?v=17"></script>
+  <script src="/js/messages.js?v=17"></script>
+  <script src="/js/gestures.js?v=17"></script>
+  <script src="/js/voice.js?v=17"></script>
+  <script src="/js/vault.js?v=17"></script>
+  <script src="/js/settings.js?v=17"></script>
+  <script src="/js/init.js?v=17"></script>
+  <script src="/js/automation.js?v=17"></script>
 </body>
 </html>

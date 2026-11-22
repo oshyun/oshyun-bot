@@ -1821,13 +1821,13 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
         ):
             self.assertIn(fn_sig, content)
 
-        # 메시지 롱프레스 액션 시트, 스와이프 제스처, 키보드 뷰포트 핸들러 확인 (모바일 하단 네비게이션은 제거됨)
+        # 메시지 롱프레스 즉시 복사(바텀시트 모달은 제거됨), 스와이프 제스처, 키보드 뷰포트 핸들러 확인
         self.assertNotIn('id="mobile-bottom-nav"', content)
+        self.assertNotIn('id="sheet-msg-actions"', content)
+        self.assertNotIn('openMsgActionSheet', content)
         for marker in (
             'id="room-bulk-bar"',
-            'id="sheet-msg-actions"',
             'id="btn-scroll-bottom"',
-            "function openMsgActionSheet(",
             "function bindMessageLongPressEvents(",
             "function initMobileSwipeGestures(",
             "function initVisualViewportHandler(",

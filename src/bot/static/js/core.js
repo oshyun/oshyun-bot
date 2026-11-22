@@ -292,7 +292,6 @@ let roomSearchDebounceTimer = null;
 let roomSearchSeq = 0;
 let renamingRoomId = null;
 let confirmModalCallback = null;
-let activeSheetMsgIndex = -1;
 let suppressNextRoomClick = false;
 let awaitingRoomLongPressRelease = false;
 let suppressRoomClickUntil = 0;

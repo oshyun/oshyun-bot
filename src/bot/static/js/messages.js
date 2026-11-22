@@ -1345,10 +1345,48 @@ function onSuggestionClick(idx) {
   if (item && item.prompt) sendUserMessage(item.prompt, false);
 }
 
+function copyMessageText(text) {
+  if (!text) return;
+  const cleanText = String(text).trim();
+  if (!cleanText) return;
+
+  const notifySuccess = () => {
+    showToast('메시지가 복사되었습니다');
+    triggerHaptic(20);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(cleanText)
+      .then(notifySuccess)
+      .catch(() => {
+        fallbackCopyMessageText(cleanText);
+        notifySuccess();
+      });
+  } else {
+    fallbackCopyMessageText(cleanText);
+    notifySuccess();
+  }
+}
+
+function fallbackCopyMessageText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } catch (_) {}
+  document.body.removeChild(ta);
+}
+
 function copyMessageByIndex(idx) {
   const room = getCurrentRoom();
   const m = room && room.messages && room.messages[idx];
-  if (m && m.text) copyToClipboard(m.text, '메시지가');
+  if (m && m.text) copyMessageText(m.text);
 }
 
 function speakMessageByIndex(idx) {
@@ -1390,51 +1428,7 @@ function retryMessageByIndex(idx) {
   if (targetPrompt) sendUserMessage(targetPrompt, false, { skipFocus: true });
 }
 
-// ─── 모바일 메시지 길게 누르기 액션 바텀시트 ───
-function openMsgActionSheet(idx) {
-  const room = getCurrentRoom();
-  const m = room && room.messages && room.messages[idx];
-  if (!m || !m.text) return;
-  activeSheetMsgIndex = idx;
-  triggerHaptic(22);
-  const previewEl = document.getElementById('sheet-msg-preview');
-  if (previewEl) previewEl.innerText = m.text.replace(/\s+/g, ' ').trim().slice(0, 60);
-  document.getElementById('sheet-msg-actions')?.classList.add('open');
-}
-
-function closeMsgActionSheet() {
-  document.getElementById('sheet-msg-actions')?.classList.remove('open');
-  activeSheetMsgIndex = -1;
-}
-
-function onMsgSheetBackdropClick(e) {
-  if (e.target && e.target.id === 'sheet-msg-actions') closeMsgActionSheet();
-}
-
-function onSheetActionCopy() {
-  const idx = activeSheetMsgIndex;
-  closeMsgActionSheet();
-  if (idx >= 0) copyMessageByIndex(idx);
-}
-
-function onSheetActionSpeak() {
-  const idx = activeSheetMsgIndex;
-  closeMsgActionSheet();
-  if (idx >= 0) speakMessageByIndex(idx);
-}
-
-function onSheetActionEditToInput() {
-  const idx = activeSheetMsgIndex;
-  closeMsgActionSheet();
-  if (idx >= 0) editMessageToInputByIndex(idx);
-}
-
-function onSheetActionRetry() {
-  const idx = activeSheetMsgIndex;
-  closeMsgActionSheet();
-  if (idx >= 0) retryMessageByIndex(idx);
-}
-
+// ─── 메시지 말풍선 롱프레스 텍스트 즉시 복사 (모바일 / 데스크톱 공통 지원) ───
 function bindMessageLongPressEvents() {
   const container = document.getElementById('messages-container');
   if (!container || container._msgLongPressBound) return;
@@ -1442,30 +1436,141 @@ function bindMessageLongPressEvents() {
 
   let timer = null;
   let startX = 0, startY = 0;
+  let activeMsgEl = null;
+  let activeIdx = -1;
+  let suppressClickUntil = 0;
 
-  const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const clearTimer = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    activeMsgEl = null;
+    activeIdx = -1;
+  };
 
+  const triggerCopy = (msgEl, idx) => {
+    clearTimer();
+    // 텍스트를 드래그해서 선택 중인 경우 롱프레스 복사 제외
+    const sel = window.getSelection ? String(window.getSelection()).trim() : '';
+    if (sel.length > 0) return;
+
+    // 시각 피드백 (에메랄드 하이라이트 & 펄스)
+    if (msgEl) {
+      msgEl.classList.add('copied-flash');
+      setTimeout(() => {
+        msgEl.classList.remove('copied-flash');
+      }, 450);
+    }
+
+    // 복사 실행 (토스트 '메시지가 복사되었습니다' 및 햅틱)
+    copyMessageByIndex(idx);
+
+    // 복사 직후 발생하는 마우스/터치 클릭 및 잔여 텍스트 선택 억제
+    suppressClickUntil = Date.now() + 450;
+    try {
+      if (window.getSelection) {
+        window.getSelection().removeAllRanges();
+      }
+    } catch (_) {}
+  };
+
+  // 1) 모바일/터치 롱프레스
   container.addEventListener('touchstart', (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('summary') || e.target.closest('pre')) return;
+    if (!e.touches || e.touches.length !== 1) {
+      clearTimer();
+      return;
+    }
+    // 버튼, 링크, 코드블록 복사, summary 등 인터랙티브 요소는 제외
+    if (e.target.closest('button, a, summary, pre, code, input, textarea, select, [contenteditable="true"]')) {
+      clearTimer();
+      return;
+    }
     const msgEl = e.target.closest('.msg[data-msg-idx]');
-    if (!msgEl) return;
+    if (!msgEl) {
+      clearTimer();
+      return;
+    }
     const idx = parseInt(msgEl.getAttribute('data-msg-idx'), 10);
-    if (isNaN(idx)) return;
+    if (isNaN(idx)) {
+      clearTimer();
+      return;
+    }
+
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
-    clear();
+    activeMsgEl = msgEl;
+    activeIdx = idx;
+
+    if (timer) clearTimeout(timer);
+    // 모바일 롱프레스: 420ms
     timer = setTimeout(() => {
-      const sel = window.getSelection ? String(window.getSelection()) : '';
-      if (!sel) openMsgActionSheet(idx);
-    }, 500);
+      triggerCopy(activeMsgEl, activeIdx);
+    }, 420);
   }, { passive: true });
 
   container.addEventListener('touchmove', (e) => {
     if (!timer || !e.touches || !e.touches[0]) return;
-    if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) clear();
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if (dx > 8 || dy > 8) {
+      clearTimer();
+    }
   }, { passive: true });
 
-  container.addEventListener('touchend', clear, { passive: true });
-  container.addEventListener('touchcancel', clear, { passive: true });
+  container.addEventListener('touchend', clearTimer, { passive: true });
+  container.addEventListener('touchcancel', clearTimer, { passive: true });
+
+  // 2) 데스크톱/마우스 롱프레스
+  container.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) { // 좌클릭만
+      clearTimer();
+      return;
+    }
+    if (e.target.closest('button, a, summary, pre, code, input, textarea, select, [contenteditable="true"]')) {
+      clearTimer();
+      return;
+    }
+    const msgEl = e.target.closest('.msg[data-msg-idx]');
+    if (!msgEl) {
+      clearTimer();
+      return;
+    }
+    const idx = parseInt(msgEl.getAttribute('data-msg-idx'), 10);
+    if (isNaN(idx)) {
+      clearTimer();
+      return;
+    }
+
+    startX = e.clientX;
+    startY = e.clientY;
+    activeMsgEl = msgEl;
+    activeIdx = idx;
+
+    if (timer) clearTimeout(timer);
+    // 데스크톱 마우스 롱프레스: 480ms
+    timer = setTimeout(() => {
+      triggerCopy(activeMsgEl, activeIdx);
+    }, 480);
+  });
+
+  container.addEventListener('mousemove', (e) => {
+    if (!timer) return;
+    const dx = Math.abs(e.clientX - startX);
+    const dy = Math.abs(e.clientY - startY);
+    if (dx > 6 || dy > 6) {
+      clearTimer();
+    }
+  });
+
+  container.addEventListener('mouseup', clearTimer);
+  container.addEventListener('mouseleave', clearTimer);
+
+  // 롱프레스 후 마우스 뗐을 때 발생할 수 있는 의도치 않은 click 이벤트 차단
+  container.addEventListener('click', (e) => {
+    if (Date.now() < suppressClickUntil) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
 }

@@ -21,7 +21,6 @@ window.addEventListener('keydown', (e) => {
     }
     closeConfirmModal(false);
     closeRenameRoomModal();
-    closeMsgActionSheet();
     closeModal('modal-spawn-session');
     closeModal('modal-task-note');
     closeModal('modal-agent-config');
