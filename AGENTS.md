@@ -67,7 +67,7 @@ oshyun-bot = "Personal Intelligent Bot". 텔레그램 메시지를 받아 로컬
 **`src/cal-sync/`** — 캘린더 동기화 사이드카
 - `calendar_sync.py` — 구글 캘린더(비공개 iCal) → 볼트 노트 동기화. LLM 미사용 순수 파이썬.
 
-**`src/bot/static/`** — 순수 HTML/CSS/JS 다크 테마(`second-bot`) 음성 비서 & 세컨브레인 볼트 매니저 프론트엔드
+**`src/bot/static/`** — 순수 HTML/CSS/JS 모던 클린 라이트(화이트/에메랄드) 테마 음성 비서 & 세컨브레인 볼트 매니저 프론트엔드
 - 별도 빌드 단계 없이 `web_server.py`가 `src/bot/static/index.html`을 직접 서빙한다.
 
 ---
@@ -144,6 +144,19 @@ PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests
 ### 4. 엔진 & 모델 정책
 - **기본 엔진**: **`agy` (Flash 3.8, Medium effort)** 고정.
 - **설정 분리**: 헤더를 심플하게 유지하고, 상세 설정은 우측 상단 톱니바퀴 아이콘을 통한 **전용 설정 패널(`SettingsScreen`)**에서 변경 (엔진: `agy`/`claude`, 모델, reasoning effort, TTS 보이스 등).
+
+### 5. 웹 UI 테마 및 디자인 시스템 절대 원칙 (⚠️ 임의 다크 테마 적용 절대 금지)
+- **기본 테마 = 모던 클린 라이트(화이트/에메랄드) 테마**:
+  - 웹 앱의 공식 기준 테마는 **밝고 깔끔한 화이트/라이트 모드(`color-scheme: light`)**이다.
+  - 기본 배경: `#FFFFFF` (`var(--bg)`), 서브 패널/아코디언/카드: `var(--bg-subtle)` (`#F4F4F5`) 또는 `var(--bg-card)`, 테두리: `var(--border)` (`#E6E6E9`), 기본 텍스트: `var(--text)` (`#18181B`), 악센트: `var(--accent)` (`#10B981`, 에메랄드 그린).
+- **🚫 임의의 다크 테마 색상 하드코딩 절대 금지 (재발 방지)**:
+  - 새로운 UI, 모달, 아코디언, 폼, 콜백 HTML 등을 개발할 때 `#18181b`, `#09090b`, `#121215`, `#161B26` 등의 어두운 배경색을 인라인 스타일이나 전용 클래스에 **절대 하드코딩하지 않는다**.
+  - 존재하지 않는 CSS 변수(예: `var(--bg-2)`)를 작성하고 폴백으로 어두운 색(`#18181b`)을 지정하여 화면 일부분이 시커멓게 얼룩지는 현상을 엄격히 금지한다.
+- **CSS 토큰 SSOT 준수**:
+  - 배경: `var(--bg)`, `var(--bg-subtle)`, `var(--bg-hover)`, `var(--bg-card)`
+  - 테두리: `var(--border)`, `var(--border-strong)`
+  - 텍스트: `var(--text)`, `var(--text-2)`, `var(--text-3)`
+  - 버튼: 기본 버튼은 `.btn`, 긍정/주요 액션은 에메랄드 악센트(`.btn.accent`)를 사용하며, 라이트 톤을 깨뜨리는 무분별한 `.btn.primary`(검은색 솔리드 채움) 남발을 금지한다.
 
 ---
 

@@ -103,12 +103,52 @@ async def handle_google_auth_callback(request: web.Request) -> web.Response:
     if error:
         err_msg = f"구글 인증 거부 또는 오류: {error}"
         html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>인증 실패</title></head>
-<body style="font-family:sans-serif;text-align:center;padding:50px;background:#18181b;color:#fff;">
-  <h2>⚠️ 인증 실패</h2>
-  <p>{err_msg}</p>
-  <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;">창 닫기</button>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>인증 실패</title>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(135deg, #FEF2F2 0%, #F8FAFC 100%);
+      color: #0F172A;
+    }}
+    .card {{
+      max-width: 440px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border: 1px solid #FEE2E2;
+      border-radius: 20px;
+      padding: 36px 24px;
+      box-shadow: 0 10px 30px rgba(239, 68, 68, 0.08);
+    }}
+    .icon {{ font-size: 48px; margin-bottom: 16px; }}
+    h2 {{ color: #EF4444; margin-bottom: 8px; }}
+    p {{ color: #64748B; font-size: 14px; line-height: 1.6; }}
+    .btn {{
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: #EF4444;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚠️</div>
+    <h2>인증 실패</h2>
+    <p>{err_msg}</p>
+    <button class="btn" onclick="window.close()">창 닫기</button>
+  </div>
 </body>
 </html>"""
         return web.Response(text=html, content_type="text/html", status=400)
@@ -128,36 +168,36 @@ async def handle_google_auth_callback(request: web.Request) -> web.Response:
         account_info = default_google_auth.get_account_info()
         email = account_info.get("email") or "인증 완료"
         html = f"""<!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <meta charset="utf-8">
   <title>구글 연동 성공</title>
   <style>
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
       text-align: center;
       padding: 60px 20px;
-      background: #09090b;
-      color: #fafafa;
+      background: linear-gradient(135deg, #F0FDF4 0%, #F8FAFC 100%);
+      color: #0F172A;
     }}
     .card {{
       max-width: 440px;
       margin: 0 auto;
-      background: #18181b;
-      border: 1px solid #27272a;
-      border-radius: 16px;
-      padding: 32px 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 20px;
+      padding: 36px 24px;
+      box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08), 0 2px 10px rgba(0, 0, 0, 0.04);
     }}
     .icon {{ font-size: 48px; margin-bottom: 16px; }}
-    h2 {{ margin-bottom: 8px; color: #4ade80; }}
-    p {{ color: #a1a1aa; font-size: 14px; line-height: 1.6; }}
-    .email {{ color: #60a5fa; font-weight: bold; margin: 12px 0; word-break: break-all; }}
+    h2 {{ margin-bottom: 8px; color: #10B981; }}
+    p {{ color: #64748B; font-size: 14px; line-height: 1.6; }}
+    .email {{ color: #059669; font-weight: 600; margin: 12px 0; word-break: break-all; }}
     .btn {{
       display: inline-block;
       margin-top: 20px;
       padding: 10px 24px;
-      background: #3b82f6;
+      background: #10B981;
       color: #fff;
       border-radius: 8px;
       text-decoration: none;
@@ -190,12 +230,52 @@ async def handle_google_auth_callback(request: web.Request) -> web.Response:
         return web.Response(text=html, content_type="text/html")
     else:
         html = """<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>토큰 교환 실패</title></head>
-<body style="font-family:sans-serif;text-align:center;padding:50px;background:#18181b;color:#fff;">
-  <h2>⚠️ 토큰 교환 실패</h2>
-  <p>인증 코드로 액세스 토큰을 발급받지 못했습니다. 다시 시도해 주세요.</p>
-  <button onclick="window.close()" style="padding:10px 20px;margin-top:20px;cursor:pointer;">창 닫기</button>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>토큰 교환 실패</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(135deg, #FEF2F2 0%, #F8FAFC 100%);
+      color: #0F172A;
+    }
+    .card {
+      max-width: 440px;
+      margin: 0 auto;
+      background: #FFFFFF;
+      border: 1px solid #FEE2E2;
+      border-radius: 20px;
+      padding: 36px 24px;
+      box-shadow: 0 10px 30px rgba(239, 68, 68, 0.08);
+    }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h2 { color: #EF4444; margin-bottom: 8px; }
+    p { color: #64748B; font-size: 14px; line-height: 1.6; }
+    .btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: #EF4444;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚠️</div>
+    <h2>토큰 교환 실패</h2>
+    <p>인증 코드로 액세스 토큰을 발급받지 못했습니다. 다시 시도해 주세요.</p>
+    <button class="btn" onclick="window.close()">창 닫기</button>
+  </div>
 </body>
 </html>"""
         return web.Response(text=html, content_type="text/html", status=500)

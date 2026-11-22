@@ -148,7 +148,7 @@ def _is_authenticated(request: web.Request) -> bool:
 
 
 def render_login_page(error_message: str | None = None) -> str:
-    """독립적이고 안전한 다크 테마 비밀 토큰 로그인 페이지 HTML을 렌더링한다."""
+    """독립적이고 안전한 모던 클린 라이트 테마 비밀 토큰 로그인 페이지 HTML을 렌더링한다."""
     error_html = (
         f'<div class="error-banner">{error_message}</div>' if error_message else ""
     )
