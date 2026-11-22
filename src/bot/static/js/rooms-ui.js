@@ -1155,7 +1155,7 @@ function renderThreadPanelBody() {
             <span class="thread-prompt-badge">지시 프롬프트</span>
             ${promptTime ? `<span class="thread-prompt-time">${escapeHtml(promptTime)}</span>` : ''}
           </div>
-          <div class="thread-prompt-body markdown-body">${promptHtml}</div>
+          <div class="thread-prompt-body md md-compact">${promptHtml}</div>
         </div>
       `);
     }
@@ -1204,7 +1204,7 @@ function renderThreadPanelBody() {
               <span class="thread-msg-role">하위 전문가 (작업 수행 중…)</span>
               <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
             </div>
-            <div class="thread-msg-bubble markdown-body" style="color:var(--text-2);">지시 프롬프트에 따른 작업을 진행하고 있습니다…</div>
+            <div class="thread-msg-bubble md md-compact" style="color:var(--text-2);">지시 프롬프트에 따른 작업을 진행하고 있습니다…</div>
           </div>
         `);
       }
@@ -1225,7 +1225,7 @@ function renderThreadPanelBody() {
               <span class="thread-msg-role">${escapeHtml(senderName)}</span>
               ${time ? `<span class="thread-msg-time">${time}</span>` : ''}
             </div>
-            <div class="thread-msg-bubble ${role === 'assistant' ? 'markdown-body' : ''}">${textHtml}</div>
+            <div class="thread-msg-bubble ${role === 'assistant' ? 'md md-compact' : ''}">${textHtml}</div>
           </div>
         `);
       });
@@ -1239,7 +1239,7 @@ function renderThreadPanelBody() {
               <span class="thread-msg-role">하위 전문가 (작성 중…)</span>
               <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
             </div>
-            <div class="thread-msg-bubble markdown-body">${streamHtml}</div>
+            <div class="thread-msg-bubble md md-compact">${streamHtml}</div>
           </div>
         `);
       }

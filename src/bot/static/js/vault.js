@@ -83,6 +83,37 @@ function toggleDirNode(el) {
   }
 }
 
+let currentVaultMode = 'preview'; // 'preview' | 'edit'
+
+function switchVaultMode(mode = 'preview') {
+  currentVaultMode = mode;
+  const previewEl = document.getElementById('vault-preview');
+  const editorEl = document.getElementById('vault-editor');
+  const btnPrev = document.getElementById('btn-vault-mode-preview');
+  const btnEdit = document.getElementById('btn-vault-mode-edit');
+
+  if (btnPrev) btnPrev.classList.toggle('active', mode === 'preview');
+  if (btnEdit) btnEdit.classList.toggle('active', mode === 'edit');
+
+  if (mode === 'preview') {
+    if (editorEl && previewEl) {
+      const rawText = editorEl.value || '';
+      const html = (typeof formatMarkdown === 'function')
+        ? formatMarkdown(rawText)
+        : (typeof escapeHtml === 'function' ? escapeHtml(rawText).replace(/\n/g, '<br>') : rawText);
+      previewEl.innerHTML = html || '<div class="sb-empty" style="padding:40px 0;">내용이 없습니다.</div>';
+    }
+    if (previewEl) previewEl.style.display = 'block';
+    if (editorEl) editorEl.style.display = 'none';
+  } else {
+    if (previewEl) previewEl.style.display = 'none';
+    if (editorEl) {
+      editorEl.style.display = 'block';
+      try { editorEl.focus(); } catch (_) {}
+    }
+  }
+}
+
 async function openVaultFile(filePath) {
   if (vaultDirty && !confirm('저장하지 않은 변경사항이 있습니다. 다른 노트를 여시겠습니까?')) return;
   currentEditingPath = filePath;
@@ -96,8 +127,8 @@ async function openVaultFile(filePath) {
 
   document.getElementById('vault-layout')?.classList.add('has-file');
   document.getElementById('editor-empty').style.display = 'none';
-  const editor = document.getElementById('vault-editor');
-  editor.style.display = 'block';
+  const modeSwitch = document.getElementById('vault-mode-switch');
+  if (modeSwitch) modeSwitch.style.display = 'inline-flex';
   document.getElementById('btn-ask-file').disabled = false;
   document.getElementById('btn-save-file').disabled = false;
   onVaultSearch();
@@ -106,7 +137,9 @@ async function openVaultFile(filePath) {
     const res = await fetch('/api/vault/file?path=' + encodeURIComponent(filePath));
     const data = await res.json();
     if (data.content !== undefined) {
-      editor.value = data.content || '';
+      const editor = document.getElementById('vault-editor');
+      if (editor) editor.value = data.content || '';
+      switchVaultMode(currentVaultMode || 'preview');
     } else {
       showToast('파일을 열지 못했습니다.');
     }
@@ -140,6 +173,7 @@ async function saveCurrentVaultFile() {
     const data = await res.json();
     if (data.success || data.ok) {
       setVaultDirty(false);
+      if (currentVaultMode === 'preview') switchVaultMode('preview');
       showToast('저장되었습니다.');
     } else {
       showToast('저장 실패: ' + (data.error || '오류'));
