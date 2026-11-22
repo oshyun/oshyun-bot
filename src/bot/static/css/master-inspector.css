@@ -467,6 +467,9 @@
   line-height: 1.45;
   word-break: break-word;
 }
+.msb-mem-card-text.md {
+  white-space: normal;
+}
 .msb-mem-badge {
   display: inline-flex;
   align-items: center;
@@ -693,14 +696,8 @@
   line-height: 1.5;
   word-break: break-word;
 }
-.thread-prompt-body p {
-  margin: 3px 0;
-}
-.thread-prompt-body p:first-child {
-  margin-top: 0;
-}
-.thread-prompt-body p:last-child {
-  margin-bottom: 0;
+.thread-prompt-body.md {
+  white-space: normal;
 }
 .thread-steps-section {
   background: var(--bg-card);
@@ -779,37 +776,9 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+.thread-msg-bubble.md,
 .thread-msg-bubble.markdown-body {
   white-space: normal;
-}
-.thread-msg-bubble.markdown-body p {
-  margin: 3px 0;
-}
-.thread-msg-bubble.markdown-body p:first-child {
-  margin-top: 0;
-}
-.thread-msg-bubble.markdown-body p:last-child {
-  margin-bottom: 0;
-}
-.thread-msg-bubble.markdown-body pre {
-  background: var(--bg-hover);
-  padding: 6px 8px;
-  border-radius: 6px;
-  overflow-x: auto;
-  font-size: 11.5px;
-  margin: 4px 0;
-}
-.thread-msg-bubble.markdown-body code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11.5px;
-  background: var(--bg-hover);
-  padding: 1px 4px;
-  border-radius: 4px;
-}
-.thread-msg-bubble.markdown-body ul,
-.thread-msg-bubble.markdown-body ol {
-  padding-left: 18px;
-  margin: 4px 0;
 }
 .thread-msg-item.assistant.streaming {
   border-color: var(--accent);

@@ -551,7 +551,10 @@ function renderMsbMemory(memory = latestMasterMemory) {
   }
   listEl.innerHTML = items.map(it => {
     const title = escapeHtml(it.title || it.kind || currentMsbMemoryTier.toUpperCase());
-    const text = escapeHtml(it.text || '');
+    const rawText = String(it.text || '');
+    const textHtml = (typeof formatMarkdown === 'function')
+      ? formatMarkdown(rawText)
+      : escapeHtml(rawText).replace(/\n/g, '<br>');
     const when = it.movedAt ? `${it.fromTier ? it.fromTier.toUpperCase() + '→' : ''}${formatRelativeTime(it.movedAt)}` : formatRelativeTime(it.createdAt);
 
     return `
@@ -564,7 +567,7 @@ function renderMsbMemory(memory = latestMasterMemory) {
           </div>
           <span class="msb-mem-card-meta">${escapeHtml(when)} (${it.chars || 0}자)</span>
         </div>
-        <div class="msb-mem-card-text">${text}</div>
+        <div class="msb-mem-card-text md md-compact">${textHtml}</div>
         <div class="msb-mem-card-footer">
           <button type="button" class="btn xs ghost" onclick="deleteMasterMemoryItem('${escapeHtml(it.id)}')" title="이 메모리 삭제" style="color:var(--danger,#ef4444);padding:1px 4px;font-size:10px;">삭제</button>
         </div>
