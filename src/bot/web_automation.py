@@ -60,6 +60,12 @@ def _extract_json_obj(text: str) -> dict[str, Any] | None:
 def _format_schedule_view(entry: dict[str, Any]) -> dict[str, Any]:
     """프론트엔드 렌더링용 정기 작업 뷰 모델을 생성한다."""
     enabled = bool(entry.get("enabled", True))
+    kind = str(entry.get("kind") or "prompt")
+    kind_labels = {
+        "prompt": "스케줄",
+        "burn": "토큰버닝",
+        "gmail": "메일 동기화",
+    }
     return {
         "id": entry.get("id", ""),
         "cron": entry.get("cron", ""),
@@ -67,8 +73,8 @@ def _format_schedule_view(entry: dict[str, Any]) -> dict[str, Any]:
         "description": entry.get("description") or entry.get("prompt", ""),
         "model": entry.get("model") or "",
         "effort": entry.get("effort") or "",
-        "kind": str(entry.get("kind") or "prompt"),
-        "kindLabel": "스케줄",
+        "kind": kind,
+        "kindLabel": kind_labels.get(kind, "스케줄"),
         "enabled": enabled,
         "statusLabel": "활성" if enabled else "일시중지",
         "created": entry.get("created", ""),
@@ -138,6 +144,7 @@ async def handle_schedules_create(request: web.Request) -> web.Response:
     description = str(body.get("description") or "").strip()
     model = str(body.get("model") or "").strip() or None
     effort = str(body.get("effort") or "").strip() or None
+    kind = str(body.get("kind") or "prompt").strip()
 
     if natural_text:
         extra_args = [x for x in (os.getenv("AGENT_EXTRA_ARGS", "")).split() if x]
@@ -174,6 +181,7 @@ async def handle_schedules_create(request: web.Request) -> web.Response:
         description=description or prompt_text[:50],
         model=model,
         effort=effort,
+        kind=kind,
     )
     await _broadcast_automation_update("schedules")
     return web.json_response({"status": "ok", "item": _format_schedule_view(entry)})

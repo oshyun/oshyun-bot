@@ -151,6 +151,20 @@ from web_vault import (
     handle_vault_tree,
 )
 
+import web_google
+from web_google import (
+    handle_gmail_status,
+    handle_gmail_sync,
+    handle_google_auth_callback,
+    handle_google_auth_code,
+    handle_google_auth_url,
+    handle_google_credentials,
+    handle_google_disconnect,
+    handle_google_status,
+    handle_schedules_ensure_gmail,
+)
+from google_auth import default_google_auth
+
 import web_execution
 from web_execution import (
     _active_agent_pids,
@@ -319,6 +333,11 @@ def build_status_payload() -> dict:
         "usage": get_cached_agy_usage(allow_refresh=True),
         "agents": agent_configs.list_agent_configs(),
         "orchestratorRoomIds": list(agent_configs.get_orchestrator_room_ids()),
+        "googleAuth": {
+            "hasCredentials": default_google_auth.has_credentials,
+            "hasToken": default_google_auth.has_token,
+            "isAuthenticated": default_google_auth.is_authenticated(),
+        },
     }
 
 
@@ -777,6 +796,17 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_get("/api/vault/file", handle_vault_get_file)
     web_app.router.add_post("/api/vault/file", handle_vault_save_file)
     web_app.router.add_post("/api/vault/create", handle_vault_create_file)
+
+    # Google OAuth2 및 Gmail 연동 API
+    web_app.router.add_get("/api/google/status", handle_google_status)
+    web_app.router.add_post("/api/google/credentials", handle_google_credentials)
+    web_app.router.add_get("/api/google/auth/url", handle_google_auth_url)
+    web_app.router.add_get("/api/google/auth/callback", handle_google_auth_callback)
+    web_app.router.add_post("/api/google/auth/code", handle_google_auth_code)
+    web_app.router.add_post("/api/google/disconnect", handle_google_disconnect)
+    web_app.router.add_get("/api/gmail/status", handle_gmail_status)
+    web_app.router.add_post("/api/gmail/sync", handle_gmail_sync)
+    web_app.router.add_post("/api/schedules/ensure-gmail", handle_schedules_ensure_gmail)
 
     resolved_static_dir = static_dir if static_dir is not None else WEB_STATIC_DIR
     index_html_path = os.path.join(resolved_static_dir, "index.html")

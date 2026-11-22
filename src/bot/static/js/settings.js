@@ -77,6 +77,9 @@ async function loadStatusAndSettings() {
     const res = await fetch('/api/status');
     applyStatusPayload(await res.json());
   } catch (_) {}
+  if (typeof loadGoogleAuthStatus === 'function') {
+    loadGoogleAuthStatus();
+  }
 }
 
 async function onSettingEngineChange() {
@@ -478,3 +481,224 @@ async function triggerPwaInstall() {
     showToast('브라우저 주소창 오른쪽의 설치 아이콘이나 메뉴의 [앱 설치]를 선택해 주세요.');
   }
 }
+
+// ─── 구글 서비스(OAuth2 / Gmail / Calendar) 연동 관리 ───
+let cachedGoogleStatus = null;
+
+async function loadGoogleAuthStatus() {
+  const descEl = document.getElementById('google-auth-status-desc');
+  const btnConnect = document.getElementById('btn-google-auth-connect');
+  const btnDisconnect = document.getElementById('btn-google-auth-disconnect');
+  const rowGmail = document.getElementById('row-gmail-sync');
+  const gmailDescEl = document.getElementById('gmail-sync-status-desc');
+
+  if (!descEl) return;
+
+  try {
+    const res = await fetch('/api/google/status');
+    const data = await res.json();
+    if (!res.ok || data.status !== 'ok') return;
+
+    cachedGoogleStatus = data;
+    const acct = data.account || {};
+    const gmail = data.gmail || {};
+
+    if (acct.isAuthenticated) {
+      const email = acct.email ? ` (${acct.email})` : '';
+      descEl.innerHTML = `<span style="color:var(--accent, #4ade80); font-weight:600;">🟢 연동됨</span>${escapeHtml(email)}`;
+      if (btnConnect) btnConnect.style.display = 'none';
+      if (btnDisconnect) btnDisconnect.style.display = 'inline-block';
+      if (rowGmail) rowGmail.style.display = 'flex';
+
+      if (gmailDescEl) {
+        if (gmail.lastSyncDisplay) {
+          gmailDescEl.innerText = `최근 동기화: ${gmail.lastSyncDisplay} (메일 ${gmail.totalCount}건, 미열람 ${gmail.unreadCount}건)`;
+        } else {
+          gmailDescEl.innerText = '아직 동기화된 메일이 없습니다. [지금 메일 수신]을 눌러보세요.';
+        }
+      }
+    } else {
+      if (acct.hasCredentials) {
+        descEl.innerHTML = `<span style="color:var(--text-3);">⚪ 미연동 (구글 계정 연동 버튼을 눌러 로그인하세요)</span>`;
+      } else {
+        descEl.innerHTML = `<span style="color:#f59e0b; font-weight:500;">🟡 클라이언트 설정 필요 (credentials.json 미등록)</span>`;
+      }
+      if (btnConnect) btnConnect.style.display = 'inline-block';
+      if (btnDisconnect) btnDisconnect.style.display = 'none';
+      if (rowGmail) rowGmail.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('Google 상태 로드 실패:', err);
+  }
+}
+
+async function startGoogleAuth() {
+  try {
+    const res = await fetch('/api/google/auth/url');
+    const data = await res.json();
+    if (!res.ok || data.status !== 'ok') {
+      showToast(data.error || '구글 인증 URL 생성에 실패했습니다.', 'error');
+      // 자격증명이 없으면 고급 설정 열기
+      toggleGoogleAdvancedSettings(true);
+      return;
+    }
+
+    const popup = window.open(
+      data.authUrl,
+      'google_auth_window',
+      'width=540,height=700,status=no,toolbar=no,menubar=no'
+    );
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      // 팝업 차단 시 직접 이동
+      location.href = data.authUrl;
+    } else {
+      showToast('구글 로그인 창이 열렸습니다. 인증을 완료해주세요.');
+    }
+  } catch (err) {
+    showToast(`인증 요청 실패: ${err.message}`, 'error');
+  }
+}
+
+async function disconnectGoogleAuth() {
+  if (!confirm('구글 서비스(Gmail/Calendar) 연동을 해제하시겠습니까?')) return;
+  try {
+    const res = await fetch('/api/google/disconnect', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok || data.status === 'ok') {
+      showToast('구글 계정 연동이 해제되었습니다.');
+      loadGoogleAuthStatus();
+    } else {
+      showToast(data.error || '연동 해제에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showToast(`연동 해제 오류: ${err.message}`, 'error');
+  }
+}
+
+async function syncGmailNow() {
+  const btn = document.getElementById('btn-gmail-sync-now');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = '수신 중…';
+  }
+  try {
+    const res = await fetch('/api/gmail/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'newer_than:7d', maxResults: 20 })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      const r = data.result || {};
+      showToast(`📬 메일 ${r.totalCount || 0}건 수신 완료 (미열람 ${r.unreadCount || 0}건)`);
+      loadGoogleAuthStatus();
+    } else {
+      showToast(data.error || '메일 수신에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showToast(`메일 동기화 오류: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = '지금 메일 수신';
+    }
+  }
+}
+
+async function addGmailSchedulePreset() {
+  try {
+    const res = await fetch('/api/schedules/ensure-gmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cron: '0 8 * * *' })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      showToast(data.message || 'Gmail 정기 스케줄이 등록되었습니다.');
+      if (typeof window.loadAutomationData === 'function') {
+        window.loadAutomationData();
+      }
+    } else {
+      showToast(data.error || '스케줄 등록에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showToast(`스케줄 등록 오류: ${err.message}`, 'error');
+  }
+}
+
+function toggleGoogleAdvancedSettings(forceOpen) {
+  const panel = document.getElementById('google-advanced-settings');
+  const btn = document.getElementById('btn-toggle-google-adv');
+  if (!panel) return;
+  const shouldOpen = forceOpen !== undefined ? forceOpen : panel.style.display === 'none';
+  panel.style.display = shouldOpen ? 'block' : 'none';
+  if (btn) btn.innerText = shouldOpen ? '설정 닫기' : '설정 열기';
+}
+
+async function submitGoogleAuthCode() {
+  const input = document.getElementById('input-google-auth-code');
+  const code = (input?.value || '').trim();
+  if (!code) {
+    showToast('인증 코드를 입력해주세요.', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/google/auth/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      showToast('구글 계정이 성공적으로 연동되었습니다.');
+      if (input) input.value = '';
+      toggleGoogleAdvancedSettings(false);
+      loadGoogleAuthStatus();
+    } else {
+      showToast(data.error || '인증 처리에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    showToast(`코드 등록 오류: ${err.message}`, 'error');
+  }
+}
+
+async function saveGoogleCredentialsJson() {
+  const textarea = document.getElementById('textarea-google-credentials');
+  const val = (textarea?.value || '').trim();
+  if (!val) {
+    showToast('credentials JSON을 입력해주세요.', 'error');
+    return;
+  }
+  try {
+    let parsed;
+    try {
+      parsed = JSON.parse(val);
+    } catch (_) {
+      showToast('올바른 JSON 형식이 아닙니다.', 'error');
+      return;
+    }
+    const res = await fetch('/api/google/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credentials: parsed })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      showToast('구글 자격증명 파일이 성공적으로 저장되었습니다.');
+      if (textarea) textarea.value = '';
+      loadGoogleAuthStatus();
+    } else {
+      showToast(data.error || '자격증명 저장 실패', 'error');
+    }
+  } catch (err) {
+    showToast(`저장 오류: ${err.message}`, 'error');
+  }
+}
+
+// 팝업 창 등에서 전달되는 성공 메시지 리스너
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'google_auth_success') {
+    showToast(`구글 연동 완료: ${event.data.email || '인증 성공'}`);
+    loadGoogleAuthStatus();
+  }
+});

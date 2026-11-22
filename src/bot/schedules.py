@@ -36,7 +36,7 @@ def add(
         "cron": cron,
         "prompt": prompt,
         "description": description,
-        "kind": kind if kind in ("prompt", "burn") else "prompt",
+        "kind": kind if kind in ("prompt", "burn", "gmail") else "prompt",
         "enabled": True,
         "created": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
@@ -103,6 +103,26 @@ def ensure_default_burn_schedule() -> dict | None:
         "cron": "0 * * * *",
         "prompt": "토큰 버닝 점검 및 실행",
         "description": "🔥 자동 토큰 버닝 (매시 정각 조건 점검)",
+        "enabled": True,
+        "created": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+    items.append(entry)
+    write_json_atomic(SCHEDULES_FILE, items, indent=2)
+    return entry
+
+
+def ensure_default_gmail_schedule(cron: str = "0 8 * * *") -> dict | None:
+    """schedules.json 에 Gmail 정기 수신 스케줄이 없으면 기본 스케줄을 등록한다."""
+    items = list_all()
+    if any(item.get("id") == "gmail-auto" or item.get("kind") == "gmail" for item in items):
+        return None
+    entry = {
+        "id": "gmail-auto",
+        "chat_id": 0,
+        "cron": cron,
+        "prompt": "최근 메일을 수신하고 볼트(_bot/메일.md)를 갱신한 뒤 중요 및 미열람 메일을 간결하게 요약 브리핑해줘.",
+        "description": "📧 정기 메일 수신 및 볼트 동기화",
+        "kind": "gmail",
         "enabled": True,
         "created": datetime.now().astimezone().isoformat(timespec="seconds"),
     }

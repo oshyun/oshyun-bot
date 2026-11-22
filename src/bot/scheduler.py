@@ -29,11 +29,26 @@ def _is_usage_report_prompt(prompt: str) -> bool:
     )
 
 
+def _is_gmail_schedule(schedule_entry: dict, prompt: str) -> bool:
+    """스케줄이 Gmail 메일 수신/동기화 작업인지 판별."""
+    if schedule_entry.get("kind") == "gmail":
+        return True
+    low_prompt = (prompt or "").lower()
+    low_desc = str(schedule_entry.get("description") or "").lower()
+    for text in (low_prompt, low_desc):
+        if ("메일" in text or "gmail" in text) and any(
+            k in text for k in ("수신", "동기화", "읽", "가져오", "요약", "정리", "체크")
+        ):
+            return True
+    return False
+
+
 def build_master_schedule_prompt(
     schedule_entry: dict,
     *,
     trigger_source: str = "cron",
     usage_report: str | None = None,
+    mail_report: str | None = None,
 ) -> str:
     """마스터 에이전트(__core__)에 전달할 정기 스케줄 트리거 프롬프트를 생성한다."""
     sid = str(schedule_entry.get("id") or "").strip() or "-"
@@ -61,6 +76,8 @@ def build_master_schedule_prompt(
     ])
     if usage_report is not None:
         lines.extend(["", "[사전 조회된 AGY 사용량 리포트]", usage_report])
+    if mail_report is not None:
+        lines.extend(["", "[사전 수신된 메일 동기화 현황]", mail_report])
 
     lines.extend([
         "",
@@ -96,6 +113,21 @@ async def _fire(
 
     prompt = schedule_entry.get("prompt", "").strip()
     is_usage_report = _is_usage_report_prompt(prompt)
+    is_gmail = _is_gmail_schedule(schedule_entry, prompt)
+
+    mail_report: str | None = None
+    if is_gmail:
+        try:
+            from gmail_manager import default_gmail_manager
+
+            sync_res = default_gmail_manager.sync_to_vault()
+            mail_report = (
+                f"📬 메일 {sync_res['totalCount']}건 수신 완료 "
+                f"(미열람 {sync_res['unreadCount']}건). 볼트 노트({sync_res['vaultFile']})에 동기화되었습니다."
+            )
+        except Exception as exc:
+            mail_report = f"⚠️ Gmail 동기화 실패 또는 계정 미연동: {exc}"
+            logger.warning("정기 작업 [%s] Gmail 동기화 오류: %s", sid, exc)
 
     if trigger_master is not None:
         usage_report: str | None = None
@@ -108,6 +140,7 @@ async def _fire(
             schedule_entry,
             trigger_source=trigger_source,
             usage_report=usage_report,
+            mail_report=mail_report,
         )
         try:
             await trigger_master(schedule_entry, master_prompt)
@@ -129,6 +162,9 @@ async def _fire(
     try:
         if is_usage_report:
             result = await get_agy_usage_report()
+            cost = 0.0
+        elif is_gmail and mail_report and "실패" in mail_report:
+            result = mail_report
             cost = 0.0
         else:
             run_result = await run_agent(

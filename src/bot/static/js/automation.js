@@ -151,6 +151,8 @@
         <div class="auto-row">
           <button class="auto-tab-btn ${scheduleNlMode ? 'active' : ''}" onclick="setScheduleNlMode(true)">자연어로 등록</button>
           <button class="auto-tab-btn ${!scheduleNlMode ? 'active' : ''}" onclick="setScheduleNlMode(false)">직접 Cron 입력</button>
+          <span style="flex:1"></span>
+          <button type="button" class="auto-btn" onclick="addGmailSchedulePresetFromAuto()">📧 Gmail 정기 수신 추가</button>
         </div>
         ${scheduleNlMode ? `
           <textarea id="auto-nl-input" class="auto-textarea" rows="3" placeholder="예: 매일 아침 8시에 오늘 캘린더 일정과 할 일 요약해줘"></textarea>
@@ -310,5 +312,18 @@
       showAutoToast('스케줄을 삭제했습니다.');
       window.loadAutomationData();
     } catch (err) { showAutoToast(err.message, true); }
+  };
+
+  window.addGmailSchedulePresetFromAuto = async function () {
+    try {
+      const res = await apiJson('/api/schedules/ensure-gmail', {
+        method: 'POST',
+        body: JSON.stringify({ cron: '0 8 * * *' }),
+      });
+      showAutoToast(res.message || 'Gmail 정기 수신 스케줄이 등록되었습니다.');
+      window.loadAutomationData();
+    } catch (err) {
+      showAutoToast(err.message, true);
+    }
   };
 })();

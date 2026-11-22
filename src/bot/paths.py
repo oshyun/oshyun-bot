@@ -108,7 +108,7 @@ def _resolve_data_rel_path(env_key: str, fallback_path: str) -> str:
     return os.path.abspath(os.path.join(ROOT_DIR, exp))
 
 
-# Google Calendar API (OAuth 2.0 자격증명 및 토큰)
+# Google API (OAuth 2.0 자격증명 및 토큰 - Calendar & Gmail 공용)
 GOOGLE_CREDENTIALS_FILE = _resolve_data_rel_path(
     "GOOGLE_CREDENTIALS_FILE", os.path.join(STATE_DIR, "gcal_credentials.json")
 )
@@ -118,6 +118,11 @@ GOOGLE_TOKEN_FILE = _resolve_data_rel_path(
 # 볼트 캘린더 동기화 트리거 파일
 CAL_REFRESH_TRIGGER_PATH = os.path.join(
     WORKDIR, os.getenv("CAL_REFRESH_TRIGGER") or "_bot/.cal-refresh"
+)
+# Gmail 동기화 상태 및 볼트 메일 노트 경로
+GMAIL_SYNC_STATE_FILE = os.path.join(STATE_DIR, "gmail_sync_state.json")
+GMAIL_VAULT_FILE = os.path.join(
+    WORKDIR, os.getenv("GMAIL_VAULT_FILE") or "_bot/메일.md"
 )
 
 
