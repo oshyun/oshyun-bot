@@ -557,7 +557,7 @@
   border-color: var(--selection-border);
 }
 
-/* ═══ 🧵 스레드 슬라이드오버 패널 (Thread Sidebar Panel) ═══ */
+/* ═══ 스레드 슬라이드오버 패널 (Thread Sidebar Panel) ═══ */
 .thread-sidebar {
   width: 100%;
   max-width: 440px;
@@ -584,7 +584,7 @@
   display: flex;
 }
 
-/* 🧵 스레드 패널 바깥 클릭 닫기용 투명 백드롭 (배경 블러 절대 금지) */
+/* 스레드 패널 바깥 클릭 닫기용 투명 백드롭 (배경 블러 절대 금지) */
 .thread-drawer-backdrop {
   display: none;
   position: fixed;
@@ -659,6 +659,48 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.thread-prompt-card {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.thread-prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: calc(11px * var(--ui-scale, 1));
+}
+.thread-prompt-badge {
+  font-weight: 700;
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.thread-prompt-time {
+  color: var(--text-3);
+  font-size: calc(10.5px * var(--ui-scale, 1));
+}
+.thread-prompt-body {
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.thread-prompt-body p {
+  margin: 3px 0;
+}
+.thread-prompt-body p:first-child {
+  margin-top: 0;
+}
+.thread-prompt-body p:last-child {
+  margin-bottom: 0;
 }
 .thread-steps-section {
   background: var(--bg-card);

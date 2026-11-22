@@ -226,3 +226,31 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         # extractDelegatedRoomsFromSteps 에서 subagent_bypass 지원 확인
         self.assertIn("s.kind === 'subagent_bypass'", messages_content)
         self.assertIn("bypassStep.agentName", messages_content)
+
+    def test_thread_panel_layout_and_emoji_cleanliness(self):
+        """스레드 패널에서 🧵 이모지가 제거되었고, 수신된 지시 프롬프트가 실행 단계보다 최상단에 우선 배치되는지 검증."""
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        index_html_path = os.path.join(base_dir, "src", "bot", "static", "index.html")
+        with open(index_html_path, "r", encoding="utf-8") as f:
+            index_html = f.read()
+
+        # index.html 에 🧵 이모지 제거 확인
+        self.assertNotIn("🧵", index_html)
+
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "static", "js", "rooms-ui.js")
+        with open(rooms_ui_js, "r", encoding="utf-8") as f:
+            rooms_ui_content = f.read()
+
+        # rooms-ui.js 에 🧵 이모지 제거 확인
+        self.assertNotIn("🧵", rooms_ui_content)
+
+        # 지시 프롬프트가 steps 및 나머지 메시지보다 먼저 push 되는지 순서 검증
+        prompt_card_pos = rooms_ui_content.find("thread-prompt-card")
+        steps_pos = rooms_ui_content.find("thread-steps-section")
+        msgs_pos = rooms_ui_content.find("thread-messages-list")
+
+        self.assertGreater(prompt_card_pos, 0, "thread-prompt-card 가 존재해야 함")
+        self.assertGreater(steps_pos, 0, "thread-steps-section 이 존재해야 함")
+        self.assertGreater(msgs_pos, 0, "thread-messages-list 가 존재해야 함")
+        self.assertLess(prompt_card_pos, steps_pos, "지시 프롬프트가 실행 단계보다 상단에 위치해야 함")
+        self.assertLess(steps_pos, msgs_pos, "실행 단계가 하위 메시지 목록보다 상단에 위치해야 함")
