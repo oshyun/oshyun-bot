@@ -140,7 +140,7 @@ def get_quota_alert_prompt(
     return (
         f"[QUOTA ALERT] 현재 AGY Gemini 잔여 쿼터가 부족합니다({status_str}; 최저 {min_pct:.1f}% < {threshold:.0f}%). "
         "고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링 작업 시 자체 AGY 토큰을 소모하지 말고 "
-        "1차 도구로 `gemini-consult` (`_agents/skills/gemini-consult/scripts/gemini_query.py --only-if-agy-below 50 --effort medium`)를 호출하여 오프로드하세요."
+        "1차 도구로 `gemini-consult` (`gemini-consult \"<질의 3~5줄 요약>\"` 또는 `~/.local/bin/gemini-consult`)를 호출하여 오프로드하세요."
     )
 
 
@@ -228,7 +228,7 @@ _FALLBACK_EXPERT_CODING_PROMPT = f"""\
 마스터 에이전트(`__core__`)의 직속 지휘를 받으며, oshyun-bot 소스코드 개발, 버그 수정, 웹 UI 개선, 단위 테스트를 총괄 조율한다.
 
 [★ 절대 원칙: 사전 탐색·고민 제로 & 1스텝 즉시 하위 워커 스폰]
-1. 스폰 전 사전 탐색·자문·고민 금지: 요청을 받으면 절대 `read_file`, `grep`, `find`, `run_command`(파일 조회/테스트), `gemini-consult` 등으로 코드를 미리 읽거나 설계를 고민하지 마라. 분석·구현·테스트는 전부 스폰된 하위 워커가 수행한다.
+1. 스폰 전 사전 탐색·자문·고민 금지: 요청을 받으면 절대 `read_file`, `grep`, `find`, `run_command`(파일 조회/테스트), `gemini-consult` 등으로 코드를 미리 읽거나 설계를 고민하지 마라 (스폰된 하위 워커는 gemini-consult를 자유롭게 활용 가능). 분석·구현·테스트는 전부 스폰된 하위 워커가 수행한다.
 2. 도구 호출 단 1회(`{_SESSION_CTL_BIN} spawn "<작업제목>" "<핵심 과업 목표 및 요구사항>" --parent __expert_coding__ --model <모델> --effort <레벨>`)로 즉시 하위 워커를 띄우고, 1~2줄 착수 보고 후 턴을 종료하라 (`--wait` 절대 금지).
 3. 직접 응답 예외(1~2초 즉답): 단순 인사, 일반 아키텍처 설명, `session-ctl list/summaries/read` 조회 1회.
 4. 프롬프트 전달 원칙 (정적 규칙 복사 금지):
@@ -254,7 +254,7 @@ _FALLBACK_ORCHESTRATOR_PROMPT = f"""\
    - 단순 인사·잡담·확인, 이미 주입된 메모리(`hot`/`warm`)나 직전 맥락으로 추가 도구 없이 답할 수 있는 질문
    - `{_SESSION_CTL_BIN} list/summaries/tasks/graph/memory` 등 오케스트레이션 상태 조회 1회
 2. 그 외 모든 실무 요청 = 무조건 즉시 비동기 위임 (직접 수행·사전 탐색 절대 금지):
-   - `_bot/컨텍스트.md`, 볼트 노트, 소스 파일을 `read_file`/`grep`/`find`로 미리 열어보거나 `search_web`/`gemini-consult`/스크립트를 직접 실행하지 마라.
+   - `_bot/컨텍스트.md`, 볼트 노트, 소스 파일을 `read_file`/`grep`/`find`로 미리 열어보거나 `search_web`/`gemini-consult`/스크립트를 직접 실행하지 마라 (하위 워커는 자유롭게 실행 가능).
    - 일반 볼트/개인 도메인(조회·일정·할일·건강·금융·식재료·노트·웹리서치):
      `{_SESSION_CTL_BIN} spawn "<방제목>" "<핵심 요구사항>" --parent __expert_vault__ --model gemini-3.8-flash --effort <low|medium>` (전면 드리밍/복합 조율 시에만 `send "__expert_vault__"`)
    - 봇/코드 개발(수정·UI·버그·테스트):

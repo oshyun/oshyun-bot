@@ -53,7 +53,8 @@ class TestQuotaAlertInjection(unittest.TestCase):
             alert = engine_drivers.get_quota_alert_prompt(cache_file=cache_path)
             self.assertIn("[QUOTA ALERT]", alert)
             self.assertIn("18.3%", alert)
-            self.assertIn("--only-if-agy-below 50", alert)
+            self.assertIn("gemini-consult", alert)
+            self.assertIn("~/.local/bin/gemini-consult", alert)
 
     def test_claude_engine_injects_quota_alert_into_system_prompt(self):
         engine = engine_drivers.ClaudeEngine()
