@@ -887,7 +887,7 @@ async def _notify_master_agent(
     model: str | None = None,
     effort: str | None = None,
 ) -> None:
-    """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가)에게 결과를 알리고 후속 턴을 트리거한다."""
+    """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가) 방에 결과를 직접 바이패스 삽입하고 사용자에게 표출한다."""
     if _is_orchestrator_room_id(room_id):
         return
     if task_id and not master_tasks.claim_report(task_id):
@@ -927,11 +927,12 @@ async def _notify_master_agent(
         except Exception:
             pass
 
-    short_res = result_text.strip()
-    if len(short_res) > 1500:
-        short_res = short_res[:1500] + "…"
+    # 하위 에이전트 발화자 레이블 결정
+    parent_cfg = agent_configs.get_agent_config(raw_parent) if raw_parent else None
+    subagent_name = room_title
+    if parent_cfg and parent_cfg.get("name"):
+        subagent_name = f"{parent_cfg.get('name')} ({room_title})"
 
-    parent_cfg = agent_configs.get_agent_config(target_parent_id)
     parent_label = (
         str(parent_cfg.get("name"))
         if parent_cfg and parent_cfg.get("name")
@@ -942,40 +943,38 @@ async def _notify_master_agent(
         )
     )
 
+    clean_res = result_text.strip() if result_text else ""
     if is_success:
-        report_msg = (
-            f"[하위 작업 완료 보고] [{room_title}] 세션 작업 완료\n"
-            f"• 대상 방: {room_title} (Room ID: {room_id})\n"
-        )
-        if task_id:
-            report_msg += f"• 작업 ID: {task_id} (상태: done)\n"
-        report_msg += (
-            f"• 상태: 정상 완료 (원장 자동 검토 완료)\n"
-            f"• 하위 에이전트 응답 요약:\n{short_res}\n\n"
-            f"※ {parent_label} 지침: 작업 원장은 자동 완료 처리되었으므로 별도 `session-ctl task --close` 호출 없이 결과만 확인하고 후속 지시가 필요할 때만 이어가세요."
-        )
+        msg_text = clean_res if clean_res else "작업이 정상적으로 완료되었습니다."
     else:
-        if not (model or effort) and room_record:
-            raw_m = room_record.get("model")
-            raw_e = room_record.get("effort")
-            model = raw_m if isinstance(raw_m, str) else None
-            effort = raw_e if isinstance(raw_e, str) else None
-        try:
-            import engine_settings
-            allowed = engine_settings.get_all_model_labels()
-        except Exception:
-            allowed = {}
-        report_msg = child_error_report.build_error_report(
-            room_title=room_title,
-            room_id=room_id,
-            error_text=result_text,
-            task_id=task_id,
-            model=model,
-            effort=effort,
-            parent_label=parent_label,
-            allowed_models=allowed,
+        err_body = clean_res if clean_res else "작업이 중단되었습니다."
+        msg_text = (
+            f"⚠️ **[{room_title}]** 하위 작업이 중단되었거나 오류가 발생했습니다.\n\n"
+            f"{err_body}\n\n"
+            f"👉 상단 칩을 클릭하여 스레드 패널에서 세부 로그를 확인하거나 추가 지시를 전달할 수 있습니다."
         )
 
+    steps = [{
+        "kind": "subagent_bypass",
+        "tool": "bypass",
+        "title": room_title,
+        "roomId": room_id,
+        "taskId": task_id,
+        "agentName": subagent_name,
+        "status": "done" if is_success else "error",
+        "reason": "정상 완료" if is_success else (clean_res[:60] if clean_res else "작업 중단"),
+        "bypassedFromRoomId": room_id,
+    }]
+
+    delegated_rooms = [{
+        "roomId": room_id,
+        "title": room_title,
+        "status": "done" if is_success else "error",
+        "reason": "정상 완료" if is_success else "오류",
+        "taskId": task_id,
+    }]
+
+    # 1. 마스터 메모리에 하위 작업 결과 요약 등록 (다음 질문 시 맥락 인지용)
     try:
         status_label = "성공" if is_success else "실패"
         notify_summary = master_memory.format_notify_memory(
@@ -995,22 +994,93 @@ async def _notify_master_agent(
         )
     except Exception:
         pass
+
+    # 2. 마스터(또는 부모) 방에 어시스턴트 메시지로 직접 삽입 (Bypass)
+    msg_id = None
+    if current_chat_db:
+        try:
+            msg_id = current_chat_db.add_message(
+                room_id=target_parent_id,
+                role="assistant",
+                text=msg_text,
+                channel="thread_bypass",
+                steps=steps,
+                model=model,
+                effort=effort,
+                created_at=time.time(),
+            )
+        except Exception as exc:
+            logger.error("[web_jobs] 부모 방(%s) 바이패스 메시지 저장 실패: %s", target_parent_id, exc)
+
+    # 3. 실시간 웹소켓 브로드캐스트 (사용자 화면에 0초 딜레이 즉시 표출)
     try:
-        enqueue_fn = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
-        await enqueue_fn(
-            room_id=target_parent_id,
-            user_text=report_msg,
-            channel="task_report",
-            task_id=task_id,
-        )
-        mark_room_completion_reported(room_id)
-        logger.info("[web_jobs] %s 에이전트(%s)에게 완료 보고 전달 완료 (task_id=%s, room=%s)", parent_label, target_parent_id, task_id, room_id)
+        current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+        if current_broadcast:
+            await current_broadcast({
+                "type": "result",
+                "roomId": target_parent_id,
+                "msgId": msg_id,
+                "text": msg_text,
+                "steps": steps,
+                "agentName": subagent_name,
+                "model": model,
+                "effort": effort,
+                "bypassedFromRoomId": room_id,
+                "delegatedRooms": delegated_rooms,
+                "createdAt": time.time(),
+            })
     except Exception as exc:
-        logger.error("[web_jobs] %s 에이전트 완료 보고 전달 실패: %s", parent_label, exc)
-        if task_id:
-            master_tasks.release_report(task_id)  # 감독 루프 안전망이 재시도
-        elif error_claimed:
-            child_error_report.release_error_report(room_id, result_text)
+        logger.error("[web_jobs] 부모 방(%s) 바이패스 웹소켓 브로드캐스트 실패: %s", target_parent_id, exc)
+
+    # 4. 완료 보고 vs 오류 보고 분기:
+    # 정상 완료(is_success=True) 시: 마스터가 다시 정리해서 보고하지 않고 사용자에게 100% 바이패스 (2차 턴 차단)
+    # 오류 발생(is_success=False) 시: 부모 에이전트(또는 마스터)에게 오류 보고를 전달하여 후속 조치/알림
+    if not is_success:
+        try:
+            if not (model or effort) and room_record:
+                raw_m = room_record.get("model")
+                raw_e = room_record.get("effort")
+                model = raw_m if isinstance(raw_m, str) else None
+                effort = raw_e if isinstance(raw_e, str) else None
+            try:
+                import engine_settings
+                allowed = engine_settings.get_all_model_labels()
+            except Exception:
+                allowed = {}
+            report_msg = child_error_report.build_error_report(
+                room_title=room_title,
+                room_id=room_id,
+                error_text=result_text,
+                task_id=task_id,
+                model=model,
+                effort=effort,
+                parent_label=parent_label,
+                allowed_models=allowed,
+            )
+            enqueue_fn = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
+            await enqueue_fn(
+                room_id=target_parent_id,
+                user_text=report_msg,
+                channel="task_report",
+                task_id=task_id,
+            )
+            logger.info("[web_jobs] %s 에이전트(%s)에게 오류 보고 전달 완료 (task_id=%s, room=%s)", parent_label, target_parent_id, task_id, room_id)
+        except Exception as exc:
+            logger.error("[web_jobs] %s 에이전트 오류 보고 전달 실패: %s", parent_label, exc)
+            if task_id:
+                master_tasks.release_report(task_id)  # 감독 루프 안전망이 재시도
+            elif error_claimed:
+                child_error_report.release_error_report(room_id, result_text)
+
+    mark_room_completion_reported(room_id)
+    logger.info(
+        "[web_jobs] %s 에이전트(%s) 방에 하위 작업(%s) 결과 바이패스 전달 완료 (task_id=%s, msg_id=%s)",
+        parent_label,
+        target_parent_id,
+        room_id,
+        task_id,
+        msg_id,
+    )
 
 
 async def _run_stream_tail_loop(

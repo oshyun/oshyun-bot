@@ -2613,27 +2613,42 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn("parentAgentId: sRoom.parentAgentId", html)
         self.assertIn("isOrchRoom", html)
 
-    async def test_notify_master_agent_preserves_summary_up_to_1500_chars(self):
-        """_notify_master_agent 가 400자를 넘는 간결한 응답(최대 1500자)을 잘리지 않게 마스터에 전달하는지 검증."""
+    async def test_notify_master_agent_bypasses_direct_message_without_enqueue(self):
+        """_notify_master_agent 가 완료 시 2차 턴(enqueue_room_turn) 없이 긴 응답도 부모 방에 직접 바이패스 저장 및 브로드캐스트하는지 검증."""
         import web_execution
 
-        long_but_concise = "카드 혜택 표 요약: " + ("가" * 900)
-        with patch.object(
-            web_server, "enqueue_room_turn", new_callable=AsyncMock
-        ) as mock_enqueue, patch.object(
-            web_execution, "enqueue_room_turn", mock_enqueue
-        ), patch.object(
-            web_execution.master_memory, "add_memory"
-        ):
+        long_response = "상세 분석 결과: " + ("나" * 900)
+        mock_enqueue = AsyncMock()
+        mock_db = MagicMock()
+        mock_db.get_room.return_value = {"id": "room-summary-test", "parentAgentId": "__core__", "title": "분석 작업"}
+        mock_broadcast = AsyncMock()
+
+        with patch.object(web_execution, "enqueue_room_turn", mock_enqueue), \
+             patch.object(web_execution, "chat_db", mock_db), \
+             patch.object(web_execution, "broadcast_ws_json", mock_broadcast), \
+             patch.object(web_execution.master_memory, "add_memory"):
             await web_execution._notify_master_agent(
                 "room-summary-test",
                 None,
-                long_but_concise,
+                long_response,
                 is_success=True,
             )
-        mock_enqueue.assert_awaited_once()
-        report_msg = mock_enqueue.call_args.kwargs.get("user_text", "")
-        self.assertIn(long_but_concise, report_msg)
+
+        # 마스터의 2차 중복 턴은 차단됨
+        mock_enqueue.assert_not_awaited()
+        # 부모 방에 어시스턴트 메시지로 직접 바이패스 저장됨
+        mock_db.add_message.assert_called_once()
+        kw = mock_db.add_message.call_args.kwargs
+        self.assertEqual(kw["room_id"], "__core__")
+        self.assertEqual(kw["role"], "assistant")
+        self.assertEqual(kw["channel"], "thread_bypass")
+        self.assertEqual(kw["text"], long_response)
+        # 웹소켓 브로드캐스트 검증
+        mock_broadcast.assert_awaited_once()
+        b_payload = mock_broadcast.call_args[0][0]
+        self.assertEqual(b_payload["type"], "result")
+        self.assertEqual(b_payload["text"], long_response)
+        self.assertEqual(b_payload["roomId"], "__core__")
 
     async def test_orchestrator_graph_endpoint(self):
         """GET /api/orchestrator/graph 로 실시간 마스터-슬레이브 관계도 및 감독 상태 반환 검증."""

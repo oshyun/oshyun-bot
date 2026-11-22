@@ -337,6 +337,23 @@ function extractDelegatedRoomsFromSteps(steps) {
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
     if (!s || typeof s !== 'object') continue;
+
+    if (s.kind === 'subagent_bypass' || s.tool === 'bypass') {
+      const bRoomId = s.roomId || s.bypassedFromRoomId || '';
+      const bTitle = s.title || '';
+      const bTaskId = s.taskId || '';
+      const bStatus = s.status || 'done';
+      const bReason = s.reason || (bStatus === 'done' ? '정상 완료' : '오류');
+      candidates.push({
+        roomId: bRoomId,
+        title: bTitle,
+        taskId: bTaskId,
+        status: bStatus,
+        reason: bReason
+      });
+      continue;
+    }
+
     const title = String(s.title || '');
     const detail = String(s.detail || '');
     const output = String(s.output || '');
@@ -582,18 +599,22 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
   const rId = String((room && (room.id || room.roomId)) || currentRoomId || '').trim();
 
   // 1. 메시지 레벨에 명시적 에이전트 이름/역할이 있는 경우 최우선 존중
-  if (m && (m.agentName || m.senderName || m.agentRole)) {
-    const explicitName = String(m.agentName || m.senderName || m.agentRole).trim();
-    if (explicitName) {
-      return {
-        name: explicitName,
-        fullName: explicitName,
-        role: 'custom',
-        avatarCls: 'is-subtask',
-        avatarIcon: ICONS.spark,
-        roleBadgeHtml: ''
-      };
+  let explicitName = String((m && (m.agentName || m.senderName || m.agentRole)) || '').trim();
+  if (!explicitName && m && Array.isArray(m.steps)) {
+    const bypassStep = m.steps.find(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass'));
+    if (bypassStep && bypassStep.agentName) {
+      explicitName = String(bypassStep.agentName).trim();
     }
+  }
+  if (explicitName) {
+    return {
+      name: explicitName,
+      fullName: explicitName,
+      role: 'custom',
+      avatarCls: 'is-subtask',
+      avatarIcon: ICONS.spark,
+      roleBadgeHtml: ''
+    };
   }
 
   // 2. 마스터 오케스트레이터 에이전트 (__core__)

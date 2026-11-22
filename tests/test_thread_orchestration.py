@@ -168,3 +168,61 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(room)
         self.assertEqual(room.get("parentAgentId"), "__core__")
         self.assertTrue(room.get("isOrchestratorChild"))
+
+    async def test_notify_master_agent_bypasses_direct_assistant_message(self):
+        """_notify_master_agent 가 하위 작업 결과를 부모 방에 assistant 바이패스 메시지로 직접 영속화하는지 검증."""
+        broadcast_mock = AsyncMock()
+        with patch.object(chat_db, "CHAT_DB_FILE", self.db_path), \
+             patch.object(web_execution, "chat_db", chat_db), \
+             patch.object(web_execution, "broadcast_ws_json", broadcast_mock), \
+             patch.object(web_execution.master_tasks, "claim_report", return_value=True), \
+             patch.object(web_execution.master_memory, "add_memory"):
+            await web_execution._notify_master_agent(
+                room_id="room-subtask-123",
+                task_id="task-sub-1",
+                result_text="최종 바이패스 응답 본문입니다.",
+                is_success=True,
+                model="gemini-3.8-flash",
+                effort="low",
+            )
+
+        # __core__ 방 메시지 확인
+        msgs = chat_db.get_messages("__core__", db_path=self.db_path)
+        asst_msgs = [m for m in msgs if m["role"] == "assistant"]
+        self.assertEqual(len(asst_msgs), 1)
+        self.assertEqual(asst_msgs[0]["text"], "최종 바이패스 응답 본문입니다.")
+        self.assertEqual(asst_msgs[0]["channel"], "thread_bypass")
+        self.assertEqual(asst_msgs[0]["model"], "gemini-3.8-flash")
+
+        # steps 검증
+        steps = asst_msgs[0].get("steps", [])
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0].get("kind"), "subagent_bypass")
+        self.assertEqual(steps[0].get("roomId"), "room-subtask-123")
+        self.assertEqual(steps[0].get("status"), "done")
+
+        # 웹소켓 브로드캐스트 검증
+        broadcast_mock.assert_awaited_once()
+        b_payload = broadcast_mock.call_args[0][0]
+        self.assertEqual(b_payload["type"], "result")
+        self.assertEqual(b_payload["roomId"], "__core__")
+        self.assertEqual(b_payload["text"], "최종 바이패스 응답 본문입니다.")
+        self.assertEqual(b_payload["bypassedFromRoomId"], "room-subtask-123")
+
+    def test_thread_panel_autofocus_and_bypass_in_frontend_js(self):
+        """rooms-ui.js 및 messages.js에 모바일 자동 포커스 방지 및 subagent_bypass 추출이 정확히 구현되었는지 검증."""
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "static", "js", "rooms-ui.js")
+        with open(rooms_ui_js, "r", encoding="utf-8") as f:
+            rooms_ui_content = f.read()
+
+        # openThreadPanel 에서 모바일 설정 검사 가드 확인
+        self.assertIn("!isTouchOrMobileDevice() || (typeof getMobileAutofocus === 'function' && getMobileAutofocus())", rooms_ui_content)
+
+        messages_js = os.path.join(base_dir, "src", "bot", "static", "js", "messages.js")
+        with open(messages_js, "r", encoding="utf-8") as f:
+            messages_content = f.read()
+
+        # extractDelegatedRoomsFromSteps 에서 subagent_bypass 지원 확인
+        self.assertIn("s.kind === 'subagent_bypass'", messages_content)
+        self.assertIn("bypassStep.agentName", messages_content)

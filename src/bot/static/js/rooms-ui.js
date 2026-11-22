@@ -1008,7 +1008,17 @@ async function openThreadPanel(taskId, roomId, title = '') {
   if (backdrop) backdrop.classList.add('open');
   const inputEl = document.getElementById('thread-user-input');
   if (inputEl) {
-    setTimeout(() => { inputEl.focus(); }, 120);
+    // 모바일/터치 기기에서는 '설정 > 모바일 대화창 선택 시 키보드(자동 포커스)' 설정을 따름 (기본값: false, 키보드 자동 팝업 차단)
+    const shouldAutofocus = !isTouchOrMobileDevice() || (typeof getMobileAutofocus === 'function' && getMobileAutofocus());
+    if (shouldAutofocus) {
+      setTimeout(() => {
+        try {
+          inputEl.focus({ preventScroll: true });
+        } catch (_) {
+          inputEl.focus();
+        }
+      }, 120);
+    }
   }
 }
 
