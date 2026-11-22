@@ -838,12 +838,14 @@
       <!-- 모바일 드로어 백드롭 -->
       <div id="master-drawer-backdrop" class="master-drawer-backdrop" onclick="toggleMasterSidebar(false)"></div>
 
-      <!-- 🧵 우측 슬라이드 스레드 패널 (Thread Slide-over Panel) -->
+      <!-- 우측 슬라이드 스레드 패널 (Thread Slide-over Panel) -->
       <aside class="thread-sidebar" id="thread-slide-panel" aria-label="하위 작업 스레드 패널">
         <div class="thread-sidebar-header">
           <div class="thread-sidebar-title">
-            <span class="thread-icon">🧵</span>
-            <span id="thread-panel-title">스레드: 하위 작업</span>
+            <span class="thread-icon" style="display:inline-flex;align-items:center;color:var(--accent);">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span id="thread-panel-title">하위 작업</span>
             <span class="thread-status-badge" id="thread-panel-status">대기</span>
           </div>
           <button class="drawer-close-btn" onclick="closeThreadPanel()" title="스레드 닫기" aria-label="닫기">

@@ -963,7 +963,7 @@ function bindRoomLongPressEvents() {
   }
 }
 
-// ─── 🧵 마스터 에이전트 하위 작업 스레드(Thread) 오케스트레이션 패널 ───
+// ─── 마스터 에이전트 하위 작업 스레드(Thread) 오케스트레이션 패널 ───
 let currentThreadRoomId = null;
 let currentThreadTaskId = null;
 
@@ -981,7 +981,7 @@ async function openThreadPanel(taskId, roomId, title = '') {
 
   const targetRoom = roomId ? getRoomById(roomId) : null;
   const displayTitle = title || (targetRoom ? targetRoom.title : '하위 작업');
-  if (titleEl) titleEl.textContent = `🧵 ${displayTitle}`;
+  if (titleEl) titleEl.textContent = displayTitle;
 
   const live = roomId ? roomLiveStates[roomId] : null;
   const isRunning = Boolean(live && live.isRunning);
@@ -1048,7 +1048,28 @@ function renderThreadPanelBody() {
 
   let html = [];
 
-  // 도구 실행 단계(live.steps 또는 live.activeSteps) 렌더링
+  // 1. [상식적 순서 1단계] 하위 세션이 수신한 과업 지시 프롬프트(첫 번째 user 메시지)를 최상단에 배치
+  const firstUserIdx = msgs.findIndex(m => m && (m.role === 'user' || m.sender === 'user'));
+  const firstUserMsg = firstUserIdx >= 0 ? msgs[firstUserIdx] : null;
+
+  if (firstUserMsg) {
+    const rawPrompt = firstUserMsg.text || firstUserMsg.content || '';
+    const promptHtml = (typeof renderMarkdown === 'function')
+      ? renderMarkdown(rawPrompt)
+      : escapeHtml(rawPrompt).replace(/\n/g, '<br>');
+    const promptTime = firstUserMsg.timestamp ? formatTime(firstUserMsg.timestamp) : (firstUserMsg.createdAt ? formatTime(firstUserMsg.createdAt) : '');
+    html.push(`
+      <div class="thread-prompt-card">
+        <div class="thread-prompt-header">
+          <span class="thread-prompt-badge">지시 프롬프트</span>
+          ${promptTime ? `<span class="thread-prompt-time">${escapeHtml(promptTime)}</span>` : ''}
+        </div>
+        <div class="thread-prompt-body markdown-body">${promptHtml}</div>
+      </div>
+    `);
+  }
+
+  // 2. [상식적 순서 2단계] 지시 수행을 위한 도구 실행 단계 (Live Steps)
   const rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
   const steps = (typeof filterToolSteps === 'function') ? filterToolSteps(rawSteps) : rawSteps;
 
@@ -1070,20 +1091,34 @@ function renderThreadPanelBody() {
     html.push('</div>');
   }
 
-  // 메시지 렌더링
-  if (msgs.length === 0 && (!live || !live.streamText)) {
-    html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 추가 지시를 보낼 수 있습니다.</div>');
+  // 3. [상식적 순서 3단계] 하위 에이전트 답변 및 후속 대화 (첫 번째 프롬프트를 제외한 나머지 메시지)
+  const remainingMsgs = firstUserMsg ? msgs.filter((_, idx) => idx !== firstUserIdx) : msgs;
+
+  if (remainingMsgs.length === 0 && (!live || !live.streamText)) {
+    if (!firstUserMsg && steps.length === 0) {
+      html.push('<div class="thread-empty">아직 하위 세션 메시지가 없습니다. 아래 입력창으로 추가 지시를 보낼 수 있습니다.</div>');
+    } else if (isRunning) {
+      html.push(`
+        <div class="thread-msg-item assistant streaming">
+          <div class="thread-msg-header">
+            <span class="thread-msg-role">하위 전문가 (작업 수행 중…)</span>
+            <span class="run-spinner" style="width:11px;height:11px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-left:4px;"></span>
+          </div>
+          <div class="thread-msg-bubble markdown-body" style="color:var(--text-2);">지시 프롬프트에 따른 작업을 진행하고 있습니다…</div>
+        </div>
+      `);
+    }
   } else {
     html.push('<div class="thread-messages-list">');
-    msgs.forEach(m => {
+    remainingMsgs.forEach(m => {
       if (!m) return;
-      const role = m.role === 'user' ? 'user' : 'assistant';
+      const role = (m.role === 'user' || m.sender === 'user') ? 'user' : 'assistant';
       const rawText = m.text || m.content || '';
       const textHtml = (role === 'assistant' && typeof renderMarkdown === 'function')
         ? renderMarkdown(rawText)
         : escapeHtml(rawText).replace(/\n/g, '<br>');
-      const time = m.timestamp ? formatTime(m.timestamp) : '';
-      const senderName = role === 'user' ? '나' : (m.agentName || (room ? room.title : '하위 전문가'));
+      const time = m.timestamp ? formatTime(m.timestamp) : (m.createdAt ? formatTime(m.createdAt) : '');
+      const senderName = role === 'user' ? '추가 지시' : (m.agentName || (room ? room.title : '하위 전문가'));
       html.push(`
         <div class="thread-msg-item ${role}">
           <div class="thread-msg-header">
