@@ -108,12 +108,25 @@ def _resolve_data_rel_path(env_key: str, fallback_path: str) -> str:
     return os.path.abspath(os.path.join(ROOT_DIR, exp))
 
 
+def _resolve_google_auth_path(env_key: str, default_filename: str, legacy_filename: str) -> str:
+    """Google OAuth 자격증명/토큰 경로 해석. 환경변수 -> 신규 표준(또는 레거시 파일 존재 시 호환) -> 기본 경로."""
+    raw = os.getenv(env_key, "").strip()
+    if raw:
+        exp = os.path.expanduser(raw)
+        return exp if os.path.isabs(exp) else os.path.abspath(os.path.join(ROOT_DIR, exp))
+    default_path = os.path.join(STATE_DIR, default_filename)
+    legacy_path = os.path.join(STATE_DIR, legacy_filename)
+    if not os.path.exists(default_path) and os.path.exists(legacy_path):
+        return legacy_path
+    return default_path
+
+
 # Google API (OAuth 2.0 자격증명 및 토큰 - Calendar & Gmail 공용)
-GOOGLE_CREDENTIALS_FILE = _resolve_data_rel_path(
-    "GOOGLE_CREDENTIALS_FILE", os.path.join(STATE_DIR, "gcal_credentials.json")
+GOOGLE_CREDENTIALS_FILE = _resolve_google_auth_path(
+    "GOOGLE_CREDENTIALS_FILE", "google_credentials.json", "gcal_credentials.json"
 )
-GOOGLE_TOKEN_FILE = _resolve_data_rel_path(
-    "GOOGLE_TOKEN_FILE", os.path.join(STATE_DIR, "gcal_token.json")
+GOOGLE_TOKEN_FILE = _resolve_google_auth_path(
+    "GOOGLE_TOKEN_FILE", "google_token.json", "gcal_token.json"
 )
 # 볼트 캘린더 동기화 트리거 파일
 CAL_REFRESH_TRIGGER_PATH = os.path.join(

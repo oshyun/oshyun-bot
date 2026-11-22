@@ -38,8 +38,8 @@ class TestPaths(unittest.TestCase):
         self.assertEqual(paths.WEB_JOBS_FILE, os.path.join(paths.STATE_DIR, "web_jobs.json"))
         self.assertEqual(paths.BURN_TODO_FILE, os.path.join(paths.STATE_DIR, "burn_todo.json"))
         self.assertEqual(paths.BURN_STATE_FILE, os.path.join(paths.STATE_DIR, "burn_state.json"))
-        self.assertEqual(paths.GOOGLE_CREDENTIALS_FILE, os.path.join(paths.STATE_DIR, "gcal_credentials.json"))
-        self.assertEqual(paths.GOOGLE_TOKEN_FILE, os.path.join(paths.STATE_DIR, "gcal_token.json"))
+        self.assertEqual(paths.GOOGLE_CREDENTIALS_FILE, os.path.join(paths.STATE_DIR, "google_credentials.json"))
+        self.assertEqual(paths.GOOGLE_TOKEN_FILE, os.path.join(paths.STATE_DIR, "google_token.json"))
 
     def test_resolve_workdir_precedence(self):
         """_resolve_workdir: AGENT_WORKDIR -> VAULT_DIR -> CLAUDE_WORKDIR -> 기본값 ~"""
