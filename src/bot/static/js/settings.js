@@ -254,6 +254,12 @@ async function triggerSystemNotification({ title, body, roomId }) {
 function handleAgentResponseNotification(targetRoom, replyText, opts = {}) {
   const mode = getNotificationMode();
   if (mode === 'off') return;
+  if (opts && opts.silent) return;
+
+  // 하위 에이전트 방이거나 바이패스된 응답은 마스터 방과 중복 알림을 방지하기 위해 침묵
+  if (targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId)) {
+    return;
+  }
 
   const isCurrentRoom = targetRoom && (targetRoom.id === currentRoomId);
   const isHidden = document.hidden || (document.visibilityState === 'hidden') || !document.hasFocus();

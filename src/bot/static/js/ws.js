@@ -1220,17 +1220,23 @@ function handleWsEvent(data) {
       renderThreadPanelBody();
     }
 
+    const isSilent = Boolean(data.silentNotification || data.bypassedFromRoomId);
+    const isChildRoom = Boolean(targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId));
+
     if (targetRoom.id === currentRoomId) {
       setOrbState(remainingQueued > 0 ? 'thinking' : 'idle', remainingQueued > 0 ? liveState.feed : '답변 완료');
       renderMessagesForCurrentRoom();
       updateSessionBar();
       updateSendButtonState();
     } else {
-      showToast(`[${targetRoom.title}] 답변이 도착했습니다.`, { roomId: targetRoom.id });
+      if (!isSilent && !isChildRoom) {
+        showToast(`[${targetRoom.title}] 답변이 도착했습니다.`, { roomId: targetRoom.id });
+      }
     }
 
     // 브라우저 및 시스템 레벨 알림 (백그라운드/다른 탭/다른 방)
-    if (typeof handleAgentResponseNotification === 'function') {
+    // 마스터가 스폰한 하위 에이전트의 작업 결과나 바이패스 결과는 중복 알림을 방지하기 위해 침묵(silent)
+    if (!isSilent && !isChildRoom && typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, replyText);
     }
 
@@ -1265,14 +1271,19 @@ function handleWsEvent(data) {
     saveChatRoomsToStorage();
     renderRoomList();
 
+    const isSilent = Boolean(data.silentNotification || data.bypassedFromRoomId);
+    const isChildRoom = Boolean(targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId));
+
     if (isCurrentRoom) {
       setOrbState('idle', '오류 발생');
       renderMessagesForCurrentRoom();
       updateSendButtonState();
     } else {
-      showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`, { roomId: targetRoom.id });
+      if (!isSilent && !isChildRoom) {
+        showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`, { roomId: targetRoom.id });
+      }
     }
-    if (typeof handleAgentResponseNotification === 'function') {
+    if (!isSilent && !isChildRoom && typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, errMsg, { isError: true });
     }
   }

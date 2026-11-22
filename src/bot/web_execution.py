@@ -1026,6 +1026,7 @@ async def _notify_master_agent(
                 "model": model,
                 "effort": effort,
                 "bypassedFromRoomId": room_id,
+                "silentNotification": True,
                 "delegatedRooms": delegated_rooms,
                 "createdAt": time.time(),
             })

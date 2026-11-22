@@ -74,7 +74,7 @@ class TestThreadOrchestration(unittest.TestCase):
         self.assertIn(".thread-msg-bubble.markdown-body", css)
 
     def test_thread_backdrop_no_blur(self):
-        """스레드 백드롭이 마스터 대화창을 가리거나 블러 처리하지 않고 투명하게 유지되는지 검증."""
+        """스레드 백드롭 및 드로어 백드롭이 마스터 대화창을 블러 처리하지 않는지 검증."""
         css_path = os.path.join(self.static_dir, "css", "master-inspector.css")
         with open(css_path, "r", encoding="utf-8") as f:
             css = f.read()
@@ -82,6 +82,44 @@ class TestThreadOrchestration(unittest.TestCase):
         self.assertIn(".thread-drawer-backdrop", css)
         self.assertIn("backdrop-filter: none !important", css)
         self.assertIn("background: transparent", css)
+
+        # master-drawer-backdrop 에서도 블러 완전 제거 검증
+        self.assertIn(".master-drawer-backdrop", css)
+        self.assertIn("backdrop-filter: none !important", css)
+
+        # responsive.css 의 drawer-backdrop 에서도 블러 완전 제거 검증
+        resp_css_path = os.path.join(self.static_dir, "css", "responsive.css")
+        with open(resp_css_path, "r", encoding="utf-8") as f:
+            resp_css = f.read()
+        self.assertIn(".drawer-backdrop", resp_css)
+        self.assertIn("backdrop-filter: none !important", resp_css)
+
+    def test_thread_drawer_cleanup_on_open(self):
+        """스레드 패널 진입 시 모바일 사이드바 드로어가 닫히는지 검증."""
+        js_path = os.path.join(self.static_dir, "js", "rooms-ui.js")
+        with open(js_path, "r", encoding="utf-8") as f:
+            js = f.read()
+
+        self.assertIn("closeRoomDrawer", js)
+        self.assertIn("toggleMasterSidebar", js)
+
+    def test_subagent_silent_notification(self):
+        """하위 에이전트 완료 결과가 마스터 방으로 바이패스될 때 중복 알림이 차단되는지 검증."""
+        exec_py_path = os.path.join(self.repo_root, "src", "bot", "web_execution.py")
+        with open(exec_py_path, "r", encoding="utf-8") as f:
+            exec_code = f.read()
+        self.assertIn('"silentNotification": True', exec_code)
+
+        ws_js_path = os.path.join(self.static_dir, "js", "ws.js")
+        with open(ws_js_path, "r", encoding="utf-8") as f:
+            ws_code = f.read()
+        self.assertIn("silentNotification", ws_code)
+        self.assertIn("isOrchestratorChild", ws_code)
+
+        settings_js_path = os.path.join(self.static_dir, "js", "settings.js")
+        with open(settings_js_path, "r", encoding="utf-8") as f:
+            settings_code = f.read()
+        self.assertIn("isOrchestratorChild", settings_code)
 
     def test_thread_js_functions_defined(self):
         """rooms-ui.js 에 스레드 패널 제어 함수들이 올바르게 정의되어 있는지 검증."""

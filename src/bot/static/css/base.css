@@ -35,7 +35,7 @@
   --radius-lg: 20px;
   --sidebar-w: 280px;
   --drawer-glass-bg: rgba(247, 247, 248, 0.90);
-  --drawer-scrim: rgba(0, 0, 0, 0.42);
+  --drawer-scrim: rgba(0, 0, 0, 0.22);
   --drawer-border: rgba(0, 0, 0, 0.08);
   --thread-w: 760px;
   --font: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
@@ -58,7 +58,7 @@
     --bg: #121215;
     --bg-sidebar: #18181C;
     --drawer-glass-bg: rgba(24, 24, 28, 0.88);
-    --drawer-scrim: rgba(0, 0, 0, 0.55);
+    --drawer-scrim: rgba(0, 0, 0, 0.32);
     --drawer-border: rgba(255, 255, 255, 0.08);
     --bg-subtle: #1D1D22;
     --bg-hover: #24242A;

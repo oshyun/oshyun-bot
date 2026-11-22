@@ -540,6 +540,7 @@ function onRoomItemClick(event, roomId) {
   if (isMasterChild && currentRoomId === CORE_ROOM_ID && typeof openThreadPanel === 'function') {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    if (typeof closeRoomDrawer === 'function') closeRoomDrawer();
     openThreadPanel(null, roomId, clickedRoom.title || '하위 작업');
     return;
   }
@@ -983,6 +984,14 @@ async function openThreadPanel(taskId, roomId, title = '') {
   const panel = document.getElementById('thread-slide-panel');
   const backdrop = document.getElementById('thread-drawer-backdrop');
   if (!panel) return;
+
+  // 0. 모바일 등에서 열려있던 좌측 사이드바 드로어나 마스터 인스펙터를 닫아서 화면 겹침 및 배경 간섭 방지
+  if (typeof closeRoomDrawer === 'function') {
+    closeRoomDrawer();
+  }
+  if (typeof toggleMasterSidebar === 'function') {
+    toggleMasterSidebar(false);
+  }
 
   // 1. 패널과 백드롭을 최우선으로 즉시 열어서 시각적 반응 보장!
   panel.classList.add('open');
