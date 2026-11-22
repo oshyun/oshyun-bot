@@ -254,3 +254,33 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(msgs_pos, 0, "thread-messages-list 가 존재해야 함")
         self.assertLess(prompt_card_pos, steps_pos, "지시 프롬프트가 실행 단계보다 상단에 위치해야 함")
         self.assertLess(steps_pos, msgs_pos, "실행 단계가 하위 메시지 목록보다 상단에 위치해야 함")
+
+    def test_thread_panel_open_resilience_and_inline_button(self):
+        """완료된 하위 작업에서도 패널이 즉시 열리고, steps 복원 및 인라인 스레드 버튼이 존재하는지 검증."""
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "static", "js", "rooms-ui.js")
+        with open(rooms_ui_js, "r", encoding="utf-8") as f:
+            rooms_ui_content = f.read()
+
+        # openThreadPanel 내부에서 패널이 비동기 fetch 전에 즉시 열리는지 확인
+        open_fn_pos = rooms_ui_content.find("function openThreadPanel")
+        self.assertGreater(open_fn_pos, 0)
+        open_panel_pos = rooms_ui_content.find("panel.classList.add('open')", open_fn_pos)
+        fetch_history_pos = rooms_ui_content.find("loadChatHistoryFromServer", open_fn_pos)
+        self.assertGreater(open_panel_pos, 0)
+        self.assertGreater(fetch_history_pos, 0)
+        self.assertLess(open_panel_pos, fetch_history_pos, "패널 open 이 fetch 보다 먼저 실행되어야 함")
+
+        # 완료 상태 steps 복원 확인
+        self.assertIn("rawSteps = m.steps", rooms_ui_content)
+
+        # 마스터 방에서 좌측 트리 클릭 시 openThreadPanel 연동 확인
+        self.assertIn("openThreadPanel(null, roomId", rooms_ui_content)
+
+        messages_js = os.path.join(base_dir, "src", "bot", "static", "js", "messages.js")
+        with open(messages_js, "r", encoding="utf-8") as f:
+            messages_content = f.read()
+
+        # 바이패스 메시지 헤더 인라인 스레드 열기 버튼 확인
+        self.assertIn("btn-open-thread-inline", messages_content)
+        self.assertIn("스레드 열기", messages_content)

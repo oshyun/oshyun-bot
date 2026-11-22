@@ -710,8 +710,20 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
     const res = await fetch(url);
     const data = await res.json();
     if (_historyFetchSeq[targetId] !== reqSeq) return;
-    const room = getRoomById(roomId) || getRoomById(sessionId);
+    let room = getRoomById(roomId) || getRoomById(sessionId);
     if (data.ok && Array.isArray(data.messages)) {
+      if (!room && roomId) {
+        room = {
+          id: roomId,
+          roomId: roomId,
+          title: data.title || '하위 세션',
+          preview: '',
+          messageCount: data.messages.length,
+          messages: [],
+          updatedAt: Date.now()
+        };
+        chatRooms.push(room);
+      }
       if (room) {
         const serverMsgs = data.messages.filter(m => m && typeof m === 'object');
         if (Array.isArray(room.messages) && room.messages.length > 0) {

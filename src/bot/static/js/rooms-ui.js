@@ -532,6 +532,18 @@ function onRoomItemClick(event, roomId) {
     toggleRoomSelection(roomId, event);
     return;
   }
+
+  // 사용자가 마스터 에이전트 대화방에 머물고 있을 때 하위 작업 항목을 클릭하면,
+  // 메인 뷰 전체를 이동시키는 대신 우측 스레드 패널을 열어 마스터 맥락을 유지한다!
+  const clickedRoom = getRoomById(roomId);
+  const isMasterChild = clickedRoom && isMasterSubtaskRoom(clickedRoom);
+  if (isMasterChild && currentRoomId === CORE_ROOM_ID && typeof openThreadPanel === 'function') {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    openThreadPanel(null, roomId, clickedRoom.title || '하위 작업');
+    return;
+  }
+
   selectRoom(roomId);
 }
 
@@ -972,6 +984,24 @@ async function openThreadPanel(taskId, roomId, title = '') {
   const backdrop = document.getElementById('thread-drawer-backdrop');
   if (!panel) return;
 
+  // 1. 패널과 백드롭을 최우선으로 즉시 열어서 시각적 반응 보장!
+  panel.classList.add('open');
+  if (backdrop) backdrop.classList.add('open');
+
+  // 2. taskId와 roomId 상호 보완
+  if (!roomId && taskId && Array.isArray(latestMasterTasks)) {
+    const matchedTask = latestMasterTasks.find(t => t && t.id === taskId);
+    if (matchedTask && matchedTask.roomId) {
+      roomId = matchedTask.roomId;
+    }
+  }
+  if (roomId && !taskId && Array.isArray(latestMasterTasks)) {
+    const matchedTask = latestMasterTasks.find(t => t && t.roomId === roomId);
+    if (matchedTask && matchedTask.id) {
+      taskId = matchedTask.id;
+    }
+  }
+
   currentThreadRoomId = roomId;
   currentThreadTaskId = taskId;
 
@@ -991,21 +1021,21 @@ async function openThreadPanel(taskId, roomId, title = '') {
   }
 
   if (bodyEl) {
-    bodyEl.innerHTML = '<div class="thread-loading"><span class="run-spinner"></span> 대화 및 실행 단계 불러오는 중…</div>';
-    if (roomId && (!targetRoom || !targetRoom.messages || targetRoom.messages.length === 0)) {
-      try {
-        if (typeof loadChatHistoryFromServer === 'function') {
-          await loadChatHistoryFromServer(roomId, targetRoom ? targetRoom.sessionId : null);
+    if (!targetRoom || !Array.isArray(targetRoom.messages) || targetRoom.messages.length === 0) {
+      bodyEl.innerHTML = '<div class="thread-loading"><span class="run-spinner"></span> 대화 및 실행 단계 불러오는 중…</div>';
+      if (roomId) {
+        try {
+          if (typeof loadChatHistoryFromServer === 'function') {
+            await loadChatHistoryFromServer(roomId, targetRoom ? targetRoom.sessionId : null);
+          }
+        } catch (err) {
+          console.warn('스레드 대화 로드 실패:', err);
         }
-      } catch (err) {
-        console.warn('스레드 대화 로드 실패:', err);
       }
     }
     renderThreadPanelBody();
   }
 
-  panel.classList.add('open');
-  if (backdrop) backdrop.classList.add('open');
   const inputEl = document.getElementById('thread-user-input');
   if (inputEl) {
     // 모바일/터치 기기에서는 '설정 > 모바일 대화창 선택 시 키보드(자동 포커스)' 설정을 따름 (기본값: false, 키보드 자동 팝업 차단)
@@ -1070,7 +1100,16 @@ function renderThreadPanelBody() {
   }
 
   // 2. [상식적 순서 2단계] 지시 수행을 위한 도구 실행 단계 (Live Steps)
-  const rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
+  let rawSteps = (live && (Array.isArray(live.steps) && live.steps.length > 0 ? live.steps : (Array.isArray(live.activeSteps) ? live.activeSteps : []))) || [];
+  // 완료된 상태라면 메시지 내 steps 에서 복원
+  if (rawSteps.length === 0 && Array.isArray(msgs)) {
+    for (const m of msgs) {
+      if (m && Array.isArray(m.steps) && m.steps.length > 0) {
+        rawSteps = m.steps;
+        break;
+      }
+    }
+  }
   const steps = (typeof filterToolSteps === 'function') ? filterToolSteps(rawSteps) : rawSteps;
 
   if (steps.length > 0) {

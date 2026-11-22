@@ -326,7 +326,8 @@ function resolveDelegatedRoomInfo(raw) {
     roomId: roomId, // 유효한 room ID가 없는 경우 빈 문자열 (절대 일반 한글 제목으로 채우지 않음)
     title: title || roomId,
     status: status,
-    reason: reason
+    reason: reason,
+    taskId: String(raw.taskId || '').trim() || undefined
   };
 }
 
@@ -486,7 +487,8 @@ function extractDelegatedRoomsFromSteps(steps) {
         title: cand.title,
         normTitle: normTitle,
         status: cand.status,
-        reason: cand.reason
+        reason: cand.reason,
+        taskId: cand.taskId || undefined
       });
     }
   });
@@ -495,7 +497,8 @@ function extractDelegatedRoomsFromSteps(steps) {
     roomId: g.roomId,
     title: g.title,
     status: g.status,
-    reason: g.reason
+    reason: g.reason,
+    taskId: g.taskId
   }));
 }
 
@@ -969,7 +972,23 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const headEffort = m.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
     const modelLabel = m.model ? `<span class="model-tag">${escapeHtml(m.model + (headEffort ? ` (${headEffort})` : ''))}</span>` : '';
     const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);
-    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}`;
+
+    let targetThreadRoomId = m.bypassedFromRoomId || '';
+    let targetThreadTaskId = null;
+    let targetThreadTitle = '';
+    if (!targetThreadRoomId && Array.isArray(m.steps)) {
+      const bStep = m.steps.find(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass'));
+      if (bStep) {
+        targetThreadRoomId = bStep.roomId || bStep.bypassedFromRoomId || '';
+        targetThreadTaskId = bStep.taskId || null;
+        targetThreadTitle = bStep.title || '';
+      }
+    }
+    const threadBtnHtml = targetThreadRoomId
+      ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(targetThreadRoomId)}', '${escapeHtml(targetThreadTitle || agentInfo.name)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;"><svg class="i" viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드 열기</span></button>`
+      : '';
+
+    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
     row.appendChild(head);
 
     const toolSteps = filterToolSteps(m.steps);
