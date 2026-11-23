@@ -841,6 +841,6 @@ def _remove_web_job(job_id: str) -> None:
 
 def _is_task_rec_aborted(rec: Any) -> bool:
     """작업 레코드 중단 판별은 web_room_queue 로 위임한다(순환 import 회피 지연 임포트)."""
-    from web_execution import _is_task_rec_aborted as _fn  # 임시: S6 전환 전 facade 지연 참조
+    from web_room_queue import _is_task_rec_aborted as _fn
 
     return _fn(rec)
