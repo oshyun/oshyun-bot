@@ -53,7 +53,6 @@ from paths import (
     DEFAULT_SSL_CERT_FILE,
     JOBS_DIR,
     STATE_DIR,
-    WEB_JOBS_FILE,
     WORKDIR,
 )
 from stream_parser import (
@@ -72,138 +71,51 @@ from web_jobs import (
 )
 from web_speech import clean_text_for_speech, VOICE_MODE_PROMPT_SUFFIX
 
-WEB_JOBS_FILE = os.path.join(STATE_DIR, "web_jobs.json")
-CORE_ORCHESTRATOR_ROOM_ID = "__core__"
-CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
-EXPERT_GENERAL_ROOM_ID = "__expert_general__"
-EXPERT_GENERAL_TITLE = "일반 대화"
-EXPERT_VAULT_ROOM_ID = "__expert_vault__"
-EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
-EXPERT_CODING_ROOM_ID = "__expert_coding__"
-EXPERT_CODING_TITLE = "봇개발 에이전트"
-ORCHESTRATOR_ROOM_IDS = (
+# ── web_runtime_state 로 이전된 심볼 재-익스포트(호환 facade) ──
+from web_runtime_state import (  # noqa: F401
+    WEB_JOBS_FILE,
     CORE_ORCHESTRATOR_ROOM_ID,
+    CORE_ORCHESTRATOR_TITLE,
     EXPERT_GENERAL_ROOM_ID,
+    EXPERT_GENERAL_TITLE,
     EXPERT_VAULT_ROOM_ID,
+    EXPERT_VAULT_TITLE,
     EXPERT_CODING_ROOM_ID,
+    EXPERT_CODING_TITLE,
+    ORCHESTRATOR_ROOM_IDS,
+    IDLE_RESET_SECONDS,
+    _is_orchestrator_room_id,
+    WEB_PORT,
+    WEB_TOKEN,
+    _connected_websockets,
+    _active_watch_tasks,
+    _active_agent_pids,
+    _last_chat_requests,
+    _room_queues,
+    _room_workers,
+    _room_session_ids,
+    _room_live_feeds,
+    _room_live_snapshots,
+    _user_cancelled_rooms,
+    _shutting_down,
+    _master_supervisor,
+    _master_supervisor_task,
+    set_shutting_down,
+    is_shutting_down,
+    detach_active_tasks,
+    _get_mod_attr,
+    _should_sync_global_session,
+    _sync_global_session_if_needed,
+    _serialize_live_run_entry,
+    get_live_run_for_room,
+    build_active_runs_payload,
+    broadcast_ws_json,
+    _zombie_reaper_task,
+    get_master_supervisor,
 )
-IDLE_RESET_SECONDS = 6 * 3600
 
-
-def _is_orchestrator_room_id(room_id: str | None) -> bool:
-    if not room_id:
-        return False
-    clean = str(room_id).strip()
-    if clean in ORCHESTRATOR_ROOM_IDS:
-        return True
-    try:
-        return agent_configs.is_orchestrator_room(clean)
-    except Exception:
-        return False
-WEB_PORT = int(os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765")
-WEB_TOKEN = os.getenv("WEB_TOKEN", os.getenv("VOICE_WEB_TOKEN", "")).strip()
 
 # ── 대화방 실행 상태 및 소켓 레지스트리 ────────────────────────────────────
-_connected_websockets: set[web.WebSocketResponse] = set()
-_active_watch_tasks: dict[str, asyncio.Task] = {}
-_active_agent_pids: dict[str, int] = {}
-_last_chat_requests: dict[str, tuple[str, float]] = {}
-_room_queues: dict[str, asyncio.Queue] = {}
-_room_workers: dict[str, asyncio.Task] = {}
-_room_session_ids: dict[str, str | None] = {}
-_room_live_feeds: dict[str, str] = {}
-_room_live_snapshots: dict[str, dict[str, Any]] = {}
-_user_cancelled_rooms: set[str] = set()
-_shutting_down: bool = False
-_master_supervisor: MasterSupervisor | None = None
-_master_supervisor_task: asyncio.Task | None = None
-
-
-def set_shutting_down(flag: bool) -> None:
-    """서버 종료/재시작 진행 중 여부를 설정한다."""
-    global _shutting_down
-    _shutting_down = bool(flag)
-
-
-def is_shutting_down() -> bool:
-    """서버가 정상 종료/재시작 중인지 반환한다."""
-    return _shutting_down
-
-
-async def detach_active_tasks(timeout: float = 1.5) -> int:
-    """서버 종료/재시작 시 실행 중인 워커·감시 태스크를 안전하게 분리 취소(detach)한다.
-
-    반드시 set_shutting_down(True) 및 persist_pending_room_turns() 호출 이후 실행해야 하며,
-    분리 실행 중인 하위 에이전트 프로세스(pid)와 web_jobs.json은 보존된다.
-    """
-    current = asyncio.current_task()
-    seen: set[int] = set()
-    tasks_to_cancel: list[asyncio.Task] = []
-
-    for mapping in (_room_workers, _active_watch_tasks):
-        for task in list(mapping.values()):
-            if isinstance(task, asyncio.Task) and task is not current and not task.done():
-                tid = id(task)
-                if tid not in seen:
-                    seen.add(tid)
-                    tasks_to_cancel.append(task)
-
-    if not tasks_to_cancel:
-        return 0
-
-    for task in tasks_to_cancel:
-        task.cancel()
-
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*tasks_to_cancel, return_exceptions=True),
-            timeout=timeout,
-        )
-    except asyncio.TimeoutError:
-        logger.warning("[web_jobs] 종료 시 태스크 분리 대기 타임아웃 (%d건)", len(tasks_to_cancel))
-
-    return len(tasks_to_cancel)
-
-
-def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value") or hasattr(fallback, "mock_calls"):
-        return fallback
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
-
-
-def _should_sync_global_session(
-    room_id: str | None,
-    current_session_id: str | None,
-    global_session_id: str | None,
-) -> bool:
-    """웹 대화방 턴이 전역(텔레그램/코어) 세션을 동기화·덮어쓰기해야 하는지 판별한다."""
-    if not room_id or room_id == "__default__" or _is_orchestrator_room_id(room_id):
-        return True
-    if global_session_id and global_session_id in (room_id, current_session_id):
-        return True
-    return False
-
-
-def _sync_global_session_if_needed(
-    room_id: str | None,
-    source_session_id: str | None,
-    resolved_session_id: str,
-    session_namespace: str,
-) -> None:
-    """전역 세션을 공유하는 방(또는 테스트 목)인 경우에만 전역 세션을 갱신한다."""
-    current_set_session = _get_mod_attr("set_session", set_session)
-    current_get_session = _get_mod_attr("get_session", get_session)
-    if (
-        _should_sync_global_session(
-            room_id, source_session_id, current_get_session(ns=session_namespace)
-        )
-        or hasattr(current_set_session, "_mock_name")
-    ):
-        current_set_session(resolved_session_id, ns=session_namespace)
 
 
 def _get_web_jobs_file() -> str:
@@ -500,146 +412,6 @@ def extract_stream_events_from_line(raw_line: str) -> list[dict]:
     return extracted
 
 
-def _serialize_live_run_entry(r_key: str) -> dict[str, Any] | None:
-    """특정 대화방 키(r_key)의 현재 진행 중 응답 스냅샷 및 대기열 상태를 직렬화한다."""
-    snap = _room_live_snapshots.get(r_key)
-    if snap is None:
-        for k, s in list(_room_live_snapshots.items()):
-            if (
-                s.get("roomId") == r_key
-                or s.get("sessionId") == r_key
-                or _room_session_ids.get(k) == r_key
-                or _room_session_ids.get(r_key) == k
-            ):
-                snap = s
-                break
-    q = _room_queues.get(r_key)
-    queued_items: list[dict[str, Any]] = []
-    if q is not None and not q.empty():
-        raw_q = getattr(q, "_queue", None)
-        if raw_q:
-            for idx, item in enumerate(list(raw_q), start=1):
-                if isinstance(item, dict) and item.get("user_text"):
-                    queued_items.append({
-                        "text": item["user_text"],
-                        "channel": item.get("channel") or "web",
-                        "queuePos": idx,
-                        "clientMsgId": item.get("client_msg_id"),
-                        "userMsgId": item.get("user_msg_id"),
-                    })
-    is_running = (
-        snap is not None
-        or (r_key in _active_watch_tasks and not _active_watch_tasks[r_key].done())
-        or (r_key in _active_agent_pids)
-    )
-    if not is_running and not queued_items:
-        return None
-
-    now_ts = time.time()
-    if snap is not None:
-        start_ts = float(snap.get("startTimestamp") or now_ts)
-        return {
-            "roomId": snap.get("roomId") or r_key,
-            "sessionId": snap.get("sessionId") or _room_session_ids.get(r_key),
-            "jobId": snap.get("jobId") or "",
-            "asstMsgId": snap.get("asstMsgId"),
-            "userMsgId": snap.get("userMsgId"),
-            "clientMsgId": snap.get("clientMsgId"),
-            "isRunning": True,
-            "userText": snap.get("userText") or "",
-            "channel": snap.get("channel") or "web",
-            "engine": snap.get("engine") or get_engine(),
-            "model": snap.get("model") or get_model(),
-            "effort": snap.get("effort") or get_effort(),
-            "startedAt": int(snap.get("startedAt") or int(start_ts * 1000)),
-            "elapsedSeconds": max(0, int(now_ts - start_ts)),
-            "feed": snap.get("feed") or _room_live_feeds.get(r_key) or "생각하는 중…",
-            "steps": [dict(s) for s in (snap.get("steps") or [])],
-            "streamText": snap.get("streamText") or "",
-            "queueCount": len(queued_items),
-            "queuedMessages": queued_items,
-        }
-
-    return {
-        "roomId": r_key,
-        "sessionId": _room_session_ids.get(r_key),
-        "jobId": "",
-        "isRunning": is_running,
-        "userText": "",
-        "channel": "web",
-        "engine": get_engine(),
-        "model": get_model(),
-        "effort": get_effort(),
-        "startedAt": int(now_ts * 1000),
-        "elapsedSeconds": 0,
-        "feed": _room_live_feeds.get(r_key) or "대기열 처리 중…",
-        "steps": [],
-        "streamText": "",
-        "queueCount": len(queued_items),
-        "queuedMessages": queued_items,
-    }
-
-
-def get_live_run_for_room(room_id: str | None) -> dict[str, Any] | None:
-    """특정 roomId(또는 sessionId)에 해당하는 실시간 실행 상태 스냅샷을 반환한다."""
-    if not room_id:
-        return None
-    direct = _serialize_live_run_entry(room_id)
-    if direct is not None:
-        return direct
-    for r_key, snap in list(_room_live_snapshots.items()):
-        if (
-            snap.get("roomId") == room_id
-            or snap.get("sessionId") == room_id
-            or _room_session_ids.get(r_key) == room_id
-            or _room_session_ids.get(room_id) == r_key
-        ):
-            return _serialize_live_run_entry(r_key)
-    return None
-
-
-def build_active_runs_payload() -> list[dict[str, Any]]:
-    """현재 실행 중이거나 대기열이 존재하는 모든 대화방의 실시간 스냅샷 목록을 반환한다."""
-    candidate_keys = list(
-        dict.fromkeys(
-            list(_room_live_snapshots.keys())
-            + list(_active_watch_tasks.keys())
-            + list(_active_agent_pids.keys())
-            + list(_room_queues.keys())
-        )
-    )
-    active_runs: list[dict[str, Any]] = []
-    seen_identifiers: set[str] = set()
-    for r_key in candidate_keys:
-        entry = _serialize_live_run_entry(r_key)
-        if entry is not None:
-            ident = entry.get("jobId") or entry.get("roomId")
-            if ident:
-                if ident in seen_identifiers:
-                    continue
-                seen_identifiers.add(ident)
-            active_runs.append(entry)
-    return active_runs
-
-
-async def broadcast_ws_json(message_dict: dict) -> None:
-    """연결된 모든 WebSocket 클라이언트에 JSON 이벤트를 브로드캐스트한다."""
-    if not _connected_websockets:
-        return
-    payload_str = json.dumps(message_dict, ensure_ascii=False)
-    stale: list[web.WebSocketResponse] = []
-    for ws in list(_connected_websockets):
-        if ws.closed:
-            stale.append(ws)
-            continue
-        try:
-            await ws.send_str(payload_str)
-        except Exception:
-            stale.append(ws)
-    for ws in stale:
-        _connected_websockets.discard(ws)
-
-
 def cancel_active_run(target_room_id: str | None = None) -> bool:
     """특정 대화방(또는 전체 대화방)의 진행 중 에이전트 프로세스 및 대기열을 즉시 중단한다."""
     was_running = False
@@ -704,8 +476,8 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
         _room_live_feeds.pop(r_key, None)
         if _room_live_snapshots.pop(r_key, None) is not None:
             was_running = True
-    if was_running and _master_supervisor is not None:
-        _master_supervisor.poke()
+    if was_running and get_master_supervisor() is not None:
+        get_master_supervisor().poke()
     return was_running
 
 
@@ -1453,8 +1225,8 @@ async def _watch_and_finish_web_job(
                 )
             except Exception:
                 pass
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
 
     should_cleanup_job = True
     try:
@@ -1579,8 +1351,8 @@ async def _watch_and_finish_web_job(
             except Exception:
                 pass
 
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
 
         try:
             await current_broadcast({
@@ -1612,7 +1384,7 @@ async def _watch_and_finish_web_job(
 
         logger.info("[web_jobs] 백그라운드 재부착 완료: %s (room=%s, msg_id=%s, task=%s)", job_id, room_id, msg_id, task_id)
     except asyncio.CancelledError:
-        is_user_cancel = (room_id in _user_cancelled_rooms) and not _shutting_down
+        is_user_cancel = (room_id in _user_cancelled_rooms) and not is_shutting_down()
         _user_cancelled_rooms.discard(room_id)
         if is_user_cancel:
             await _finalize_orchestrator_completion(
@@ -1626,8 +1398,8 @@ async def _watch_and_finish_web_job(
                 error_text="작업이 취소되었습니다.",
                 on_complete=None,
             )
-            if _master_supervisor:
-                _master_supervisor.poke()
+            if get_master_supervisor():
+                get_master_supervisor().poke()
             try:
                 await current_broadcast({"type": "cancelled", "jobId": job_id, "roomId": room_id})
             except Exception:
@@ -1766,8 +1538,8 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
                 feed="실행 중 (재부착됨)…",
                 sessionId=session_id,
             )
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
         watch_task = asyncio.create_task(
             _watch_and_finish_web_job(job_id, rec, steps, initial_offset=initial_offset)
         )
@@ -1883,8 +1655,8 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
     elif is_success and rec.get("channel") in ("orchestrator", "task_report"):
         await _notify_master_agent(room_id, None, reply_text, is_success=True)
 
-    if _master_supervisor:
-        _master_supervisor.poke()
+    if get_master_supervisor():
+        get_master_supervisor().poke()
 
     _remove_web_job(job_id)
     _remove_job_files(out_file, err_file)
@@ -1947,9 +1719,6 @@ async def _recover_startup_placeholders() -> int:
     except Exception as exc:
         logger.warning("[web_jobs] 기동 시 고아 플레이스홀더 복구 경고: %s", exc)
     return fixed_count
-
-
-_zombie_reaper_task: asyncio.Task | None = None
 
 
 async def reap_zombie_sessions(
@@ -2144,8 +1913,8 @@ async def reap_zombie_sessions(
         except Exception:
             pass
 
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
 
         reaped_rooms.append(room_id)
 
@@ -2159,10 +1928,10 @@ async def run_zombie_reaper_loop(
 ) -> None:
     """주기적으로 고아 세션을 감지하여 회수하는 백그라운드 루프."""
     logger.info("[zombie_reaper] 고아 세션 능동 회수 루프 가동 (주기: %.0f초, 무응답 한계: %.0f초, 최대 실행: %.0f초)", interval, max_inactive_seconds, max_elapsed_seconds)
-    while not _shutting_down:
+    while not is_shutting_down():
         try:
             await asyncio.sleep(interval)
-            if _shutting_down:
+            if is_shutting_down():
                 break
             reaped = await reap_zombie_sessions(
                 max_inactive_seconds=max_inactive_seconds,
@@ -2464,8 +2233,8 @@ async def execute_chat_turn(
             feed="생각하는 중…",
             sessionId=current_session_id,
         )
-    if _master_supervisor:
-        _master_supervisor.poke()
+    if get_master_supervisor():
+        get_master_supervisor().poke()
 
     await current_broadcast(
         {
@@ -2562,8 +2331,8 @@ async def execute_chat_turn(
             error_text=str(exc),
             on_complete=on_complete,
         )
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
         await current_broadcast(
             {
                 "type": "error",
@@ -2642,8 +2411,8 @@ async def execute_chat_turn(
                 stepCount=len(collected_steps),
                 lastActivityAt=time.time(),
             )
-        if _master_supervisor:
-            _master_supervisor.poke()
+        if get_master_supervisor():
+            get_master_supervisor().poke()
         await current_broadcast(
             {
                 "type": "progress",
@@ -2667,7 +2436,7 @@ async def execute_chat_turn(
             session_id=current_session_id,
         )
     except asyncio.CancelledError:
-        is_user_cancel = (room_key in _user_cancelled_rooms) and not _shutting_down
+        is_user_cancel = (room_key in _user_cancelled_rooms) and not is_shutting_down()
         _user_cancelled_rooms.discard(room_key)
         _room_live_feeds.pop(room_key, None)
         _room_live_snapshots.pop(room_key, None)
@@ -2683,8 +2452,8 @@ async def execute_chat_turn(
                 error_text="작업이 취소되었습니다.",
                 on_complete=on_complete,
             )
-            if _master_supervisor:
-                _master_supervisor.poke()
+            if get_master_supervisor():
+                get_master_supervisor().poke()
             await current_broadcast({"type": "cancelled", "jobId": job_id, "roomId": room_id})
             if asst_msg_id:
                 curr_txt = (live_snapshot.get("streamText") or "").strip()
@@ -2886,7 +2655,7 @@ async def execute_chat_turn(
         and not collected_steps
         and not agent_output.get("interrupted")
         and room_key not in _user_cancelled_rooms
-        and not _shutting_down
+        and not is_shutting_down()
     ):
         logger.warning(
             "[voice-web] 빈 응답 감지 (room=%s, session=%s) — 1회 자동 재실행합니다.",
@@ -3024,8 +2793,8 @@ async def execute_chat_turn(
                 master_memory.commit_memory_prompt_checkpoint(resolved_session_id, agent_id=orch_agent)
         except Exception:
             pass
-    if _master_supervisor:
-        _master_supervisor.poke()
+    if get_master_supervisor():
+        get_master_supervisor().poke()
 
     result_payload = {
         "type": "result",
