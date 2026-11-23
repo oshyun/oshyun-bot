@@ -87,11 +87,6 @@ def update_schedule(sched_id: str, **fields) -> dict | None:
     return None
 
 
-def set_enabled(sched_id: str, enabled: bool) -> dict | None:
-    """id 로 작업의 활성화 상태를 변경하고 수정된 항목을 반환한다."""
-    return update_schedule(sched_id, enabled=bool(enabled))
-
-
 def ensure_default_burn_schedule() -> dict | None:
     """schedules.json 에 토큰 버닝 스케줄이 없으면 매시 정각(0 * * * *) 기본 일반 스케줄을 등록한다."""
     items = list_all()

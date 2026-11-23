@@ -108,15 +108,6 @@ AGENT_CONFIGS_FILE = os.path.join(STATE_DIR, "agent_configs.json")
 # 동적으로 생성/편집된 에이전트 지침(AGENTS.md) 디렉토리.
 RUNTIME_INSTRUCTIONS_DIR = os.path.join(STATE_DIR, "agent_instructions")
 
-def _resolve_data_rel_path(env_key: str, fallback_path: str) -> str:
-    raw = os.getenv(env_key, "").strip()
-    if not raw:
-        return fallback_path
-    exp = os.path.expanduser(raw)
-    if os.path.isabs(exp):
-        return exp
-    return os.path.abspath(os.path.join(ROOT_DIR, exp))
-
 
 def _resolve_google_auth_path(env_key: str, default_filename: str, legacy_filename: str) -> str:
     """Google OAuth 자격증명/토큰 경로 해석. 환경변수 -> 신규 표준(또는 레거시 파일 존재 시 호환) -> 기본 경로."""

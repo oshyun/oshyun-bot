@@ -20,7 +20,7 @@ import bot.core.cron as cron_mod
 import bot.scheduler.scheduler as scheduler
 import bot.core.schedules as schedules
 from bot.engine.agent_engine import run_agent
-from bot.core.bot_logger import logger, vault_log
+from bot.core.bot_logger import vault_log
 from bot.core.paths import WORKDIR
 from bot.web.runtime_state import broadcast_ws_json
 

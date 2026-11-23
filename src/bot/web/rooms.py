@@ -124,16 +124,6 @@ def _save_hidden_room(room_id: str) -> None:
     _save_hidden_rooms([room_id])
 
 
-def _load_chat_rooms_backup() -> list[dict]:
-    """대화방 목록 조회 하위 호환 래퍼 (오직 SQLite SSOT에서만 조회)."""
-    return _load_chat_rooms_index()
-
-
-def _save_chat_rooms_backup(rooms: list[dict]) -> None:
-    """레거시 백업 파일 저장 비활성화 (SQLite chat.db 단일 SSOT 원칙)."""
-    return
-
-
 async def handle_chat_rooms_backup(request: web.Request) -> web.Response:
     """GET /api/chat/rooms/backup — SQLite SSOT 대화방 목록 반환."""
     rooms = _load_chat_rooms_index()

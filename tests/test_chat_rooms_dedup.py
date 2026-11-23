@@ -40,7 +40,6 @@ class TestChatRoomsDeduplication(unittest.TestCase):
 
         with patch("bot.web.server._load_hidden_rooms", return_value=set()), \
              patch("bot.web.server.chat_db.get_rooms", return_value=[]), \
-             patch("bot.web.server._load_chat_rooms_backup", return_value=[]), \
              patch("os.path.isfile", return_value=False), \
              patch("os.path.isdir", return_value=False):
             # _load_chat_rooms_index는 내부에서 raw_rooms를 취합하므로
@@ -51,7 +50,6 @@ class TestChatRoomsDeduplication(unittest.TestCase):
         # chat_db.get_rooms가 raw_rooms를 반환하도록 모의
         with patch("bot.web.server._load_hidden_rooms", return_value=set()), \
              patch("bot.web.server.chat_db.get_rooms", return_value=raw_rooms), \
-             patch("bot.web.server._load_chat_rooms_backup", return_value=[]), \
              patch("os.path.isfile", return_value=False), \
              patch("os.path.isdir", return_value=False):
             result = web_server._load_chat_rooms_index()
@@ -90,7 +88,6 @@ class TestChatRoomsDeduplication(unittest.TestCase):
 
         with patch("bot.web.server._load_hidden_rooms", return_value=set()), \
              patch("bot.web.server.chat_db.get_rooms", return_value=raw_rooms), \
-             patch("bot.web.server._load_chat_rooms_backup", return_value=[]), \
              patch("os.path.isfile", return_value=False), \
              patch("os.path.isdir", return_value=False):
             result = web_server._load_chat_rooms_index()
@@ -127,7 +124,6 @@ class TestChatRoomsDeduplication(unittest.TestCase):
 
         with patch("bot.web.server._load_hidden_rooms", return_value=set()), \
              patch("bot.web.server.chat_db.get_rooms", return_value=raw_rooms), \
-             patch("bot.web.server._load_chat_rooms_backup", return_value=[]), \
              patch("os.path.isfile", return_value=False), \
              patch("os.path.isdir", return_value=False):
             result = web_server._load_chat_rooms_index()
@@ -167,7 +163,6 @@ class TestChatRoomsDeduplication(unittest.TestCase):
 
         with patch("bot.web.server._load_hidden_rooms", return_value=set()), \
              patch("bot.web.server.chat_db.get_rooms", return_value=raw_rooms), \
-             patch("bot.web.server._load_chat_rooms_backup", return_value=[]), \
              patch("os.path.isfile", return_value=False), \
              patch("os.path.isdir", return_value=False):
             result = web_server._load_chat_rooms_index()

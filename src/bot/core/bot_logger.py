@@ -46,8 +46,6 @@ class CappedFileHandler(logging.Handler):
             self.handleError(record)
 
 
-_CappedFileHandler = CappedFileHandler  # 하위 호환성 alias
-
 _log_handler = CappedFileHandler(WEB_LOG_FILE)
 _log_handler.setFormatter(
     logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")

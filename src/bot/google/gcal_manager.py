@@ -7,7 +7,6 @@ Google 계정(OAuth 2.0)으로 캘린더 일정을 조회, 빠른 등록(quickAd
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone

@@ -6,9 +6,7 @@ Gmail 수신/볼트 동기화 엔드포인트를 제공한다.
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
 
 from aiohttp import web
 

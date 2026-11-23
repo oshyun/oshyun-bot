@@ -79,7 +79,6 @@ TIER_LABELS: dict[str, str] = {
     "freeze": "FREEZE · 동결",
 }
 
-VALID_AGENT_IDS: tuple[str, ...] = ("master", "second_brain", "bot_dev")
 AGENT_LABELS: dict[str, str] = {
     "master": "마스터 에이전트",
     "second_brain": "세컨브레인 에이전트",

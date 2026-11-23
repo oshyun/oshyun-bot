@@ -10,7 +10,6 @@ import asyncio
 import datetime
 import logging
 import os
-import shutil
 import time
 from typing import Any
 

@@ -7,8 +7,6 @@ Obsidian 볼트(_bot/메일.md)에 정제된 마크다운 형태로 동기화한
 from __future__ import annotations
 
 import base64
-import json
-import logging
 import os
 from datetime import datetime
 from email.utils import parsedate_to_datetime

@@ -473,21 +473,3 @@ async def run_agent(
         }
 
     return _parse_stream(out, fallback_session_id=session_id, fallback_model=get_model)
-
-
-async def compact_session(
-    session_id: str,
-    *,
-    workdir: str,
-    coding: bool = False,
-    timeout: int = 180,
-) -> dict:
-    """공식 CLI의 /compact 명령어로 세션의 컨텍스트를 압축/요약한다."""
-    return await run_agent(
-        "/compact",
-        session_id,
-        workdir=workdir,
-        slash_commands=True,
-        coding=coding,
-        timeout=timeout,
-    )

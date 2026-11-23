@@ -35,7 +35,6 @@ from bot.core.json_store import read_json, write_json_atomic
 from bot.core.paths import MASTER_TASKS_FILE
 
 ACTIVE_STATUSES = ("queued", "running", "stalled")
-ATTENTION_STATUSES = ("done", "failed", "stalled", "lost")
 TERMINAL_STATUSES = ("done", "failed", "lost", "cancelled", "closed")
 ALL_STATUSES = ACTIVE_STATUSES + ("done", "failed", "lost", "cancelled", "closed")
 
