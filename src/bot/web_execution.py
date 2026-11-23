@@ -1,76 +1,41 @@
-"""web_execution — 실시간 대화 턴 실행, 워커 큐(FIFO), 스트림 파싱 및 백그라운드 작업 복구 모듈."""
+"""web_execution — 테스트 mock.patch 전달 전용 임시 facade.
+
+런타임 상태/주입의 실제 정의처는 web_runtime_state 이며, web_server 는 이미
+web_runtime_state 속성에 직접 대입하는 방식으로 전환되었다. 이 모듈은 더 이상
+런타임 로직을 갖지 않고, 기존 테스트가 `patch.object(web_execution, "X")` /
+`patch("web_execution.X")` 로 patch 하는 심볼과 src 내 from-import 호환
+심볼을 재-익스포트하는 얇은 facade 만 남는다.
+
+동작: 이 모듈 속성에 setattr 이 발생하면(테스트 mock.patch 등) 값을 아래
+상태 소유 모듈들 중 같은 이름을 가진 모든 모듈에 전달한다. 이로써
+patch('web_execution.X') 가 새 모듈 내부 호출까지 관통한다.
+mutable 전역(dict/set)은 어느 모듈에서도 재바인딩하지 않는다(요소 조작만).
+
+제거 조건: 모든 importer 와 테스트가 새 모듈을 직접 참조·patch 하여
+web_execution 재-익스포트를 사용하는 곳이 0건이 되었을 때 삭제한다.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import inspect
-import json
-import os
-import re
 import sys
-import time
 import types
-from collections.abc import Callable
-from typing import Any
-import uuid
 
-from aiohttp import web
-
-import chat_db
-from json_store import read_json, write_json_atomic
-from agent_engine import (
-    AGY_DEFAULT_MODEL,
-    check_and_reset_if_idle,
-    clear_session,
+# ── 테스트 patch 대상 심볼(관통 patch 를 위해 이 모듈에 존재해야 함) ──
+import chat_db  # noqa: F401
+import master_memory  # noqa: F401
+import master_tasks  # noqa: F401
+from agent_engine import (  # noqa: F401
     detached_pid_alive,
-    fmt_cost,
-    get_coding_mode,
-    get_effort,
-    get_engine,
-    get_model,
-    get_session,
-    is_quota_exhausted_error,
-    is_session_stale_error,
     kill_job,
-    set_model,
     set_session,
     spawn_agent,
     update_last_activity,
     watch_agent,
 )
-from bot_logger import logger, vault_log
-from master_supervisor import (
-    CORE_ROOM_ID,
-    MASTER_PATROL_CHANNEL,
-    MasterSupervisor,
-)
-import agent_configs
-import master_memory
-import master_tasks
-import child_error_report
-from paths import (
-    CODEDIR,
-    child_default_workdir,
-    DEFAULT_SSL_CERT_FILE,
-    JOBS_DIR,
-    STATE_DIR,
-    WORKDIR,
-)
-from stream_parser import (
-    _EMPTY_OUTPUT_TEXT,
-    _NO_RESULT_TEXT,
-    extract_agy_transcript_final_response,
-)
-from web_jobs import (
-    compute_remaining_timeout as _compute_remaining_timeout,
-    extract_steps_from_jsonl as _extract_steps_from_jsonl,
-    load_web_jobs as _load_web_jobs_from_file,
-    remove_job_files as _remove_job_files,
-    remove_web_job as _remove_web_job_from_file,
-    save_web_job as _save_web_job_to_file,
-    sweep_orphan_job_files as _sweep_orphan_job_files,
-)
-from web_speech import clean_text_for_speech, VOICE_MODE_PROMPT_SUFFIX
+from bot_logger import vault_log  # noqa: F401
+from json_store import read_json  # noqa: F401
+from paths import JOBS_DIR  # noqa: F401
+from stream_parser import extract_agy_transcript_final_response  # noqa: F401
 
 # ── web_turn_execution 로 이전된 심볼 재-익스포트(호환 facade) ──
 from web_turn_execution import (  # noqa: F401
@@ -101,13 +66,11 @@ from web_room_queue import (  # noqa: F401
 from web_stream_watch import (  # noqa: F401
     _format_tool_step_info,
     extract_stream_events_from_line,
-    _run_stream_tail_loop,
     _watch_and_finish_web_job,
 )
 
 # ── web_job_recovery 로 이전된 심볼 재-익스포트(호환 facade) ──
 from web_job_recovery import (  # noqa: F401
-    _get_web_jobs_file,
     _load_web_jobs,
     _save_web_job,
     _remove_web_job,
@@ -135,8 +98,6 @@ from web_runtime_state import (  # noqa: F401
     ORCHESTRATOR_ROOM_IDS,
     IDLE_RESET_SECONDS,
     _is_orchestrator_room_id,
-    WEB_PORT,
-    WEB_TOKEN,
     _connected_websockets,
     _active_watch_tasks,
     _active_agent_pids,
@@ -162,23 +123,11 @@ from web_runtime_state import (  # noqa: F401
     broadcast_ws_json,
     _zombie_reaper_task,
     get_master_supervisor,
+    poke_master_supervisor,
 )
 
 
-# ── 대화방 실행 상태 및 소켓 레지스트리 ────────────────────────────────────
-
-
 # ── 전달 프록시 facade ──────────────────────────────────────────────────────
-# 임시 facade — 새 모듈(web_runtime_state 등) 경유 전환 완료 후 축소 예정.
-# 제거 조건: 모든 importer 와 테스트가 새 모듈을 직접 참조·patch 하여
-# web_execution 재-익스포트를 사용하는 곳이 0건이 되었을 때 축소/제거한다.
-# 그 전에는 외부 import(web_server/web_orchestrator/web_ws/web_rooms/web_automation/
-# 테스트)가 깨지므로 facade 축소를 금지한다.
-#
-# 동작: 이 모듈 속성에 setattr 이 발생하면(테스트 mock.patch, web_server 의
-# 런타임 주입 등) 값을 아래 모듈들 중 같은 이름을 가진 모든 모듈에 전달한다.
-# 이로써 patch('web_execution.X') 가 새 모듈 내부 호출까지 관통한다.
-# mutable 전역(dict/set)은 어느 모듈에서도 재바인딩하지 않는다(요소 조작만).
 
 _NEW_STATE_MODULES = (
     "web_runtime_state",
