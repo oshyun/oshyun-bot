@@ -20,6 +20,7 @@ from bot_logger import logger, vault_log
 from engine_settings import get_coding_mode
 import paths
 from paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
+from web_runtime_state import _get_mod_attr, get_master_supervisor
 
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -51,13 +52,6 @@ def _is_orchestrator_room_id(room_id: str | None) -> bool:
     clean = str(room_id).strip()
     return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
-
-def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
 
 
 def _get_hidden_file() -> str:
@@ -654,8 +648,7 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
 
         # 2-2. 마스터 감독 루프에 변경 사항 즉시 반영
         try:
-            from web_execution import _master_supervisor
-            supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+            supervisor = get_master_supervisor()
             if supervisor:
                 supervisor.poke()
         except Exception:
@@ -1059,8 +1052,7 @@ async def handle_archive_chat_room(request: web.Request) -> web.Response:
             "isArchived": is_archived,
         })
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is not None:
         supervisor.poke()
 
@@ -1119,8 +1111,7 @@ async def handle_batch_archive_chat_rooms(request: web.Request) -> web.Response:
             except Exception:
                 pass
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is not None:
         supervisor.poke()
 

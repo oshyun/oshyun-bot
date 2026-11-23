@@ -303,7 +303,7 @@ class TestModelInjection(unittest.TestCase):
                  patch("web_server.chat_db.update_room") as mock_update_room, \
                  patch("web_server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
                  patch("web_server.broadcast_ws_json", new_callable=AsyncMock):
-                mock_enqueue.return_value = (False, 0)
+                mock_enqueue.return_value = {"already_running": False, "queue_size": 0}
                 resp = await web_server.handle_orchestrator_dispatch(mock_request)
                 self.assertEqual(resp.status, 200)
                 mock_create_task.assert_called_once()
@@ -424,7 +424,7 @@ class TestModelInjection(unittest.TestCase):
                  patch("master_tasks.create_task", return_value={"id": "mt-rebalance"}), \
                  patch("web_server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
                  patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
-                mock_enqueue.return_value = (False, 0)
+                mock_enqueue.return_value = {"already_running": False, "queue_size": 0}
                 resp = await web_server.handle_orchestrator_dispatch(mock_request)
                 self.assertEqual(resp.status, 200)
 

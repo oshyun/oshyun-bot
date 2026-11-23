@@ -29,6 +29,7 @@ import agent_configs
 import master_memory
 import master_tasks
 from paths import MASTER_STATE_FILE, WORKDIR, child_default_workdir
+from web_runtime_state import _get_mod_attr, get_master_supervisor
 
 AGY_BRAIN_DIR = os.path.expanduser("~/.gemini/antigravity/brain")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -61,13 +62,6 @@ def _is_orchestrator_room_id(room_id: str | None) -> bool:
     clean = str(room_id).strip()
     return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
-
-def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
 
 
 class _WebServerSupervisorHost:
@@ -1051,7 +1045,9 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     if orchestrator_flag is not None:
         enqueue_kwargs["orchestrator"] = orchestrator_flag
 
-    is_already_running, q_size = await current_enqueue(**enqueue_kwargs)
+    enqueue_result = await current_enqueue(**enqueue_kwargs)
+    is_already_running = enqueue_result["already_running"]
+    q_size = enqueue_result["queue_size"]
 
     if not wait_for_result or result_future is None:
         resp_body: dict[str, Any] = {
@@ -1231,8 +1227,7 @@ async def handle_orchestrator_summary_update(request: web.Request) -> web.Respon
         status=str(status_val).strip() if status_val is not None else None,
     )
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor:
         supervisor.poke()
 
@@ -1246,8 +1241,7 @@ async def handle_orchestrator_summary_update(request: web.Request) -> web.Respon
 
 async def handle_orchestrator_graph(request: web.Request) -> web.Response:
     """GET /api/orchestrator/graph — 실시간 마스터-슬레이브 관계도 및 감독 상태 반환."""
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is None:
         return web.json_response({"ok": False, "error": "Supervisor not initialized"}, status=503)
     graph = supervisor.current_graph()
@@ -1278,8 +1272,7 @@ async def handle_orchestrator_task_update(request: web.Request) -> web.Response:
     room_id = str(payload.get("roomId") or "").strip()
     if not task_id and room_id:
         marked = master_tasks.mark_room_reviewed(room_id)
-        from web_execution import _master_supervisor
-        supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+        supervisor = get_master_supervisor()
         if supervisor:
             supervisor.poke()
         return web.json_response({"ok": True, "roomId": room_id, "marked": marked})
@@ -1304,8 +1297,7 @@ async def handle_orchestrator_task_update(request: web.Request) -> web.Response:
     if not updated:
         return web.json_response({"ok": False, "error": f"작업을 찾을 수 없습니다: {task_id}"}, status=404)
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor:
         supervisor.poke()
     return web.json_response({"ok": True, "task": updated})
@@ -1326,8 +1318,7 @@ async def handle_orchestrator_room_mark_read(request: web.Request) -> web.Respon
 
     marked = master_tasks.mark_room_reviewed(room_id)
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor:
         supervisor.poke()
 
@@ -1336,8 +1327,7 @@ async def handle_orchestrator_room_mark_read(request: web.Request) -> web.Respon
 
 async def handle_orchestrator_patrol_trigger(request: web.Request) -> web.Response:
     """POST /api/orchestrator/patrol/trigger — 정기 점검 턴을 즉시 수동 트리거."""
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is None:
         return web.json_response({"ok": False, "error": "Supervisor not initialized"}, status=503)
     res = await supervisor.start_patrol(reason="사용자 수동 점검", force=True)
@@ -1402,7 +1392,7 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     )
     target_sid = _room_session_ids.get(parent_agent_id) or get_session(ns=parent_ns)
 
-    is_already_running, q_size = await current_enqueue(
+    enqueue_result = await current_enqueue(
         room_id=parent_agent_id,
         user_text=message,
         is_voice_mode=False,
@@ -1411,6 +1401,8 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
         channel=channel,
         task_id=task_id,
     )
+    is_already_running = enqueue_result["already_running"]
+    q_size = enqueue_result["queue_size"]
 
     try:
         notify_summary = master_memory.format_notify_memory(
@@ -1590,7 +1582,7 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
     except Exception:
         pass
 
-    from web_execution import _master_supervisor, _room_session_ids, broadcast_ws_json, enqueue_room_turn
+    from web_execution import _room_session_ids, broadcast_ws_json, enqueue_room_turn
 
     current_enqueue = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
@@ -1623,7 +1615,7 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
 
         core_sid = _room_session_ids.get(CORE_ORCHESTRATOR_ROOM_ID) or get_session(ns="core_")
 
-        is_already_running, q_size = await current_enqueue(
+        enqueue_result = await current_enqueue(
             room_id=CORE_ORCHESTRATOR_ROOM_ID,
             user_text=system_prompt,
             is_voice_mode=False,
@@ -1632,6 +1624,8 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
             channel="task_report",
             task_id=task_id,
         )
+        is_already_running = enqueue_result["already_running"]
+        q_size = enqueue_result["queue_size"]
 
     await current_broadcast({
         "type": "orchestrator_task_event",
@@ -1646,7 +1640,7 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
         "queueSize": q_size,
     })
 
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is not None:
         supervisor.poke()
 
@@ -1772,7 +1766,6 @@ async def reset_core_orchestrator_state(
     from engine_settings import delete_session_files
     from web_execution import (
         _load_web_jobs,
-        _master_supervisor,
         _remove_web_job,
         _room_session_ids,
         broadcast_ws_json,
@@ -1787,7 +1780,7 @@ async def reset_core_orchestrator_state(
     clear_session_fn = _get_mod_attr("clear_session", clear_session)
     broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
     vault_log_fn = _get_mod_attr("vault_log", vault_log)
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
 
     # 1. 기존 모델/effort 및 세션 ID 확보 (대화방 재생성·CLI 세션 파일 정리용)
     old_row: dict[str, Any] | None = None
@@ -2004,8 +1997,7 @@ async def handle_orchestrator_memory_post(request: web.Request) -> web.Response:
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400)
 
-    from web_execution import _master_supervisor
-    supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+    supervisor = get_master_supervisor()
     if supervisor is not None:
         supervisor.poke()
     return web.json_response({"ok": True, **snap})
@@ -2038,7 +2030,7 @@ async def handle_orchestrator_skill_post(request: web.Request) -> web.Response:
     wait_sync = bool(payload.get("wait"))
 
     import agent_engine
-    from web_execution import _master_supervisor, broadcast_ws_json
+    from web_execution import broadcast_ws_json
 
     current_run_agent = _get_mod_attr("run_agent", agent_engine.run_agent)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
@@ -2056,7 +2048,7 @@ async def handle_orchestrator_skill_post(request: web.Request) -> web.Response:
         )
         result_text = str((out or {}).get("result") or "").strip()
         mem_snap = master_memory.get_memory_snapshot(limit_per_tier=50)
-        supervisor = _get_mod_attr("_master_supervisor", _master_supervisor)
+        supervisor = get_master_supervisor()
         if supervisor is not None:
             supervisor.poke()
         return {

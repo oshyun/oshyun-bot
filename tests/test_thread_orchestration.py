@@ -105,9 +105,12 @@ class TestThreadOrchestration(unittest.TestCase):
 
     def test_subagent_silent_notification(self):
         """하위 에이전트 완료 결과가 마스터 방으로 바이패스될 때 중복 알림이 차단되는지 검증."""
-        exec_py_path = os.path.join(self.repo_root, "src", "bot", "web_execution.py")
-        with open(exec_py_path, "r", encoding="utf-8") as f:
-            exec_code = f.read()
+        # 바이패스 보고 코드는 web_agent_reporting.py 로 분리됨 — 두 모듈을 모두 검사
+        exec_code = ""
+        for exec_py_name in ("web_execution.py", "web_agent_reporting.py"):
+            exec_py_path = os.path.join(self.repo_root, "src", "bot", exec_py_name)
+            with open(exec_py_path, "r", encoding="utf-8") as f:
+                exec_code += f.read()
         self.assertIn('"silentNotification": True', exec_code)
 
         ws_js_path = os.path.join(self.static_dir, "js", "ws.js")

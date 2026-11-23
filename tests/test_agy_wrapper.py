@@ -517,7 +517,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
                 "raw_log_path": ".agy_workspace/task_98a7f6/full.log",
             },
         }
-        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value=(False, 0)) as mock_enq, patch(
+        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
             "web_server.broadcast_ws_json", new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)
@@ -560,7 +560,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
             "summary": "1차 부분 결과",
             "requires_master_intervention": False,
         }
-        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value=(False, 0)) as mock_enq, patch(
+        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
             "web_server.broadcast_ws_json", new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)

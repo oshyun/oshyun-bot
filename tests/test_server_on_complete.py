@@ -296,7 +296,7 @@ class TestOrchestratorNotifyDedupAndRouting(AioHTTPTestCase):
             mock_enqueue.assert_not_awaited()
 
     async def test_notify_routes_to_explicit_parent_agent(self):
-        mock_enqueue = AsyncMock(return_value=(False, 0))
+        mock_enqueue = AsyncMock(return_value={"already_running": False, "queue_size": 0})
         mock_broadcast = AsyncMock()
         with (
             patch.object(web_execution, "enqueue_room_turn", mock_enqueue),
