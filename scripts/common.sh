@@ -93,6 +93,16 @@ CAL_PIDFILE="${LOGS_DIR}/cal-sync.pid"
 CAL_LOGFILE="${LOGS_DIR}/cal-sync.log"
 CAL_ERRFILE="${LOGS_DIR}/cal-sync.err.log"
 
+# 웹 서버 프로세스 정리 pkill 패턴 SSOT — start.sh/stop.sh 가 공유한다.
+# 첫째 패턴: 구경로 thin launcher(src/bot/web_server.py) 전환기 정리용,
+# 둘째 패턴: 신규 모듈 기동(python -m bot.web.server) 프로세스.
+WEB_KILL_PATTERN_LEGACY="${PROJECT_ROOT}/src/bot/web_server.py"
+WEB_KILL_PATTERN_MODULE="python.* -m bot.web.server"
+kill_web_processes() {
+  pkill -f "$WEB_KILL_PATTERN_LEGACY" 2>/dev/null || true  # 구경로 thin launcher 정리
+  pkill -f "$WEB_KILL_PATTERN_MODULE" 2>/dev/null || true
+}
+
 # 웹 서버(web_server.py) — Flutter Web & 음성 비서/볼트 파일 매니저 독립 프로세스.
 # 로그는 web_server.py 가 직접 기록(최근 100줄 유지)하고,
 # 셸은 stderr(경고/크래시)만 WEB_ERRFILE 로 받는다.

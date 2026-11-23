@@ -5,7 +5,7 @@
 직접 삽입하고 웹소켓으로 즉시 표출하며(_notify_master_agent), 완료 보고
 TTL 캐시(_recent_reported_rooms)로 중복 보고를 막는다.
 execute_chat_turn 의 종료 경로 계약(정상/실패/취소/종료중 스킵)의 실체가 여기 있다.
-web_rooms 의 parentAgentId 조회는 순환 import 회피를 위해 함수 내 지연 import 를 유지한다.
+web_rooms ↔ 순환 방향: agent_reporting → web_rooms 단방향 지연 import(parentAgentId 조회).web_rooms 는 agent_reporting 을 import 하지 않는다 — 순환 방지를 위해 web_rooms 쪽은 역방향import 를 금지하고, agent_reporting 쪽 지연 import 를 유지한다.
 """
 
 from __future__ import annotations

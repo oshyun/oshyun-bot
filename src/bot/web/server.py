@@ -5,9 +5,8 @@
 - web_speech: 한국어 신경망 음성 합성(edge-tts) 및 TTS 텍스트 정제
 - web_vault: Obsidian 볼트 파일 탐색/읽기/쓰기/생성 REST API
 - web_rooms: 대화방 인덱스(SQLite SSOT), 히스토리, 세션 관리, 첨부파일 업로드
-- web_execution: 비동기 워커 큐(FIFO), 백그라운드 재부착 및 턴 실행기
+- web_room_queue/web_job_recovery/web_turn_execution: 비동기 워커 큐(FIFO), 백그라운드 재부착 및 턴 실행기
 - web_orchestrator: 총괄 에이전트(Core Orchestrator) 및 마스터 슈퍼바이저 세션 제어
-- web_ws: WebSocket 실시간 이벤트 디스패처
 """
 
 from __future__ import annotations
@@ -44,34 +43,39 @@ import bot.engine.agent_engine as agent_engine
 from bot.engine.agent_engine import AGY_DEFAULT_MODEL, ENGINE_LABELS, ENGINES, check_and_reset_if_idle, clear_session, delete_session_files, detached_pid_alive, fmt_cost, get_coding_mode, get_effort, get_engine, get_model, get_model_candidates, get_model_labels, get_session, get_supported_efforts, get_cached_agy_usage, refresh_agy_quota_cache, is_quota_exhausted_error, is_session_stale_error, kill_job, set_coding_mode, set_effort, set_engine, set_model, set_session, spawn_agent, update_last_activity, watch_agent
 
 # ── 서브모듈 심볼 Re-export (100% 하위 호환성 보장) ───────────────────────
-import bot.web.auth as web_auth
 from bot.web.auth import AUTH_COOKIE_NAME, AUTH_DELAY_SECONDS, AUTH_LOCKOUT_DURATION_SECONDS, AUTH_LOCKOUT_WINDOW_SECONDS, AUTH_MAX_FAILURES, AUTH_SESSION_SECRET, AUTH_SESSION_TTL_SECONDS, WEB_AUTH_REQUIRED, WEB_TOKEN, _create_session_cookie_value, _failed_auth_attempts, _get_client_ip, _is_authenticated, _is_ip_locked, _record_failed_attempt, _redirect_response, _reset_failed_attempts, _verify_session_cookie, _verify_token, auth_middleware, cors_middleware, handle_login_page, handle_login_submit, handle_logout, render_login_page
 
 import bot.web.speech as web_speech
 from bot.web.speech import AVAILABLE_TTS_VOICES, DEFAULT_TTS_MODE, DEFAULT_TTS_VOICE, VALID_TTS_MODES, VALID_TTS_VOICE_IDS, VOICE_MODE_PROMPT_SUFFIX, _current_tts_mode, _current_tts_voice, clean_text_for_speech, deduplicate_speech_text, handle_tts, synthesize_edge_tts_mp3
 
-import bot.web.vault as web_vault
 from bot.web.vault import ALLOWED_NOTE_EXTENSIONS, EXCLUDED_DIR_NAMES, _build_directory_tree, _resolve_vault_absolute_path, handle_vault_create_file, handle_vault_get_file, handle_vault_recent, handle_vault_save_file, handle_vault_tree
 
-import bot.web.google as web_google
 from bot.web.google import handle_gmail_status, handle_gmail_sync, handle_google_auth_callback, handle_google_auth_code, handle_google_auth_url, handle_google_credentials, handle_google_disconnect, handle_google_status, handle_schedules_ensure_gmail
 from bot.google.google_auth import default_google_auth
 
-import bot.web.execution as web_execution
+import bot.web.job_recovery as web_job_recovery
 import bot.web.runtime_state as web_runtime_state
-from bot.web.execution import _active_agent_pids, _active_watch_tasks, _connected_websockets, _format_tool_step_info, _last_chat_requests, _load_web_jobs, _master_supervisor, _master_supervisor_task, _recover_single_web_job, _recover_web_jobs, _remove_web_job, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _save_web_job, _serialize_live_run_entry, _user_cancelled_rooms, _watch_and_finish_web_job, _zombie_reaper_task, broadcast_ws_json, build_active_runs_payload, cancel_active_run, enqueue_room_turn, execute_chat_turn, extract_stream_events_from_line, get_live_run_for_room, run_room_worker
+from bot.web.job_recovery import _load_web_jobs, _recover_single_web_job, _recover_web_jobs, _remove_web_job, _save_web_job
+from bot.web.room_queue import cancel_active_run, enqueue_room_turn, run_room_worker
+from bot.web.runtime_state import _active_agent_pids, _active_watch_tasks, _connected_websockets, _last_chat_requests, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _serialize_live_run_entry, _user_cancelled_rooms, broadcast_ws_json, build_active_runs_payload, get_live_run_for_room, set_shutting_down
+from bot.web.stream_watch import _format_tool_step_info, extract_stream_events_from_line
+from bot.web.turn_execution import execute_chat_turn
 
-import bot.web.automation as web_automation
 from bot.web.automation import handle_burn_run, handle_burn_status, handle_burn_todo_create, handle_burn_todo_delete, handle_schedules_create, handle_schedules_delete, handle_schedules_list, handle_schedules_run, handle_schedules_update
-import bot.web.rooms as web_rooms
 from bot.web.rooms import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_TITLE, HIDDEN_ROOMS_FILE, _append_room_message, _get_room_chat_file, _load_chat_rooms_backup, _load_chat_rooms_index, _load_hidden_rooms, _load_room_messages, _normalize_room_ts, _save_chat_rooms_backup, _save_chat_rooms_index, _save_hidden_room, _save_hidden_rooms, _update_room_metadata, handle_api_delete_session, handle_api_rename_room, handle_api_room_settings, handle_api_upload, handle_chat_history, handle_chat_rooms, handle_chat_rooms_backup, handle_chat_rooms_backup_save, handle_get_attachment, handle_archive_chat_room, handle_batch_archive_chat_rooms, handle_search_chat_rooms
 
 import bot.core.agent_configs as agent_configs
-import bot.web.orchestrator as web_orchestrator
 from bot.web.orchestrator import _WebServerSupervisorHost, _find_similar_orchestrator_room, _format_updated_at, _inspect_agy_brain, _is_room_currently_running, _resolve_orchestrator_target_room, ensure_core_orchestrator_room, handle_orchestrator_agent_delete, handle_orchestrator_agent_preview, handle_orchestrator_agent_upsert, handle_orchestrator_agents_get, handle_orchestrator_archive_session, handle_orchestrator_dispatch, handle_orchestrator_graph, handle_orchestrator_memory_get, handle_orchestrator_memory_post, handle_orchestrator_skill_post, handle_orchestrator_notify, handle_orchestrator_patrol_trigger, handle_orchestrator_read, handle_orchestrator_reset, handle_orchestrator_sessions, handle_orchestrator_summaries, handle_orchestrator_summary_update, handle_orchestrator_room_mark_read, handle_orchestrator_task_update, handle_orchestrator_tasks, handle_task_events_callback, reset_core_orchestrator_state
 
-import bot.web.ws as web_ws
 from bot.web.ws import handle_websocket
+
+# 모듈 레벨 백그라운드 태스크 바인딩( cleanup 시 NameError 방지 ). 실제 값은 기동 시 할당되며,
+# SSOT 는 web_runtime_state — 여기엔 로컬 참조만 둔다.
+_master_supervisor: Any = None
+_master_supervisor_task: Any = None
+_scheduler_task: Any = None
+_burn_recover_task: Any = None
+_zombie_reaper_task: Any = None
 
 # ── 웹 서버 기본 설정 ─────────────────────────────────────────────────────
 WEB_ENABLED = os.getenv("WEB_ENABLED", os.getenv("VOICE_WEB_ENABLED", "1")).strip() != "0"
@@ -434,7 +438,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
 
     async def _on_web_startup(_app: web.Application) -> None:
         global _master_supervisor_task, _scheduler_task, _burn_recover_task, _zombie_reaper_task
-        web_execution.set_shutting_down(False)
+        web_runtime_state.set_shutting_down(False)
         is_test_env = _is_test_runner_env()
         if not is_test_env:
             try:
@@ -443,7 +447,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
                 logger.error("[web_jobs] 시작 시 작업 복구 실패: %s", exc)
 
             _zombie_reaper_task = asyncio.create_task(
-                web_execution.run_zombie_reaper_loop(
+                web_job_recovery.run_zombie_reaper_loop(
                     interval=float(os.getenv("ZOMBIE_REAPER_INTERVAL", "60.0")),
                     max_inactive_seconds=float(os.getenv("ZOMBIE_MAX_INACTIVE_SECONDS", "900.0")),
                     max_elapsed_seconds=float(os.getenv("ZOMBIE_MAX_ELAPSED_SECONDS", "1800.0")),
@@ -483,14 +487,14 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
             )
 
     async def _on_web_shutdown(_app: web.Application) -> None:
-        web_execution.set_shutting_down(True)
+        web_runtime_state.set_shutting_down(True)
         if not _is_test_runner_env():
             try:
-                web_execution.persist_pending_room_turns()
+                web_job_recovery.persist_pending_room_turns()
             except Exception as exc:
                 logger.warning("[web_jobs] 종료 시 대기열 저장 경고: %s", exc)
         try:
-            detached = await web_execution.detach_active_tasks()
+            detached = await web_runtime_state.detach_active_tasks()
             if detached:
                 logger.info("[web_jobs] 종료 시 활성 태스크 %d건 안전 분리(detach)", detached)
         except Exception as exc:
@@ -511,7 +515,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
         _zombie_reaper_task = None
         web_runtime_state._master_supervisor_task = None
         web_runtime_state._zombie_reaper_task = None
-        web_execution.set_shutting_down(False)
+        web_runtime_state.set_shutting_down(False)
 
     web_app.on_startup.append(_on_web_startup)
     web_app.on_shutdown.append(_on_web_shutdown)

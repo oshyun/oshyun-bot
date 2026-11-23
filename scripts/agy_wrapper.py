@@ -13,10 +13,7 @@ _SRC_DIR = os.path.join(_ROOT_DIR, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-try:
-    import bot.core.paths as paths  # noqa: F401  # .env 로드 및 경로 해석 초기화
-except ImportError:
-    pass
+import bot.core.paths as paths  # noqa: F401  # .env 로드 및 경로 해석 초기화
 
 from bot.engine.agy_wrapper import main
 

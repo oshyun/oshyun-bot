@@ -64,7 +64,7 @@ class _WebServerSupervisorHost:
 
     def snapshot(self) -> dict[str, Any]:
         from bot.web.rooms import _load_chat_rooms_index
-        from bot.web.execution import build_active_runs_payload
+        from bot.web.runtime_state import build_active_runs_payload
         load_index_fn = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
         build_payload_fn = _get_mod_attr("build_active_runs_payload", build_active_runs_payload)
         return {
@@ -73,7 +73,7 @@ class _WebServerSupervisorHost:
         }
 
     def core_busy(self) -> bool:
-        from bot.web.execution import _active_watch_tasks, _active_agent_pids, _room_queues
+        from bot.web.runtime_state import _active_watch_tasks, _active_agent_pids, _room_queues
         task = _active_watch_tasks.get(CORE_ORCHESTRATOR_ROOM_ID)
         is_running = (task is not None and not task.done()) or (CORE_ORCHESTRATOR_ROOM_ID in _active_agent_pids)
         q = _room_queues.get(CORE_ORCHESTRATOR_ROOM_ID)
@@ -81,7 +81,8 @@ class _WebServerSupervisorHost:
         return is_running or has_queue
 
     async def enqueue_patrol(self, prompt: str) -> asyncio.Future:
-        from bot.web.execution import enqueue_room_turn, _room_session_ids
+        from bot.web.room_queue import enqueue_room_turn
+        from bot.web.runtime_state import _room_session_ids
         enqueue_fn = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
@@ -97,12 +98,12 @@ class _WebServerSupervisorHost:
         return fut
 
     async def broadcast(self, message: dict) -> None:
-        from bot.web.execution import broadcast_ws_json
+        from bot.web.runtime_state import broadcast_ws_json
         broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
         await broadcast_fn(message)
 
     async def notify_task(self, task: dict) -> None:
-        from bot.web.execution import _notify_master_agent
+        from bot.web.agent_reporting import _notify_master_agent
         notify_fn = _get_mod_attr("_notify_master_agent", _notify_master_agent)
         ok = task.get("status") == "done"
         text = (task.get("resultPreview") if ok else task.get("error")) or task.get("status") or ""
@@ -132,7 +133,7 @@ def _format_updated_at(ts: Any) -> str:
 
 def _is_room_currently_running(room_id: str, session_id: str | None = None) -> tuple[bool, int, str]:
     """해당 방(또는 세션 ID)이 현재 실행 중인지, 대기열 수, 실시간 피드 문자열을 반환한다."""
-    from bot.web.execution import _active_watch_tasks, _active_agent_pids, _room_queues, _room_live_feeds
+    from bot.web.runtime_state import _active_watch_tasks, _active_agent_pids, _room_queues, _room_live_feeds
     keys = [k for k in (room_id, session_id) if k]
     for k in keys:
         t = _active_watch_tasks.get(k)
@@ -576,7 +577,7 @@ def _inspect_agy_brain(session_id: str | None) -> dict | None:
 async def handle_orchestrator_sessions(request: web.Request) -> web.Response:
     """GET /api/orchestrator/sessions — 전체 활성 채팅방(AGY 세션) 목록과 실시간 실행 상태를 반환한다."""
     from bot.web.rooms import _load_chat_rooms_index, _normalize_room_ts
-    from bot.web.execution import _room_session_ids
+    from bot.web.runtime_state import _room_session_ids
     load_index_fn = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
 
     try:
@@ -809,7 +810,8 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     )
 
     from bot.web.rooms import _append_room_message, _update_room_metadata
-    from bot.web.execution import is_room_busy, enqueue_room_turn, broadcast_ws_json
+    from bot.web.room_queue import is_room_busy, enqueue_room_turn
+    from bot.web.runtime_state import broadcast_ws_json
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
     current_enqueue = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
@@ -1355,7 +1357,9 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     room_id = str(payload.get("roomId") or payload.get("room_id") or "").strip() or None
     channel = str(payload.get("channel") or "task_report").strip()
 
-    from bot.web.execution import _room_session_ids, broadcast_ws_json, enqueue_room_turn, is_room_completion_recently_reported
+    from bot.web.agent_reporting import is_room_completion_recently_reported
+    from bot.web.room_queue import enqueue_room_turn
+    from bot.web.runtime_state import _room_session_ids, broadcast_ws_json
 
     # 서버 완료 훅/안전망이 이미 보고한 작업이면 클라이언트 감시자(session-ctl watch/notify)의 중복 보고는 무시한다.
     if task_id and channel == "task_report" and master_tasks.get_task(task_id) and not master_tasks.claim_report(task_id):
@@ -1568,7 +1572,8 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
     except Exception:
         pass
 
-    from bot.web.execution import _room_session_ids, broadcast_ws_json, enqueue_room_turn
+    from bot.web.room_queue import enqueue_room_turn
+    from bot.web.runtime_state import _room_session_ids, broadcast_ws_json
 
     current_enqueue = _get_mod_attr("enqueue_room_turn", enqueue_room_turn)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
@@ -1750,7 +1755,9 @@ async def reset_core_orchestrator_state(
 
     from bot.engine.agent_engine import kill_job
     from bot.engine.engine_settings import delete_session_files
-    from bot.web.execution import _load_web_jobs, _remove_web_job, _room_session_ids, broadcast_ws_json, cancel_active_run
+    from bot.web.job_recovery import _load_web_jobs, _remove_web_job
+    from bot.web.room_queue import cancel_active_run
+    from bot.web.runtime_state import _room_session_ids, broadcast_ws_json
 
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     cancel_run_fn = _get_mod_attr("cancel_active_run", cancel_active_run)
@@ -2010,7 +2017,7 @@ async def handle_orchestrator_skill_post(request: web.Request) -> web.Response:
     wait_sync = bool(payload.get("wait"))
 
     import bot.engine.agent_engine as agent_engine
-    from bot.web.execution import broadcast_ws_json
+    from bot.web.runtime_state import broadcast_ws_json
 
     current_run_agent = _get_mod_attr("run_agent", agent_engine.run_agent)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
@@ -2132,8 +2139,8 @@ def extract_delegated_subagents(
     db = chat_db_module or _get_mod_attr("chat_db", chat_db)
     tasks_mod = master_tasks_module or _get_mod_attr("master_tasks", master_tasks)
     try:
-        import bot.web.execution as web_execution
-        exec_mod = web_exec_module or web_execution
+        import bot.web.room_queue as room_queue
+        exec_mod = web_exec_module or room_queue
     except Exception:
         exec_mod = web_exec_module
 
@@ -2483,7 +2490,7 @@ async def handle_orchestrator_agent_upsert(request: web.Request) -> web.Response
     except Exception as exc:
         logger.warning("[orchestrator] 에이전트 설정 DB 동기화 경고 (%s): %s", saved["id"], exc)
 
-    from bot.web.execution import broadcast_ws_json
+    from bot.web.runtime_state import broadcast_ws_json
     broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
     all_agents = agent_configs.list_agent_configs()
     if broadcast_fn:
@@ -2530,7 +2537,8 @@ async def handle_orchestrator_agent_delete(request: web.Request) -> web.Response
     except Exception:
         pass
 
-    from bot.web.execution import broadcast_ws_json, cancel_active_run
+    from bot.web.room_queue import cancel_active_run
+    from bot.web.runtime_state import broadcast_ws_json
     cancel_fn = _get_mod_attr("cancel_active_run", cancel_active_run)
     if cancel_fn:
         cancel_fn(agent_id)

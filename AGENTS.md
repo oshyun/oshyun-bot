@@ -67,9 +67,10 @@ oshyun-bot = "Personal Intelligent Bot". 웹 UI(브라우저/모바일)에서 �
 - **`bot.scheduler/`** — 정기작업/버닝: `scheduler/scheduler.py`(**정기 작업(다이제스트) 실행 루프 & 토큰 버닝 감시** —
   매분 cron 매칭, 주간 쿼터 리셋 직전 잔여 토큰 감시해 개선 트리거), `scheduler/burn_runner.py`(격리 워크트리 자동 개선 실행기).
 - **`bot.google/`** — 구글 연동(core 만 의존): `google/google_auth.py`, `google/gmail_manager.py`, `google/gcal_manager.py`.
-- **`bot.web/`** — 웹 서버(진입점 `web/server.py`, `python -m bot.web.server` 로 기동):
+- **`bot.web/`** — 웹 서버(진입점 `bot.web.server`, `python -m bot.web.server` 로 기동):
   - `web/server.py` — 실시간 음성 비서(STT/TTS WebSocket) 및 옵시디언 볼트 파일 매니저 REST API / Web 정적 서빙 (독립 프로세스).
-  - `web/runtime_state.py`(런타임 상태 SSOT), `web/orchestrator.py`(턴 지휘), `web/execution.py`(호환 facade),
+  - `web/runtime_state.py`(런타임 상태 SSOT), `web/orchestrator.py`(턴 지휘 — 2,500줄 이상으로
+    **다음 쪼개기 후보**: 마스터 그래프/방 오케스트레이션/완료 처리 하위 도메인 분리), `web/execution.py`(테스트 mock.patch 전달 전용 임시 facade — 프로덕션 importer 0건, 잔존 테스트 이관 후 삭제),
     `web/rooms.py`·`web/ws.py`·`web/speech.py`·`web/automation.py`·`web/google.py`·`web/vault.py`,
     `web/jobs.py`(job 레코드 영속화 — 봇 재시작 후 **재부착(reattach)** 근거),
     `web/job_recovery.py`·`web/stream_watch.py`·`web/turn_execution.py`·`web/room_queue.py`·`web/agent_reporting.py`·`web/auth.py`.
@@ -132,7 +133,7 @@ PYTHONPATH=src .venv/bin/python3 -m unittest discover -s tests
   - 방마다 대화 메시지, 실시간 thinking/도구 실행 단계(`activeSteps`), 백엔드 세션 ID가 메모리에 보존되며, 목록에서 방을 전환하면 과거 질의응답 및 추론 과정이 온전히 복원됨.
   - 첫 질문 발화 시 질문 첫 문장으로 대화방 제목 자동 요약.
 
-### 2. 실시간 Thinking & 도구 실행 스트리밍 (`web_server.py` ↔ WebSocket `/ws`)
+### 2. 실시간 Thinking & 도구 실행 스트리밍 (`bot.web.server` ↔ WebSocket `/ws`)
 - 에이전트(`claude` / `agy`)의 내부 추론(Thinking) 및 도구 호출(`read_file`, `grep_search`, `write_file` 등)을 실시간 스트리밍:
   - `started`: 작업 시작 알림 (`roomId`, `voiceMode`)
   - `agent_step`: 각 도구 실행 단계, 파라미터 미리보기, 경과 시간(초) 실시간 전달

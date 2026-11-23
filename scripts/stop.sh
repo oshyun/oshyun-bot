@@ -9,8 +9,7 @@ source "${SCRIPT_DIR}/common.sh"
 
 stop_web() {
   stop_proc "웹 서버" "$WEB_PIDFILE"
-  pkill -f "${PROJECT_ROOT}/src/bot/web_server.py" 2>/dev/null || true  # 구경로 thin launcher 정리
-  pkill -f "python.* -m bot.web.server" 2>/dev/null || true
+  kill_web_processes
 }
 
 stop_cal() {

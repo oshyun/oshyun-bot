@@ -28,7 +28,8 @@ ORCHESTRATOR_ROOM_IDS = (
 
 async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     """GET /ws — 실시간 대화·음성 모드·진행 상태 스트리밍·즉시 취소 WebSocket 핸들러."""
-    from bot.web.execution import _get_mod_attr, _connected_websockets, _active_watch_tasks, _room_queues, _room_session_ids, _last_chat_requests, cancel_active_run, broadcast_ws_json, enqueue_room_turn
+    from bot.web.room_queue import cancel_active_run, enqueue_room_turn
+    from bot.web.runtime_state import _get_mod_attr, _connected_websockets, _active_watch_tasks, _room_queues, _room_session_ids, _last_chat_requests, broadcast_ws_json
 
     websocket = web.WebSocketResponse(heartbeat=25.0)
     await websocket.prepare(request)

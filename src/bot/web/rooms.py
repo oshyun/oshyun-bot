@@ -1,4 +1,8 @@
-"""web_rooms — 대화방 목록(SSOT), 대화 히스토리, 세션 삭제, 방 이름/설정 변경 및 첨부파일 업로드 REST API 모듈."""
+"""web_rooms — 대화방 목록(SSOT), 대화 히스토리, 세션 삭제, 방 이름/설정 변경 및 첨부파일 업로드 REST API 모듈.
+
+순환 import 방향: rooms → runtime_state(agent_reporting 을 import 하지 않음).
+agent_reporting → rooms 는 지연 import 로만 허용(방향 단일화).
+"""
 
 from __future__ import annotations
 
@@ -916,8 +920,8 @@ async def handle_chat_rooms(_request: web.Request) -> web.Response:
     """GET /api/chat/rooms — 우리 앱 전용 대화방 목록 반환 (초고속 단일 진실 원천 SSOT)."""
     current_load_index = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
     rooms = current_load_index()
-    import bot.web.execution as web_execution
-    build_payload_fn = _get_mod_attr("build_active_runs_payload", web_execution.build_active_runs_payload)
+    from bot.web.runtime_state import build_active_runs_payload
+    build_payload_fn = _get_mod_attr("build_active_runs_payload", build_active_runs_payload)
     return web.json_response({
         "ok": True,
         "rooms": rooms,
@@ -969,14 +973,15 @@ async def handle_chat_history(request: web.Request) -> web.Response:
             if not messages and matched.get("messages"):
                 messages = matched.get("messages")
 
-    import bot.web.execution as web_execution
-    get_live_run_fn = _get_mod_attr("get_live_run_for_room", web_execution.get_live_run_for_room)
+    from bot.web.runtime_state import get_live_run_for_room
+    get_live_run_fn = _get_mod_attr("get_live_run_for_room", get_live_run_for_room)
     live_run = get_live_run_fn(resolved_room_id) or get_live_run_fn(room_id)
     if messages:
         active_msg_ids: set[Any] = set()
         if live_run and live_run.get("asstMsgId"):
             active_msg_ids.add(live_run["asstMsgId"])
-        load_jobs_fn = _get_mod_attr("_load_web_jobs", web_execution._load_web_jobs)
+        from bot.web.job_recovery import _load_web_jobs
+        load_jobs_fn = _get_mod_attr("_load_web_jobs", _load_web_jobs)
         for job_rec in load_jobs_fn().values():
             if isinstance(job_rec, dict) and job_rec.get("msg_id"):
                 active_msg_ids.add(job_rec["msg_id"])

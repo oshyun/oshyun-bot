@@ -22,7 +22,7 @@ import bot.core.schedules as schedules
 from bot.engine.agent_engine import run_agent
 from bot.core.bot_logger import logger, vault_log
 from bot.core.paths import WORKDIR
-from bot.web.execution import broadcast_ws_json
+from bot.web.runtime_state import broadcast_ws_json
 
 _NL_TO_CRON_PROMPT = (
     "다음 사용자의 정기 작업 요청을 5필드 cron 식과 실행 프롬프트, 한 줄 설명으로 변환하라.\n"
