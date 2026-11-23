@@ -209,18 +209,11 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
             }
         )
         import contextlib
-        import sys
 
         patches = [
             mock.patch("bot.web.execution.broadcast_ws_json", new=mock.AsyncMock()),
             mock.patch("bot.web.execution.enqueue_room_turn", side_effect=fake_enqueue_room_turn),
         ]
-        if "bot.web.server" in sys.modules:
-            ws_mod = sys.modules["bot.web.server"]
-            if hasattr(ws_mod, "broadcast_ws_json"):
-                patches.append(mock.patch.object(ws_mod, "broadcast_ws_json", new=mock.AsyncMock()))
-            if hasattr(ws_mod, "enqueue_room_turn"):
-                patches.append(mock.patch.object(ws_mod, "enqueue_room_turn", side_effect=fake_enqueue_room_turn))
 
         with contextlib.ExitStack() as stack:
             for p in patches:

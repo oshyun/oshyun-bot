@@ -94,10 +94,13 @@ CAL_LOGFILE="${LOGS_DIR}/cal-sync.log"
 CAL_ERRFILE="${LOGS_DIR}/cal-sync.err.log"
 
 # 웹 서버 프로세스 정리 pkill 패턴 SSOT — start.sh/stop.sh 가 공유한다.
+# 두 패턴 모두 본 체크아웃의 venv 인터프리터 절대경로(${PY})로 앵커링한다 —
+# 앵커가 없으면 pkill 부분일치로 다른 체크아웃/워크트리의 웹 서버나
+# 에디터·tail 등 우연히 경로를 포함하는 프로세스까지 죽일 수 있다.
 # 첫째 패턴: 구경로 thin launcher(src/bot/web_server.py) 전환기 정리용,
 # 둘째 패턴: 신규 모듈 기동(python -m bot.web.server) 프로세스.
-WEB_KILL_PATTERN_LEGACY="${PROJECT_ROOT}/src/bot/web_server.py"
-WEB_KILL_PATTERN_MODULE="python.* -m bot.web.server"
+WEB_KILL_PATTERN_LEGACY="${PY} .*src/bot/web_server\.py"
+WEB_KILL_PATTERN_MODULE="${PY} -m bot\.web\.server"
 kill_web_processes() {
   pkill -f "$WEB_KILL_PATTERN_LEGACY" 2>/dev/null || true  # 구경로 thin launcher 정리
   pkill -f "$WEB_KILL_PATTERN_MODULE" 2>/dev/null || true

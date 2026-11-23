@@ -32,6 +32,7 @@ import bot.engine.stream_parser as stream_parser
 import bot.web.execution as web_execution
 import bot.web.orchestrator as web_orchestrator
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 def _load_session_ctl():
@@ -478,12 +479,12 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
         self._state_patcher = patch("bot.web.orchestrator.MASTER_STATE_FILE", self.state_file)
         self._state_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = True
-        web_server.WEB_TOKEN = "cb-secret-token"
+        web_auth.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_TOKEN = "cb-secret-token"
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         web_server._room_session_ids.pop("__core__", None)
         self._state_patcher.stop()
         self._memory_patcher.stop()

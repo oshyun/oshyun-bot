@@ -20,6 +20,7 @@ if _SRC_DIR not in sys.path:
 import bot.core.burn_todo as burn_todo
 import bot.core.schedules as schedules
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestWebAutomationEndpoints(AioHTTPTestCase):
@@ -35,12 +36,12 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.orig_sched_file = schedules.SCHEDULES_FILE
         self.orig_burn_file = burn_todo.BURN_TODO_FILE
         self.orig_sched_enabled = os.environ.get("WEB_SCHEDULER_ENABLED")
-        self.orig_auth_required = web_server.WEB_AUTH_REQUIRED
+        self.orig_auth_required = web_auth.WEB_AUTH_REQUIRED
 
         schedules.SCHEDULES_FILE = os.path.join(self.test_dir, "schedules.json")
         burn_todo.BURN_TODO_FILE = os.path.join(self.test_dir, "burn_todo.json")
         os.environ["WEB_SCHEDULER_ENABLED"] = "0"
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
 
         return web_server.create_web_app(static_dir=self.test_dir)
 
@@ -50,7 +51,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
             p.stop()
         schedules.SCHEDULES_FILE = self.orig_sched_file
         burn_todo.BURN_TODO_FILE = self.orig_burn_file
-        web_server.WEB_AUTH_REQUIRED = self.orig_auth_required
+        web_auth.WEB_AUTH_REQUIRED = self.orig_auth_required
         if self.orig_sched_enabled is None:
             os.environ.pop("WEB_SCHEDULER_ENABLED", None)
         else:

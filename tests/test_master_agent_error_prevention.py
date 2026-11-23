@@ -16,6 +16,7 @@ import bot.master.master_supervisor as master_supervisor
 import bot.master.master_tasks as master_tasks
 import bot.web.execution as web_execution
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
@@ -83,17 +84,11 @@ class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(web_execution, "spawn_agent", spawn_mock),
-            patch.object(web_server, "spawn_agent", spawn_mock),
             patch.object(web_execution, "watch_agent", watch_mock),
-            patch.object(web_server, "watch_agent", watch_mock),
             patch.object(web_execution, "broadcast_ws_json", AsyncMock()),
-            patch.object(web_server, "broadcast_ws_json", AsyncMock()),
             patch.object(web_execution, "set_session", MagicMock()),
-            patch.object(web_server, "set_session", MagicMock()),
             patch.object(web_execution, "update_last_activity", MagicMock()),
-            patch.object(web_server, "update_last_activity", MagicMock()),
             patch.object(web_execution, "vault_log", MagicMock()),
-            patch.object(web_server, "vault_log", MagicMock()),
             patch("bot.web.execution.extract_agy_transcript_final_response", return_value=None),
         ):
             res = await web_execution.execute_chat_turn(
@@ -168,12 +163,12 @@ class TestWebAppTestRunnerIsolation(AioHTTPTestCase):
         self._patch_db = patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "test.db"))
         self._patch_db.start()
         self._orig_auth = getattr(web_server, "WEB_AUTH_REQUIRED", True)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir="/nonexistent")
 
     async def tearDownAsync(self):
         await super().tearDownAsync()
-        web_server.WEB_AUTH_REQUIRED = getattr(self, "_orig_auth", True)
+        web_auth.WEB_AUTH_REQUIRED = getattr(self, "_orig_auth", True)
         self._patch_db.stop()
         self._tmp_dir.cleanup()
 

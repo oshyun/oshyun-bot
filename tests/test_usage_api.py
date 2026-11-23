@@ -18,6 +18,7 @@ if _SRC_DIR not in sys.path:
 
 import bot.engine.usage_pricing as usage_pricing
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestUsagePricingHelpers(unittest.TestCase):
@@ -136,11 +137,11 @@ class TestUsageEndpoints(AioHTTPTestCase):
         for p in self._patchers:
             p.start()
         self.orig_auth = getattr(web_server, "WEB_AUTH_REQUIRED", True)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app()
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = getattr(self, "orig_auth", True)
+        web_auth.WEB_AUTH_REQUIRED = getattr(self, "orig_auth", True)
         if hasattr(self, "client") and self.client:
             await self.client.close()
         for p in reversed(getattr(self, "_patchers", [])):

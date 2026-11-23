@@ -337,10 +337,6 @@ async def handle_fallback_dashboard(request: web.Request) -> web.Response:
     )
 
 
-_scheduler_task: asyncio.Task | None = None
-_burn_recover_task: asyncio.Task | None = None
-
-
 async def _trigger_schedule_in_master(schedule_entry: dict, master_prompt: str) -> None:
     """정기 작업 시점 도래/수동 실행 시 마스터 에이전트(__core__) 턴을 명시적으로 트리거한다."""
     if not master_prompt:
@@ -708,7 +704,7 @@ async def start_web_server(
     port: int = WEB_PORT,
     ssl_context: ssl.SSLContext | None = None,
 ) -> web.AppRunner | None:
-    """telegram_bot.py 이벤트 루프 안에서 비차단으로 WebSocket/HTTP 서버를 기동한다."""
+    """웹 서버(bot.web.server) 이벤트 루프 안에서 비차단으로 WebSocket/HTTP 서버를 기동한다."""
     if not WEB_ENABLED:
         logger.info("WEB_ENABLED=0 — 웹 API 서버 기동을 건너뜁니다.")
         return None
@@ -738,7 +734,7 @@ _instance_lock_file = None
 
 
 def _acquire_instance_lock() -> bool:
-    """오직 하나의 web_server.py 프로세스만 실행되도록 OS 레벨 배타적 파일 락을 획득한다."""
+    """오직 하나의 웹 서버(bot.web.server) 프로세스만 실행되도록 OS 레벨 배타적 파일 락을 획득한다."""
     global _instance_lock_file
     lock_path = os.path.join(LOGS_DIR, "web.lock")
     try:

@@ -459,6 +459,9 @@ class ClaudeEngine(BaseEngine):
             cmd += extra_args
 
         env = os.environ.copy()
+        # 기동 스크립트가 심은 PYTHONPATH(<repo>/src)가 claude 자식(및 그 하위
+        # bash — burn_runner 격리 워크트리 작업 포함)으로 누수되지 않게 제거한다.
+        env.pop("PYTHONPATH", None)
         env["AGENT_CODE_DISABLE_BUNDLED_SKILLS"] = "1"
         env["AGENT_CODE_DISABLE_FEEDBACK_SURVEY"] = "1"
         env["AGENT_CODE_ENABLE_TELEMETRY"] = "0"
@@ -620,6 +623,8 @@ class AGYEngine(BaseEngine):
             cmd += extra_args
 
         env = os.environ.copy()
+        # 기동 스크립트가 심은 PYTHONPATH(<repo>/src)가 agy 자식으로 누수되지 않게 제거한다.
+        env.pop("PYTHONPATH", None)
         for k in (
             "ANTIGRAVITY_AGENT",
             "ANTIGRAVITY_LS_ADDRESS",

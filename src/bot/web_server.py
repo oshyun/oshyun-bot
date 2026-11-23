@@ -7,6 +7,15 @@ cron 등)이 0건임을 확인한 후 삭제한다. scripts/common.sh 의 WEB_KI
 전환기 패턴도 같이 정리한다. 전환 안정화 이후에 제거한다.
 """
 
+# 직접 실행 시 sys.path[0] 이 src/bot 이 되어 bot 패키지를 찾지 못하므로
+# src 루트를 먼저 추가한다(scripts/gcal.py·agy_wrapper.py 와 동일 패턴).
+import sys
+from pathlib import Path
+
+_SRC_ROOT = str(Path(__file__).resolve().parents[1])
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
+
 from bot.web.server import main
 
 if __name__ == "__main__":

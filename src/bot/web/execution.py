@@ -58,6 +58,7 @@ _NEW_STATE_MODULES = (
     "bot.web.room_queue",
     "bot.web.agent_reporting",
     "bot.web.turn_execution",
+    "bot.web.automation",
 )
 
 
@@ -71,7 +72,15 @@ class _FacadeModule(types.ModuleType):
     """
 
     def __setattr__(self, name: str, value: object) -> None:
-        for mod_name in _NEW_STATE_MODULES:
+        # 전달 대상: 상태 소유 모듈들 + (재-익스포트 심볼이면) 그 정의처(소유 모듈)
+        # + 조립 모듈(bot.web.server)의 from-import 사본. 이로써 facade 단일 patch 가
+        # _get_mod_attr 의 소유 모듈 우선 조회와 server 사본 조회까지 모두 관통한다.
+        targets = list(_NEW_STATE_MODULES)
+        owner_mod_name = getattr(vars(self).get(name), "__module__", None)
+        if owner_mod_name and owner_mod_name not in targets:
+            targets.append(owner_mod_name)
+        targets.append("bot.web.server")
+        for mod_name in targets:
             mod = sys.modules.get(mod_name)
             if mod is not None and name in vars(mod):
                 setattr(mod, name, value)

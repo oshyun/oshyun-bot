@@ -16,6 +16,7 @@ import bot.engine.agent_engine as agent_engine
 import bot.web.execution as web_execution
 import bot.web.orchestrator as web_orchestrator
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestAgentEngineWatchOnComplete(unittest.IsolatedAsyncioTestCase):
@@ -259,8 +260,8 @@ class TestOrchestratorNotifyDedupAndRouting(AioHTTPTestCase):
         ]
         for p in self._patchers:
             p.start()
-        web_server.WEB_TOKEN = "test-secret-token-1234"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "test-secret-token-1234"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         return web_server.create_web_app(static_dir="/nonexistent")
 
     async def tearDownAsync(self):

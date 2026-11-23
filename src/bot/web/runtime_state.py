@@ -119,13 +119,53 @@ async def detach_active_tasks(timeout: float = 1.5) -> int:
 
     return len(tasks_to_cancel)
 
+# from-import 사본이 아니라 이 모듈들의 정의처 값을 우선 조회해야 하는 모듈들.
+# web_execution facade 의 patch 전달 대상과 동일한 집합이다.
+_OWNER_STATE_MODULES = (
+    "bot.web.runtime_state",
+    "bot.web.job_recovery",
+    "bot.web.stream_watch",
+    "bot.web.room_queue",
+    "bot.web.agent_reporting",
+    "bot.web.turn_execution",
+    "bot.web.automation",
+)
+
+def _is_test_double(value: Any) -> bool:
+    """테스트 더블(MagicMock/AsyncMock/Mock) 여부를 판별한다."""
+    return (
+        hasattr(value, "assert_called")
+        or hasattr(value, "_mock_return_value")
+        or hasattr(value, "mock_calls")
+    )
+
 def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value") or hasattr(fallback, "mock_calls"):
+    """patch된 mock 또는 정의처(소유 모듈)·bot.web.server 의 현재 속성을 조회한다.
+
+    조회 순서:
+    1. fallback 자체가 테스트 더블이면 그대로 반환한다.
+    2. fallback 의 정의처가 상태 소유 모듈(_OWNER_STATE_MODULES)이면 그 모듈의
+       현재 속성을 우선한다 — bot.web.server 의 from-import 사본(stale 가능)이
+       정의처를 가리지 않게 단일화한다. patch 여부를 함께 보므로 소유 모듈이
+       아닌 bot.web.server 만 patch 된 기존 테스트도 계속 관통된다.
+    3. 그 외 심볼(엔진·rooms 등)은 기존처럼 bot.web.server 를 먼저 조회한다.
+    4. 없으면 fallback 을 반환한다.
+    """
+    if _is_test_double(fallback):
         return fallback
-    mod = sys.modules.get("bot.web.server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
+    owner_mod_name = getattr(fallback, "__module__", None)
+    owner_mod = sys.modules.get(owner_mod_name) if owner_mod_name in _OWNER_STATE_MODULES else None
+    server_mod = sys.modules.get("bot.web.server")
+    owner_val = getattr(owner_mod, attr_name, None) if owner_mod is not None else None
+    server_val = getattr(server_mod, attr_name, None) if server_mod is not None else None
+    if owner_mod is not None and owner_val is not None:
+        # patch 우선: 소유 모듈이 patch 됐거나 server 사본이 patch 되지 않았으면
+        # 정의처 값을, server 사본만 patch 됐으면(기존 테스트 호환) 그 값을 반환한다.
+        if _is_test_double(owner_val) or not _is_test_double(server_val):
+            return owner_val
+        return server_val
+    if server_mod is not None and hasattr(server_mod, attr_name):
+        return server_val
     return fallback
 
 def _should_sync_global_session(

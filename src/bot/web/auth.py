@@ -7,7 +7,6 @@ import hashlib
 import hmac
 import os
 import secrets
-import sys
 import time
 
 from aiohttp import web
@@ -34,13 +33,6 @@ AUTH_DELAY_SECONDS = float(os.getenv("WEB_AUTH_DELAY", os.getenv("VOICE_WEB_AUTH
 
 # IP별 실패 이력 {ip: [실패타임스탬프, ...]}
 _failed_auth_attempts: dict[str, list[float]] = {}
-
-
-def _get_mod_val(attr_name: str, fallback: any) -> any:
-    mod = sys.modules.get("bot.web.server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
 
 
 def _get_client_ip(request: web.Request) -> str:
@@ -79,7 +71,7 @@ def _reset_failed_attempts(ip: str) -> None:
 
 def _verify_token(token: str | None) -> bool:
     """상수 시간(constant-time) 비교로 비밀 토큰을 검증한다."""
-    curr_token = _get_mod_val("WEB_TOKEN", WEB_TOKEN)
+    curr_token = WEB_TOKEN
     if not token or not curr_token:
         return False
     try:
@@ -90,7 +82,7 @@ def _verify_token(token: str | None) -> bool:
 
 def _create_session_cookie_value() -> str:
     """암호학적으로 서명된 세션 쿠키 문자열을 생성한다."""
-    curr_secret = _get_mod_val("AUTH_SESSION_SECRET", AUTH_SESSION_SECRET)
+    curr_secret = AUTH_SESSION_SECRET
     ts = str(int(time.time()))
     sig = hmac.new(
         curr_secret.encode("utf-8"),
@@ -113,7 +105,7 @@ def _verify_session_cookie(cookie_val: str | None) -> bool:
     # 30일 초과 만료 또는 미래 시각 방어
     if now - ts > AUTH_SESSION_TTL_SECONDS or ts > now + 60:
         return False
-    curr_secret = _get_mod_val("AUTH_SESSION_SECRET", AUTH_SESSION_SECRET)
+    curr_secret = AUTH_SESSION_SECRET
     expected_sig = hmac.new(
         curr_secret.encode("utf-8"),
         ts_str.encode("utf-8"),
@@ -124,7 +116,7 @@ def _verify_session_cookie(cookie_val: str | None) -> bool:
 
 def _is_authenticated(request: web.Request) -> bool:
     """쿠키, Bearer 헤더, 쿼리 파라미터를 통해 요청이 인증되었는지 판별한다."""
-    if not _get_mod_val("WEB_AUTH_REQUIRED", WEB_AUTH_REQUIRED):
+    if not WEB_AUTH_REQUIRED:
         return True
 
     # 1. 세션 쿠키 확인
@@ -367,7 +359,7 @@ async def handle_login_submit(request: web.Request) -> web.Response:
             return web.json_response({"ok": False, "error": msg}, status=429)
         return web.Response(text=render_login_page(error_message=msg), content_type="text/html", status=429)
 
-    delay = _get_mod_val("AUTH_DELAY_SECONDS", AUTH_DELAY_SECONDS)
+    delay = AUTH_DELAY_SECONDS
     if delay > 0:
         await asyncio.sleep(delay)
 
@@ -451,7 +443,7 @@ async def auth_middleware(request: web.Request, handler):
     # 3. 인증 여부 검증
     if _is_authenticated(request):
         response = await handler(request)
-        if _get_mod_val("WEB_AUTH_REQUIRED", WEB_AUTH_REQUIRED) and request.query.get("token"):
+        if WEB_AUTH_REQUIRED and request.query.get("token"):
             query_token = request.query.get("token", "").strip()
             if _verify_token(query_token) and not _verify_session_cookie(request.cookies.get(AUTH_COOKIE_NAME)):
                 try:

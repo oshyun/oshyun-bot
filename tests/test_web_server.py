@@ -31,6 +31,7 @@ import bot.master.master_tasks as master_tasks
 import bot.engine.stream_parser as stream_parser
 import bot.web.execution as web_execution
 import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 _STATIC_BUNDLE_CACHE: dict[str, str] = {}
@@ -357,8 +358,8 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
         chat_db.init_db(self.test_chat_db, migrate_legacy=False)
 
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "test-secret-token-1234"
-        web_server.AUTH_DELAY_SECONDS = 0.0  # 테스트 실행 속도를 위해 딜레이 비활성화
+        web_auth.WEB_TOKEN = "test-secret-token-1234"
+        web_auth.AUTH_DELAY_SECONDS = 0.0  # 테스트 실행 속도를 위해 딜레이 비활성화
 
         # 테스트용 볼트 파일 생성
         os.makedirs(os.path.join(self.test_vault_dir, "개인"), exist_ok=True)
@@ -745,8 +746,8 @@ class TestAuthGateway(AioHTTPTestCase):
         chat_db.CHAT_DB_FILE = self.test_chat_db
         chat_db.init_db(self.test_chat_db, migrate_legacy=False)
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         return web_server.create_web_app(static_dir="/nonexistent")
 
@@ -921,8 +922,8 @@ class TestPwaSupport(AioHTTPTestCase):
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
         chat_db.CHAT_DB_FILE = os.path.join(self.test_vault_dir, "test_chat.db")
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         self.orig_hidden_file = web_server.HIDDEN_ROOMS_FILE
         self.orig_chat_db_hidden_file = getattr(chat_db, "HIDDEN_ROOMS_FILE", None)
@@ -981,8 +982,8 @@ class TestHubApi(AioHTTPTestCase):
         self.test_vault_dir = tempfile.mkdtemp()
         self._cleanup_runtime = _install_runtime_isolation(self.test_vault_dir)
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         self.orig_hidden_file = web_server.HIDDEN_ROOMS_FILE
         self.orig_chat_db_hidden_file = getattr(chat_db, "HIDDEN_ROOMS_FILE", None)
@@ -1375,11 +1376,11 @@ class TestVoiceRouteServing(AioHTTPTestCase):
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
         chat_db.CHAT_DB_FILE = os.path.join(self.test_db_dir, "test_chat.db")
         chat_db.init_db(chat_db.CHAT_DB_FILE, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         if getattr(self, "orig_chat_db_file", None):
             chat_db.CHAT_DB_FILE = self.orig_chat_db_file
         if hasattr(self, "_cleanup_runtime"):
@@ -1482,7 +1483,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
     """WebSocket /ws 상에서 에이전트 응답 진행 중 인입된 채팅 요청이 큐(FIFO)로 적재되고 순차 실행되는지 검증."""
 
     async def get_application(self):
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         self.test_db_dir = tempfile.mkdtemp()
         self._cleanup_runtime = _install_runtime_isolation(self.test_db_dir)
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
@@ -1499,7 +1500,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         if getattr(self, "orig_chat_db_file", None):
             chat_db.CHAT_DB_FILE = self.orig_chat_db_file
         if getattr(self, "orig_hidden_file", None):
@@ -1740,11 +1741,11 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
         )
         self._chat_db_hidden_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         self._hidden_patcher.stop()
         if hasattr(self, "_chat_db_hidden_patcher"):
             self._chat_db_hidden_patcher.stop()
@@ -1885,11 +1886,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         )
         self._memory_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         web_server._room_session_ids.pop("__core__", None)
         self._memory_patcher.stop()
         self._tasks_patcher.stop()
