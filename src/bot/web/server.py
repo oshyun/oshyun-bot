@@ -78,7 +78,7 @@ WEB_ENABLED = os.getenv("WEB_ENABLED", os.getenv("VOICE_WEB_ENABLED", "1")).stri
 WEB_HOST = os.getenv("WEB_HOST", os.getenv("VOICE_WEB_HOST", "127.0.0.1")).strip() or "127.0.0.1"
 WEB_PORT = int(os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765")
 INTERNAL_STATIC_DIR = os.path.join(
-    ROOT_DIR, "src", "bot", "static"
+    ROOT_DIR, "src", "bot", "web", "static"
 )
 DEFAULT_WEB_BUILD_DIR = INTERNAL_STATIC_DIR
 WEB_STATIC_DIR = (

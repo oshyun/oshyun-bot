@@ -52,12 +52,12 @@ from bot.web.runtime_state import WEB_JOBS_FILE, CORE_ORCHESTRATOR_ROOM_ID, CORE
 # ── 전달 프록시 facade ──────────────────────────────────────────────────────
 
 _NEW_STATE_MODULES = (
-    "web_runtime_state",
-    "web_job_recovery",
-    "web_stream_watch",
-    "web_room_queue",
-    "web_agent_reporting",
-    "web_turn_execution",
+    "bot.web.runtime_state",
+    "bot.web.job_recovery",
+    "bot.web.stream_watch",
+    "bot.web.room_queue",
+    "bot.web.agent_reporting",
+    "bot.web.turn_execution",
 )
 
 
