@@ -9,7 +9,7 @@
 
 ## 🌟 주요 기능 (Key Features)
 
-### 1. 🎙️ 실시간 음성 비서 & 반응형 웹 채팅 UI (`src/bot/static/`)
+### 1. 🎙️ 실시간 음성 비서 & 반응형 웹 채팅 UI (`src/bot/web/static/`)
 * **웹 오디오 기반 실시간 음성 상호작용**: Voice Orb 스테이지를 통한 음성 입력(STT) 및 Microsoft Edge TTS(고품질 신경망 한국어 음성) 자동 낭독 지원.
 * **실시간 Thinking & 도구 실행 스트리밍**: 에이전트의 내부 추론(Thinking) 과정과 도구 호출 단계(`read_file`, `grep`, `write_file` 등 `activeSteps`)를 실시간 카드 UI로 시각화.
 * **ChatGPT 스타일 멀티 대화방 & 세션 격리**: 좌측 사이드바에서 대화방 생성·전환·삭제 지원 및 신규 룸 생성 시 독립 세션 보장.
@@ -44,7 +44,7 @@
                            ▼ (WebSocket /ws  &  REST API /api/*)
 ┌─────────────────────────────────────────────────────────────────┐
 │                     oshyun-bot Web Server                       │
-│                     (src/bot/web_server.py)                     │
+│                     (src/bot/web/server.py)                     │
 ├─────────────────┬──────────────────────────────┬────────────────┤
 │  Chat / Rooms   │      Vault File Manager      │   Scheduler    │
 │  (SQLite WAL)   │        (/api/vault/*)        │  & Token Burn  │
@@ -173,7 +173,7 @@ oshyun-bot/
 ## 🧪 테스트 실행 (Testing)
 
 ```bash
-PYTHONPATH=src/bot:src/cal-sync .venv/bin/python3 -m unittest discover -s tests
+PYTHONPATH=src:src/cal-sync .venv/bin/python3 -m unittest discover -s tests
 ```
 
 ---
