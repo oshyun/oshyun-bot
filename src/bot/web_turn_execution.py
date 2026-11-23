@@ -645,7 +645,8 @@ async def execute_chat_turn(
         retry_session_id: str | None,
         *,
         model_override: str | None = None,
-    ) -> tuple[dict[str, Any], str] | None:
+    ) -> dict[str, Any] | None:
+        """재실행 결과를 {"output": 에이전트 출력 dict, "reply_text": 응답 텍스트} 로 반환한다."""
         await current_broadcast(
             {
                 "type": "progress",
@@ -683,7 +684,10 @@ async def execute_chat_turn(
             if retry_session_id is not None:
                 watch_kwargs["session_id"] = retry_session_id
             retried_output = await current_watch_agent(retry_out_file, **watch_kwargs)
-            return retried_output, str(retried_output.get("result") or "").strip()
+            return {
+                "output": retried_output,
+                "reply_text": str(retried_output.get("result") or "").strip(),
+            }
         except Exception as retry_exc:
             logger.error("[voice-web] 자동 재실행 실패: %s", retry_exc)
             return None
@@ -712,7 +716,8 @@ async def execute_chat_turn(
             None,
         )
         if retried is not None:
-            agent_output, reply_text = retried
+            agent_output = retried["output"]
+            reply_text = retried["reply_text"]
 
     # 모델 쿼터 소진 시 기본 AGY 모델(gemini-3.8-flash)로 자동 전환하여 기존 세션을 유지한 채 재실행
     current_get_engine = _get_mod_attr("get_engine", get_engine)
@@ -744,7 +749,8 @@ async def execute_chat_turn(
             model_override=AGY_DEFAULT_MODEL,
         )
         if retried is not None:
-            agent_output, reply_text = retried
+            agent_output = retried["output"]
+            reply_text = retried["reply_text"]
 
     elapsed_seconds = int(time.time() - start_timestamp)
     new_session_id = agent_output.get("session_id")
@@ -807,7 +813,8 @@ async def execute_chat_turn(
             resolved_session_id,
         )
         if retried_empty is not None:
-            agent_output, retried_text = retried_empty
+            agent_output = retried_empty["output"]
+            retried_text = retried_empty["reply_text"]
             retried_sid = agent_output.get("session_id") or resolved_session_id
             if retried_sid:
                 resolved_session_id = retried_sid

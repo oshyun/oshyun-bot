@@ -2458,14 +2458,14 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn("볼트 최우선", common_content)
         self.assertIn("Gemini API", common_content)
 
-        step_list_title, _ = web_server._format_tool_step_info("run_command", {"CommandLine": "session-ctl list"})
-        self.assertEqual(step_list_title, "session-ctl list: all")
+        step_list_info = web_server._format_tool_step_info("run_command", {"CommandLine": "session-ctl list"})
+        self.assertEqual(step_list_info["title"], "session-ctl list: all")
 
-        step_send_title, _ = web_server._format_tool_step_info(
+        step_send_info = web_server._format_tool_step_info(
             "run_command",
             {"CommandLine": 'session-ctl send "주식방" "포트폴리오 업데이트해줘" --wait'},
         )
-        self.assertTrue(step_send_title.startswith("session-ctl send:"))
+        self.assertTrue(step_send_info["title"].startswith("session-ctl send:"))
 
         html = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
         self.assertIn('id="core-agent-slot"', html)
@@ -2984,13 +2984,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         ):
             # 1. 배경 점검 턴 적재 (channel="master_patrol")
             patrol_fut = asyncio.get_running_loop().create_future()
-            is_run, _ = await web_server.enqueue_room_turn(
+            is_run = (await web_server.enqueue_room_turn(
                 room_id="__core__",
                 user_text="[정기 점검] 하위 세션 감시",
                 channel="master_patrol",
                 result_future=patrol_fut,
-            )
-            # 점검 턴이 시작될 때까지 잠시 대기
+            ))["already_running"]
             await asyncio.sleep(0.05)
 
             # 2. 사용자 요청 도착 (channel="web")
@@ -3427,7 +3426,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
         async def fake_enqueue(**kwargs):
             enqueue_calls.append(kwargs)
-            return False, 0
+            return {"already_running": False, "queue_size": 0}
 
         with (
             patch.object(web_server, "enqueue_room_turn", new=fake_enqueue),

@@ -283,4 +283,4 @@ async def enqueue_room_turn(
     if worker is None or worker.done():
         _room_workers[room_key] = asyncio.create_task(run_room_worker(room_key))
 
-    return is_already_running, q.qsize()
+    return {"already_running": is_already_running, "queue_size": q.qsize()}

@@ -107,9 +107,8 @@ from web_runtime_state import (  # noqa: F401
     _room_live_feeds,
     _room_live_snapshots,
     _user_cancelled_rooms,
-    _shutting_down,
-    _master_supervisor,
-    _master_supervisor_task,
+    # _shutting_down / _master_supervisor / _master_supervisor_task / _zombie_reaper_task 는
+    # import 시점 값 사본이 stale 해지는 스칼라라 from-import 하지 않고 __getattr__ 위임으로 제공한다.
     set_shutting_down,
     is_shutting_down,
     detach_active_tasks,
@@ -120,7 +119,6 @@ from web_runtime_state import (  # noqa: F401
     get_live_run_for_room,
     build_active_runs_payload,
     broadcast_ws_json,
-    _zombie_reaper_task,
     get_master_supervisor,
     poke_master_supervisor,
 )
@@ -139,7 +137,13 @@ _NEW_STATE_MODULES = (
 
 
 class _FacadeModule(types.ModuleType):
-    """setattr 을 상태 소유 모듈(web_runtime_state 등)로 전달하는 모듈 프록시."""
+    """setattr/getattr 을 상태 소유 모듈(web_runtime_state 등)로 전달하는 모듈 프록시.
+
+    setattr 은 같은 이름을 가진 모든 상태 소유 모듈에 값을 전달한다.
+    getattr 은 facade 자체 속성(from-import 재-익스포트 포함)에 없을 때만
+    소유 모듈의 현재 값으로 폴백한다 — import 시점 값 사본(stale 스칼라)을
+    읽는 대신 항상 최신 값을 돌려준다.
+    """
 
     def __setattr__(self, name: str, value: object) -> None:
         for mod_name in _NEW_STATE_MODULES:
@@ -147,6 +151,18 @@ class _FacadeModule(types.ModuleType):
             if mod is not None and name in vars(mod):
                 setattr(mod, name, value)
         super().__setattr__(name, value)
+
+    def __getattr__(self, name: str) -> object:
+        # __getattr__ 은 일반 조회 실패 시에만 호출되므로 기존 재-익스포트는 그대로 동작한다.
+        if name.startswith("__"):
+            raise AttributeError(name)
+        for mod_name in _NEW_STATE_MODULES:
+            mod = sys.modules.get(mod_name)
+            if mod is not None and name in vars(mod):
+                return vars(mod)[name]
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}"
+        )
 
 
 sys.modules[__name__].__class__ = _FacadeModule

@@ -36,13 +36,13 @@ from stream_parser import (
     extract_agy_transcript_final_response,
 )
 from web_jobs import (
+    _is_task_rec_aborted,
     compute_remaining_timeout as _compute_remaining_timeout,
     remove_job_files as _remove_job_files,
 )
 from web_speech import clean_text_for_speech
 
 from web_agent_reporting import _finalize_orchestrator_completion, _notify_master_agent
-from web_jobs import _is_task_rec_aborted
 from web_runtime_state import (
     ORCHESTRATOR_ROOM_IDS,
     _active_agent_pids,
@@ -60,8 +60,11 @@ from web_runtime_state import (
 
 
 
-def _format_tool_step_info(tool_name: str, tool_input: dict) -> tuple[str, str]:
-    """도구 이름과 입력 파라미터를 원래 영어 도구명 기반의 요약 타이틀 및 상세 문자열로 변환한다."""
+def _format_tool_step_info(tool_name: str, tool_input: dict) -> dict[str, str]:
+    """도구 이름과 입력 파라미터를 원래 영어 도구명 기반의 요약 타이틀 및 상세 문자열로 변환한다.
+
+    반환: {"title": 요약 타이틀, "detail": 상세 문자열}
+    """
     summary_title = tool_name
     detail_lines: list[str] = []
     file_path = str(
@@ -164,7 +167,7 @@ def _format_tool_step_info(tool_name: str, tool_input: dict) -> tuple[str, str]:
         if detail_lines
         else (json.dumps(tool_input, ensure_ascii=False, indent=2) if tool_input else "")
     )
-    return summary_title, detail_str
+    return {"title": summary_title, "detail": detail_str}
 
 def extract_stream_events_from_line(raw_line: str) -> list[dict]:
     """stream-json 단일 라인에서 실시간 Thinking 및 Tool 상세 실행 내역을 구조화해 추출한다."""
@@ -190,12 +193,12 @@ def extract_stream_events_from_line(raw_line: str) -> list[dict]:
             elif block_type == "tool_use":
                 tool_name = block.get("name", "tool")
                 tool_input = block.get("input") or {}
-                summary_title, detail_str = _format_tool_step_info(tool_name, tool_input)
+                step_info = _format_tool_step_info(tool_name, tool_input)
                 extracted.append({
                     "kind": "tool_call",
                     "tool": tool_name,
-                    "title": summary_title,
-                    "detail": detail_str,
+                    "title": step_info["title"],
+                    "detail": step_info["detail"],
                     "status": "running",
                 })
 
@@ -223,12 +226,12 @@ def extract_stream_events_from_line(raw_line: str) -> list[dict]:
         if step_type == "tool" and state == "ACTIVE":
             tool_name = su.get("tool_name") or "tool"
             params = (su.get("tool_info") or {}).get("parameters") or {}
-            summary_title, detail_str = _format_tool_step_info(tool_name, params)
+            step_info = _format_tool_step_info(tool_name, params)
             step_item = {
                 "kind": "tool_call",
                 "tool": tool_name,
-                "title": summary_title,
-                "detail": detail_str,
+                "title": step_info["title"],
+                "detail": step_info["detail"],
                 "status": "running",
             }
             if su.get("step_index") is not None:

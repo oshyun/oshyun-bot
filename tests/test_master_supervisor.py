@@ -650,7 +650,7 @@ class TestMasterNotifyEndpoint(unittest.IsolatedAsyncioTestCase):
         import web_orchestrator
         from aiohttp.test_utils import make_mocked_request
 
-        fake_enqueue = AsyncMock(return_value=(False, 0))
+        fake_enqueue = AsyncMock(return_value={"already_running": False, "queue_size": 0})
         fake_broadcast = AsyncMock()
 
         payload = {

@@ -1045,7 +1045,9 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     if orchestrator_flag is not None:
         enqueue_kwargs["orchestrator"] = orchestrator_flag
 
-    is_already_running, q_size = await current_enqueue(**enqueue_kwargs)
+    enqueue_result = await current_enqueue(**enqueue_kwargs)
+    is_already_running = enqueue_result["already_running"]
+    q_size = enqueue_result["queue_size"]
 
     if not wait_for_result or result_future is None:
         resp_body: dict[str, Any] = {
@@ -1390,7 +1392,7 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     )
     target_sid = _room_session_ids.get(parent_agent_id) or get_session(ns=parent_ns)
 
-    is_already_running, q_size = await current_enqueue(
+    enqueue_result = await current_enqueue(
         room_id=parent_agent_id,
         user_text=message,
         is_voice_mode=False,
@@ -1399,6 +1401,8 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
         channel=channel,
         task_id=task_id,
     )
+    is_already_running = enqueue_result["already_running"]
+    q_size = enqueue_result["queue_size"]
 
     try:
         notify_summary = master_memory.format_notify_memory(
@@ -1611,7 +1615,7 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
 
         core_sid = _room_session_ids.get(CORE_ORCHESTRATOR_ROOM_ID) or get_session(ns="core_")
 
-        is_already_running, q_size = await current_enqueue(
+        enqueue_result = await current_enqueue(
             room_id=CORE_ORCHESTRATOR_ROOM_ID,
             user_text=system_prompt,
             is_voice_mode=False,
@@ -1620,6 +1624,8 @@ async def handle_task_events_callback(request: web.Request) -> web.Response:
             channel="task_report",
             task_id=task_id,
         )
+        is_already_running = enqueue_result["already_running"]
+        q_size = enqueue_result["queue_size"]
 
     await current_broadcast({
         "type": "orchestrator_task_event",

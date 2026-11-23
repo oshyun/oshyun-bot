@@ -197,7 +197,7 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
 
         async def fake_enqueue_room_turn(**kwargs):
             captured_enqueue.update(kwargs)
-            return (False, 0)
+            return {"already_running": False, "queue_size": 0}
 
         req_dispatch = DummyRequest(
             body={

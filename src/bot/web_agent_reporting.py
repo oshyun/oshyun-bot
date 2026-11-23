@@ -45,7 +45,8 @@ def mark_room_completion_reported(room_id: str | None) -> None:
     now = time.monotonic()
     _recent_reported_rooms[rid] = now
     if len(_recent_reported_rooms) > 256:
-        expired = [k for k, ts in _recent_reported_rooms.items() if now - ts > 300.0]
+        # 만료 정리 기준을 읽기 TTL(120초, is_room_completion_recently_reported 기본값)과 일치시킨다.
+        expired = [k for k, ts in _recent_reported_rooms.items() if now - ts > 120.0]
         for k in expired:
             _recent_reported_rooms.pop(k, None)
 
