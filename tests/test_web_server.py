@@ -730,7 +730,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     def test_web_static_dir_resolution(self):
         self.assertTrue(
-            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "static"))
+            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "bot", "web", "static"))
         )
 
 
@@ -931,7 +931,7 @@ class TestPwaSupport(AioHTTPTestCase):
         web_server.HIDDEN_ROOMS_FILE = test_hidden
         chat_db.HIDDEN_ROOMS_FILE = test_hidden
         web_server.CHAT_ROOMS_BACKUP_FILE = os.path.join(self.test_vault_dir, "backup.json")
-        static_dir = os.path.join(_REPO_ROOT, "src", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "web", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):
@@ -1002,7 +1002,7 @@ class TestHubApi(AioHTTPTestCase):
         chat_db.init_db(test_db, migrate_legacy=False)
         os.makedirs(web_server.CHATS_DIR, exist_ok=True)
 
-        static_dir = os.path.join(_REPO_ROOT, "src", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "web", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):

@@ -94,7 +94,7 @@ class TestPreserveActiveSteps(unittest.TestCase):
 
     def test_frontend_index_html_contains_merge_steps_and_preservation(self):
         """index.html 및 js 모듈에 도구 호출 단계 보존을 위한 mergeToolSteps 함수와 스냅샷 보호 로직이 존재하는지 검증."""
-        static_dir = os.path.join(SRC_BOT, "static")
+        static_dir = os.path.join(SRC_BOT, "bot", "web", "static")
         index_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.exists(index_path))
         parts = []

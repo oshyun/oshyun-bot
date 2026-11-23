@@ -176,7 +176,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(items[0]["prompt"], "매시 정각 점검")
 
         # 유효성 검사 실패 케이스
-        bad_cron = await self.client.patch(f"/api/schedules/{sched_id}", json={"bot.core.cron": "invalid cron"})
+        bad_cron = await self.client.patch(f"/api/schedules/{sched_id}", json={"cron": "invalid cron"})
         self.assertEqual(bad_cron.status, 400)
 
         empty_prompt = await self.client.patch(f"/api/schedules/{sched_id}", json={"prompt": "   "})
@@ -185,7 +185,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         no_fields = await self.client.patch(f"/api/schedules/{sched_id}", json={})
         self.assertEqual(no_fields.status, 400)
 
-        not_found = await self.client.patch("/api/schedules/nonexistent", json={"bot.core.cron": "0 8 * * *"})
+        not_found = await self.client.patch("/api/schedules/nonexistent", json={"cron": "0 8 * * *"})
         self.assertEqual(not_found.status, 404)
 
     async def test_burn_status_and_todo_crud(self):

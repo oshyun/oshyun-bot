@@ -24,7 +24,7 @@ class TestThreadOrchestration(unittest.TestCase):
 
         # 루트 경로 및 static 파일 경로 확인
         self.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        self.static_dir = os.path.join(self.repo_root, "src", "static")
+        self.static_dir = os.path.join(self.repo_root, "src", "bot", "web", "static")
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
@@ -107,8 +107,8 @@ class TestThreadOrchestration(unittest.TestCase):
         """하위 에이전트 완료 결과가 마스터 방으로 바이패스될 때 중복 알림이 차단되는지 검증."""
         # 바이패스 보고 코드는 web_agent_reporting.py 로 분리됨 — 두 모듈을 모두 검사
         exec_code = ""
-        for exec_py_name in ("web_execution.py", "web_agent_reporting.py"):
-            exec_py_path = os.path.join(self.repo_root, "src", exec_py_name)
+        for exec_py_name in ("execution.py", "agent_reporting.py"):
+            exec_py_path = os.path.join(self.repo_root, "src", "bot", "web", exec_py_name)
             with open(exec_py_path, "r", encoding="utf-8") as f:
                 exec_code += f.read()
         self.assertIn('"silentNotification": True', exec_code)
@@ -253,14 +253,14 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
     def test_thread_panel_autofocus_and_bypass_in_frontend_js(self):
         """rooms-ui.js 및 messages.js에 모바일 자동 포커스 방지 및 subagent_bypass 추출이 정확히 구현되었는지 검증."""
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        rooms_ui_js = os.path.join(base_dir, "src", "static", "js", "rooms-ui.js")
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "rooms-ui.js")
         with open(rooms_ui_js, "r", encoding="utf-8") as f:
             rooms_ui_content = f.read()
 
         # openThreadPanel 에서 모바일 설정 검사 가드 확인
         self.assertIn("!isTouchOrMobileDevice() || (typeof getMobileAutofocus === 'function' && getMobileAutofocus())", rooms_ui_content)
 
-        messages_js = os.path.join(base_dir, "src", "static", "js", "messages.js")
+        messages_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "messages.js")
         with open(messages_js, "r", encoding="utf-8") as f:
             messages_content = f.read()
 
@@ -271,14 +271,14 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
     def test_thread_panel_layout_and_emoji_cleanliness(self):
         """스레드 패널에서 🧵 이모지가 제거되었고, 수신된 지시 프롬프트가 실행 단계보다 최상단에 우선 배치되는지 검증."""
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        index_html_path = os.path.join(base_dir, "src", "static", "index.html")
+        index_html_path = os.path.join(base_dir, "src", "bot", "web", "static", "index.html")
         with open(index_html_path, "r", encoding="utf-8") as f:
             index_html = f.read()
 
         # index.html 에 🧵 이모지 제거 확인
         self.assertNotIn("🧵", index_html)
 
-        rooms_ui_js = os.path.join(base_dir, "src", "static", "js", "rooms-ui.js")
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "rooms-ui.js")
         with open(rooms_ui_js, "r", encoding="utf-8") as f:
             rooms_ui_content = f.read()
 
@@ -299,7 +299,7 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
     def test_thread_panel_open_resilience_and_inline_button(self):
         """완료된 하위 작업에서도 패널이 즉시 열리고, steps 복원 및 인라인 스레드 버튼이 존재하는지 검증."""
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        rooms_ui_js = os.path.join(base_dir, "src", "static", "js", "rooms-ui.js")
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "rooms-ui.js")
         with open(rooms_ui_js, "r", encoding="utf-8") as f:
             rooms_ui_content = f.read()
 
@@ -318,7 +318,7 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         # 마스터 방에서 좌측 트리 클릭 시 openThreadPanel 연동 확인
         self.assertIn("openThreadPanel(null, roomId", rooms_ui_content)
 
-        messages_js = os.path.join(base_dir, "src", "static", "js", "messages.js")
+        messages_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "messages.js")
         with open(messages_js, "r", encoding="utf-8") as f:
             messages_content = f.read()
 
@@ -329,7 +329,7 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
     def test_thread_panel_loading_freeze_prevention_and_safe_format(self):
         """rooms-ui.js 및 rooms-sync.js에서 로딩 고착 방지, safe formatTime, 마크다운 렌더링 및 예외 방어가 완전한지 검증."""
         base_dir = os.path.dirname(os.path.dirname(__file__))
-        rooms_ui_js = os.path.join(base_dir, "src", "static", "js", "rooms-ui.js")
+        rooms_ui_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "rooms-ui.js")
         with open(rooms_ui_js, "r", encoding="utf-8") as f:
             rooms_ui_content = f.read()
 
@@ -356,7 +356,7 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
         self.assertIn("하위 대화방 정보를 찾을 수 없습니다.", rooms_ui_content)
 
         # 6. rooms-sync.js 에서 스레드 패널 동기화 연동 확인
-        rooms_sync_js = os.path.join(base_dir, "src", "static", "js", "rooms-sync.js")
+        rooms_sync_js = os.path.join(base_dir, "src", "bot", "web", "static", "js", "rooms-sync.js")
         with open(rooms_sync_js, "r", encoding="utf-8") as f:
             rooms_sync_content = f.read()
 
