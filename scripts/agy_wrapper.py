@@ -14,11 +14,11 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 try:
-    import paths  # noqa: F401  # .env 로드 및 경로 해석 초기화
+    import bot.core.paths as paths  # noqa: F401  # .env 로드 및 경로 해석 초기화
 except ImportError:
     pass
 
-from agy_wrapper import main
+from bot.engine.agy_wrapper import main
 
 if __name__ == "__main__":
     sys.exit(main())

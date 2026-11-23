@@ -14,27 +14,14 @@ import uuid
 from typing import Any
 from collections.abc import Callable
 
-from agent_engine import kill_job
-from bot_logger import logger
-from master_supervisor import MASTER_PATROL_CHANNEL
-import master_tasks
+from bot.engine.agent_engine import kill_job
+from bot.core.bot_logger import logger
+from bot.master.master_supervisor import MASTER_PATROL_CHANNEL
+import bot.master.master_tasks as master_tasks
 
 
 
-from web_runtime_state import (
-    CORE_ORCHESTRATOR_ROOM_ID,
-    _active_agent_pids,
-    _active_watch_tasks,
-    _get_mod_attr,
-    _room_live_feeds,
-    _room_live_snapshots,
-    _room_queues,
-    _room_session_ids,
-    _room_workers,
-    _user_cancelled_rooms,
-    broadcast_ws_json,
-    poke_master_supervisor,
-)
+from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _user_cancelled_rooms, broadcast_ws_json, poke_master_supervisor
 
 
 
@@ -107,7 +94,7 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
     return was_running
 
 async def run_room_worker(r_key: str) -> None:
-    from web_turn_execution import execute_chat_turn  # 순환 import 회피 지연 임포트
+    from bot.web.turn_execution import execute_chat_turn  # 순환 import 회피 지연 임포트
     """특정 대화방의 대기열(FIFO)에서 순차적으로 턴을 꺼내 실행한다."""
     q = _room_queues.get(r_key)
     if q is None:

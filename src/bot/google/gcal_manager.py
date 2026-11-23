@@ -14,11 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from paths import (
-    CAL_REFRESH_TRIGGER_PATH,
-    GOOGLE_CREDENTIALS_FILE,
-    GOOGLE_TOKEN_FILE,
-)
+from bot.core.paths import CAL_REFRESH_TRIGGER_PATH, GOOGLE_CREDENTIALS_FILE, GOOGLE_TOKEN_FILE
 
 logger = logging.getLogger("oshyun-bot.gcal")
 

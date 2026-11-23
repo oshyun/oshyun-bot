@@ -8,7 +8,7 @@ import sys
 from aiohttp import web
 import edge_tts
 
-from bot_logger import logger
+from bot.core.bot_logger import logger
 
 AVAILABLE_TTS_VOICES: tuple[dict[str, str], ...] = (
     {"id": "ko-KR-SunHiNeural", "label": "선희 (여성 · 자연스러운 한국어)"},
@@ -38,7 +38,7 @@ VOICE_MODE_PROMPT_SUFFIX = (
 
 
 def _get_mod_val(attr_name: str, fallback: any) -> any:
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
     return fallback

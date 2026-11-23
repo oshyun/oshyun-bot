@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 
-from paths import WEB_LOG_FILE, WORKDIR
+from bot.core.paths import WEB_LOG_FILE, WORKDIR
 
 
 def _is_test_runner() -> bool:

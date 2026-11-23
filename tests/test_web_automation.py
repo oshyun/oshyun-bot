@@ -17,17 +17,17 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import burn_todo
-import schedules
-import web_server
+import bot.core.burn_todo as burn_todo
+import bot.core.schedules as schedules
+import bot.web.server as web_server
 
 
 class TestWebAutomationEndpoints(AioHTTPTestCase):
     async def get_application(self):
         self.test_dir = tempfile.mkdtemp()
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", os.path.join(self.test_dir, "chat.db")),
-            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self.test_dir, "master_tasks.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self.test_dir, "chat.db")),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self.test_dir, "bot.master.master_tasks.json")),
             patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self.test_dir, "web_jobs.json")),
         ]
         for p in self._patchers:
@@ -65,7 +65,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(data["items"], [])
 
         # 2. 자연어 등록
-        with patch("web_automation.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.web.automation.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {
                 "result": json.dumps({
                     "cron": "0 8 * * *",
@@ -92,7 +92,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(toggled["statusLabel"], "일시중지")
 
         # 4. 수동 즉시 실행 (POST /api/schedules/{id}/run) -> 마스터(__core__) 트리거
-        with patch("web_automation.scheduler._fire", new_callable=AsyncMock) as mock_fire:
+        with patch("bot.web.automation.scheduler._fire", new_callable=AsyncMock) as mock_fire:
             resp = await self.client.post(f"/api/schedules/{sched_id}/run")
             self.assertEqual(resp.status, 200)
             run_data = await resp.json()
@@ -176,7 +176,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(items[0]["prompt"], "매시 정각 점검")
 
         # 유효성 검사 실패 케이스
-        bad_cron = await self.client.patch(f"/api/schedules/{sched_id}", json={"cron": "invalid cron"})
+        bad_cron = await self.client.patch(f"/api/schedules/{sched_id}", json={"bot.core.cron": "invalid cron"})
         self.assertEqual(bad_cron.status, 400)
 
         empty_prompt = await self.client.patch(f"/api/schedules/{sched_id}", json={"prompt": "   "})
@@ -185,7 +185,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         no_fields = await self.client.patch(f"/api/schedules/{sched_id}", json={})
         self.assertEqual(no_fields.status, 400)
 
-        not_found = await self.client.patch("/api/schedules/nonexistent", json={"cron": "0 8 * * *"})
+        not_found = await self.client.patch("/api/schedules/nonexistent", json={"bot.core.cron": "0 8 * * *"})
         self.assertEqual(not_found.status, 404)
 
     async def test_burn_status_and_todo_crud(self):

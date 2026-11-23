@@ -17,7 +17,7 @@ import sqlite3
 import time
 from typing import Any
 
-from paths import CHAT_DB_FILE, CHAT_ROOMS_FILE, CHATS_DIR, STATE_DIR
+from bot.core.paths import CHAT_DB_FILE, CHAT_ROOMS_FILE, CHATS_DIR, STATE_DIR
 
 logger = logging.getLogger("oshyun-chat-db")
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
@@ -35,7 +35,7 @@ def _is_protected_room_id(room_id: str | None) -> bool:
     if clean in PROTECTED_ROOM_IDS:
         return True
     try:
-        import agent_configs
+        import bot.core.agent_configs as agent_configs
         return agent_configs.is_orchestrator_room(clean)
     except Exception:
         return False
@@ -1049,7 +1049,7 @@ def archive_rooms_bulk(
         protected_sids: set[str] = set()
         all_protected = set(PROTECTED_ROOM_IDS)
         try:
-            import agent_configs
+            import bot.core.agent_configs as agent_configs
             all_protected.update(agent_configs.get_orchestrator_room_ids())
         except Exception:
             pass
@@ -1253,7 +1253,7 @@ def delete_rooms_bulk(
     protected_sids: set[str] = set()
     all_protected = set(PROTECTED_ROOM_IDS)
     try:
-        import agent_configs
+        import bot.core.agent_configs as agent_configs
         all_protected.update(agent_configs.get_orchestrator_room_ids())
     except Exception:
         pass

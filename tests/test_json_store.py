@@ -13,7 +13,7 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from json_store import read_json, write_json_atomic
+from bot.core.json_store import read_json, write_json_atomic
 
 
 class TestJsonStore(unittest.TestCase):

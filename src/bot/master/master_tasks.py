@@ -31,8 +31,8 @@ import time
 import uuid
 from typing import Any
 
-from json_store import read_json, write_json_atomic
-from paths import MASTER_TASKS_FILE
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import MASTER_TASKS_FILE
 
 ACTIVE_STATUSES = ("queued", "running", "stalled")
 ATTENTION_STATUSES = ("done", "failed", "stalled", "lost")

@@ -7,7 +7,7 @@ import threading
 import time
 from typing import Any
 
-from json_store import read_json, write_json_atomic
+from bot.core.json_store import read_json, write_json_atomic
 
 _WEB_JOBS_LOCK = threading.Lock()
 

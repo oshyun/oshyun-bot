@@ -12,10 +12,10 @@ from typing import Any
 
 from aiohttp import web
 
-from bot_logger import logger
-from gmail_manager import default_gmail_manager
-from google_auth import default_google_auth
-from schedules import ensure_default_gmail_schedule
+from bot.core.bot_logger import logger
+from bot.google.gmail_manager import default_gmail_manager
+from bot.google.google_auth import default_google_auth
+from bot.core.schedules import ensure_default_gmail_schedule
 
 logger = logging.getLogger("oshyun-bot.web_google")
 

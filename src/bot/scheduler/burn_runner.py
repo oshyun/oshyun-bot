@@ -14,19 +14,10 @@ import shutil
 import time
 from typing import Any
 
-import burn_todo
-from agent_engine import (
-    detached_pid_alive,
-    format_token_usage,
-    get_agy_usage_data,
-    get_engine,
-    get_model,
-    get_supported_efforts,
-    spawn_agent,
-    watch_agent,
-)
-from json_store import read_json, write_json_atomic
-from paths import BURN_STATE_FILE, JOBS_DIR, ROOT_DIR, WORKDIR
+import bot.core.burn_todo as burn_todo
+from bot.engine.agent_engine import detached_pid_alive, format_token_usage, get_agy_usage_data, get_engine, get_model, get_supported_efforts, spawn_agent, watch_agent
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import BURN_STATE_FILE, JOBS_DIR, ROOT_DIR, WORKDIR
 
 logger = logging.getLogger("oshyun-bot.burn_runner")
 

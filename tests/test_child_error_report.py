@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import child_error_report as cer
-import web_execution
-import web_server
+import bot.core.child_error_report as cer
+import bot.web.execution as web_execution
+import bot.web.server as web_server
 from contextlib import ExitStack
 
 MODELS = {"claude-sonnet-5-5": "Sonnet 5.5", "gemini-3.8-flash": "Flash 3.8"}

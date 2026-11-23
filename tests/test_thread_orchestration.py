@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, patch
 # src/bot 경로 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
 
-import chat_db
-import web_execution
+import bot.core.chat_db as chat_db
+import bot.web.execution as web_execution
 
 
 class TestThreadOrchestration(unittest.TestCase):

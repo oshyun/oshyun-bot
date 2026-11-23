@@ -11,14 +11,14 @@ import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import bot_logger
-import chat_db
-import engine_settings
-import master_supervisor
-import master_tasks
-import stream_parser
-import web_execution
-import web_server
+import bot.core.bot_logger as bot_logger
+import bot.core.chat_db as chat_db
+import bot.engine.engine_settings as engine_settings
+import bot.master.master_supervisor as master_supervisor
+import bot.master.master_tasks as master_tasks
+import bot.engine.stream_parser as stream_parser
+import bot.web.execution as web_execution
+import bot.web.server as web_server
 
 
 class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
@@ -34,7 +34,7 @@ class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
         os.makedirs(self.jobs_dir, exist_ok=True)
         chat_db.init_db(self.db_path, migrate_legacy=False)
 
-        self.patch_tasks = patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file)
+        self.patch_tasks = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
         self.patch_memory = patch(
             "master_memory.MASTER_MEMORY_FILE",
             os.path.join(self.tmp_dir, "master_memory.json"),
@@ -43,7 +43,7 @@ class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
         self.patch_server_jobs = patch.object(web_server, "WEB_JOBS_FILE", self.web_jobs_file)
         self.patch_jobs_dir = patch.object(web_execution, "JOBS_DIR", self.jobs_dir)
         self.patch_server_jobs_dir = patch.object(web_server, "JOBS_DIR", self.jobs_dir)
-        self.patch_db = patch("chat_db.CHAT_DB_FILE", self.db_path)
+        self.patch_db = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
         self.patch_settings = patch(
             "engine_settings._SETTINGS_FILE",
             os.path.join(self.tmp_dir, "bot_settings.json"),
@@ -56,7 +56,7 @@ class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
             "bot_logger.BOT_LOG_PATH",
             os.path.join(self.tmp_dir, "bot-log.md"),
         )
-        self.patch_run_vault_log = patch("bot_logger._run_vault_log", AsyncMock())
+        self.patch_run_vault_log = patch("bot.core.bot_logger._run_vault_log", AsyncMock())
         for p in (
             self.patch_tasks,
             self.patch_memory,
@@ -486,7 +486,7 @@ class TestMasterSupervisorGracefulReconciliation(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.tasks_file = os.path.join(self.tmp_dir, "master_tasks.json")
-        self.patch_tasks = patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file)
+        self.patch_tasks = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
         self.patch_tasks.start()
 
     def tearDown(self):

@@ -16,8 +16,8 @@ _SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import usage_pricing
-import web_server
+import bot.engine.usage_pricing as usage_pricing
+import bot.web.server as web_server
 
 
 class TestUsagePricingHelpers(unittest.TestCase):
@@ -129,8 +129,8 @@ class TestUsageEndpoints(AioHTTPTestCase):
     async def get_application(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
-            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "master_tasks.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "bot.master.master_tasks.json")),
             patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
         ]
         for p in self._patchers:
@@ -159,7 +159,7 @@ class TestUsageEndpoints(AioHTTPTestCase):
             }
             usage_pricing._save_cached_quota(data, cache_file=cache_file)
 
-            with patch("usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
+            with patch("bot.engine.usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
                 resp = await self.client.request("GET", "/api/usage")
                 self.assertEqual(resp.status, 200)
                 body = await resp.json()
@@ -180,7 +180,7 @@ class TestUsageEndpoints(AioHTTPTestCase):
             }
             usage_pricing._save_cached_quota(data, cache_file=cache_file)
 
-            with patch("usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
+            with patch("bot.engine.usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
                 payload = web_server.build_status_payload()
                 self.assertIn("usage", payload)
                 self.assertIsNotNone(payload["usage"])

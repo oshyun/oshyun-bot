@@ -24,26 +24,15 @@ from typing import Any
 
 from aiohttp import web
 
-import agent_configs
-from agent_engine import (
-    get_effort,
-    get_engine,
-    get_model,
-    get_session,
-    set_session,
-)
-from bot_logger import logger
-from master_supervisor import MasterSupervisor
-from paths import WEB_JOBS_FILE
-from web_auth import WEB_TOKEN
+import bot.core.agent_configs as agent_configs
+from bot.engine.agent_engine import get_effort, get_engine, get_model, get_session, set_session
+from bot.core.bot_logger import logger
+from bot.master.master_supervisor import MasterSupervisor
+from bot.core.paths import WEB_JOBS_FILE
+from bot.web.auth import WEB_TOKEN
 
 # 룸 ID 상수는 agent_configs(빌트인 에이전트 정의 SSOT)에서 가져온다.
-from agent_configs import (
-    CORE_ORCHESTRATOR_ROOM_ID,
-    EXPERT_CODING_ROOM_ID,
-    EXPERT_GENERAL_ROOM_ID,
-    EXPERT_VAULT_ROOM_ID,
-)
+from bot.core.agent_configs import CORE_ORCHESTRATOR_ROOM_ID, EXPERT_CODING_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID
 
 # 타이틀 상수는 agent_configs 의 AGENTS dict 리터럴 값과 동일하지만 상수로
 # 노출되어 있지 않아 여기서 정의한다(출처: agent_configs.AGENTS[*].title).
@@ -134,7 +123,7 @@ def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
     """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
     if hasattr(fallback, "assert_called") or hasattr(fallback, "_mock_return_value") or hasattr(fallback, "mock_calls"):
         return fallback
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
     return fallback

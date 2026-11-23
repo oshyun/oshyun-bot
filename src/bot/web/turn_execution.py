@@ -18,74 +18,22 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
-import agent_configs
-import chat_db
-import child_error_report
-from agent_engine import (
-    AGY_DEFAULT_MODEL,
-    check_and_reset_if_idle,
-    clear_session,
-    fmt_cost,
-    get_coding_mode,
-    get_effort,
-    get_engine,
-    get_model,
-    get_session,
-    is_quota_exhausted_error,
-    is_session_stale_error,
-    set_model,
-    set_session,
-    spawn_agent,
-    update_last_activity,
-    watch_agent,
-)
-from bot_logger import logger, vault_log
-from master_supervisor import MASTER_PATROL_CHANNEL
-import master_memory
-import master_tasks
-from paths import (
-    CODEDIR,
-    DEFAULT_SSL_CERT_FILE,
-    JOBS_DIR,
-    WORKDIR,
-    child_default_workdir,
-)
-from stream_parser import (
-    _EMPTY_OUTPUT_TEXT,
-    _NO_RESULT_TEXT,
-    extract_agy_transcript_final_response,
-)
-from web_speech import VOICE_MODE_PROMPT_SUFFIX, clean_text_for_speech
+import bot.core.agent_configs as agent_configs
+import bot.core.chat_db as chat_db
+import bot.core.child_error_report as child_error_report
+from bot.engine.agent_engine import AGY_DEFAULT_MODEL, check_and_reset_if_idle, clear_session, fmt_cost, get_coding_mode, get_effort, get_engine, get_model, get_session, is_quota_exhausted_error, is_session_stale_error, set_model, set_session, spawn_agent, update_last_activity, watch_agent
+from bot.core.bot_logger import logger, vault_log
+from bot.master.master_supervisor import MASTER_PATROL_CHANNEL
+import bot.master.master_memory as master_memory
+import bot.master.master_tasks as master_tasks
+from bot.core.paths import CODEDIR, DEFAULT_SSL_CERT_FILE, JOBS_DIR, WORKDIR, child_default_workdir
+from bot.engine.stream_parser import _EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, extract_agy_transcript_final_response
+from bot.web.speech import VOICE_MODE_PROMPT_SUFFIX, clean_text_for_speech
 
-from web_agent_reporting import _finalize_orchestrator_completion
-from web_runtime_state import (
-    CORE_ORCHESTRATOR_ROOM_ID,
-    CORE_ORCHESTRATOR_TITLE,
-    EXPERT_CODING_ROOM_ID,
-    EXPERT_CODING_TITLE,
-    EXPERT_GENERAL_ROOM_ID,
-    EXPERT_GENERAL_TITLE,
-    EXPERT_VAULT_ROOM_ID,
-    EXPERT_VAULT_TITLE,
-    IDLE_RESET_SECONDS,
-    ORCHESTRATOR_ROOM_IDS,
-    WEB_PORT,
-    WEB_TOKEN,
-    _active_agent_pids,
-    _active_watch_tasks,
-    _get_mod_attr,
-    _room_live_feeds,
-    _room_live_snapshots,
-    _is_orchestrator_room_id,
-    _room_session_ids,
-    _should_sync_global_session,
-    _user_cancelled_rooms,
-    broadcast_ws_json,
-    poke_master_supervisor,
-    is_shutting_down,
-)
-from web_job_recovery import _remove_web_job, _save_web_job
-from web_stream_watch import _run_stream_tail_loop
+from bot.web.agent_reporting import _finalize_orchestrator_completion
+from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_TITLE, EXPERT_CODING_ROOM_ID, EXPERT_CODING_TITLE, EXPERT_GENERAL_ROOM_ID, EXPERT_GENERAL_TITLE, EXPERT_VAULT_ROOM_ID, EXPERT_VAULT_TITLE, IDLE_RESET_SECONDS, ORCHESTRATOR_ROOM_IDS, WEB_PORT, WEB_TOKEN, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _is_orchestrator_room_id, _room_session_ids, _should_sync_global_session, _user_cancelled_rooms, broadcast_ws_json, poke_master_supervisor, is_shutting_down
+from bot.web.job_recovery import _remove_web_job, _save_web_job
+from bot.web.stream_watch import _run_stream_tail_loop
 
 
 
@@ -125,7 +73,7 @@ async def execute_chat_turn(
         session_namespace = str(agent_cfg["sessionNamespace"])
     else:
         session_namespace = "coding_" if is_coding else ""
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     curr_workdir = getattr(mod, "WORKDIR", WORKDIR) if mod else WORKDIR
     curr_codedir = getattr(mod, "CODEDIR", CODEDIR) if mod else CODEDIR
     if agent_cfg and agent_cfg.get("workdir"):
@@ -147,11 +95,7 @@ async def execute_chat_turn(
     current_update_last_activity = _get_mod_attr("update_last_activity", update_last_activity)
     current_vault_log = _get_mod_attr("vault_log", vault_log)
 
-    from web_rooms import (
-        _append_room_message,
-        _update_room_metadata,
-        _load_hidden_rooms,
-    )
+    from bot.web.rooms import _append_room_message, _update_room_metadata, _load_hidden_rooms
 
     room_db = current_chat_db.get_room(room_key) if room_key != "__default__" else None
     room_model = (room_db.get("model") if room_db else None) or None

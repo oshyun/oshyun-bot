@@ -7,15 +7,10 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from engine_drivers import (
-    _FALLBACK_EXPERT_CODING_PROMPT,
-    _FALLBACK_EXPERT_VAULT_PROMPT,
-    _FALLBACK_ORCHESTRATOR_PROMPT,
-    _load_instruction_file,
-)
-import web_execution
+from bot.engine.engine_drivers import _FALLBACK_EXPERT_CODING_PROMPT, _FALLBACK_EXPERT_VAULT_PROMPT, _FALLBACK_ORCHESTRATOR_PROMPT, _load_instruction_file
+import bot.web.execution as web_execution
 try:
-    import web_server
+    import bot.web.server as web_server
 except ImportError:
     web_server = None
 

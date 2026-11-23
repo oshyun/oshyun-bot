@@ -13,7 +13,7 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from google_auth import DEFAULT_GOOGLE_SCOPES, GoogleAuthManager
+from bot.google.google_auth import DEFAULT_GOOGLE_SCOPES, GoogleAuthManager
 
 
 class TestGoogleAuthManager(unittest.TestCase):

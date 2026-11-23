@@ -10,8 +10,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from json_store import read_json, write_json_atomic
-from paths import SCHEDULES_FILE
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import SCHEDULES_FILE
 
 
 def list_all() -> list[dict]:

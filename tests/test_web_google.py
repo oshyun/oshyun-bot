@@ -16,9 +16,9 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from google_auth import GoogleAuthManager
-from gmail_manager import GmailManager
-import web_google
+from bot.google.google_auth import GoogleAuthManager
+from bot.google.gmail_manager import GmailManager
+import bot.web.google as web_google
 
 
 class TestWebGoogleEndpoints(AioHTTPTestCase):
@@ -155,7 +155,7 @@ class TestWebGoogleEndpoints(AioHTTPTestCase):
             self.assertEqual(data["result"]["totalCount"], 5)
 
     async def test_schedules_ensure_gmail(self):
-        with patch("web_google.ensure_default_gmail_schedule", return_value={"id": "gmail-auto", "cron": "0 8 * * *"}):
+        with patch("bot.web.google.ensure_default_gmail_schedule", return_value={"id": "gmail-auto", "bot.core.cron": "0 8 * * *"}):
             res = await self.client.post("/api/schedules/ensure-gmail", json={"cron": "0 8 * * *"})
             self.assertEqual(res.status, 200)
             data = await res.json()

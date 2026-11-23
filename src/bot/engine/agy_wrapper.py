@@ -106,7 +106,7 @@ def _default_callback_url() -> str:
     port = os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765"
     proto = "http"
     try:
-        from paths import DEFAULT_SSL_CERT_FILE
+        from bot.core.paths import DEFAULT_SSL_CERT_FILE
 
         ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(
             DEFAULT_SSL_CERT_FILE

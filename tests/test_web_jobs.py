@@ -14,8 +14,8 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import web_execution
-import web_jobs
+import bot.web.execution as web_execution
+import bot.web.jobs as web_jobs
 
 
 class TestWebJobs(unittest.TestCase):

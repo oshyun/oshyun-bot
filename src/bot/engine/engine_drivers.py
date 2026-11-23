@@ -11,21 +11,9 @@ import sys
 from abc import ABC, abstractmethod
 from typing import Awaitable, Callable
 
-from engine_sandbox import (
-    _AGENT_INSTALL_DIR,
-    _HOME,
-    SANDBOX_ENABLED,
-    _resolve_claude_bin,
-    _sandbox_prefix,
-)
-from paths import (
-    AGENT_HOME_DIR as _AGENT_HOME_DIR,
-    AGENT_TMP_DIR as _AGENT_TMP_DIR,
-    INSTRUCTIONS_DIR as _INSTRUCTIONS_DIR,
-    LOGS_DIR as _LOGS_DIR,
-    ROOT_DIR as _ROOT_DIR,
-)
-from usage_pricing import _resolve_agy_bin, get_cached_agy_usage
+from bot.engine.engine_sandbox import _AGENT_INSTALL_DIR, _HOME, SANDBOX_ENABLED, _resolve_claude_bin, _sandbox_prefix
+from bot.core.paths import AGENT_HOME_DIR as _AGENT_HOME_DIR, AGENT_TMP_DIR as _AGENT_TMP_DIR, INSTRUCTIONS_DIR as _INSTRUCTIONS_DIR, LOGS_DIR as _LOGS_DIR, ROOT_DIR as _ROOT_DIR
+from bot.engine.usage_pricing import _resolve_agy_bin, get_cached_agy_usage
 
 ProgressCb = Callable[[str], Awaitable[None]]
 
@@ -165,7 +153,7 @@ def _resolve_system_prompt(
 
     if target_agent_id:
         try:
-            import agent_configs
+            import bot.core.agent_configs as agent_configs
             cfg = agent_configs.get_agent_config(target_agent_id)
             if cfg and cfg.get("systemPrompt"):
                 common_content = _load_instruction_file("common")
@@ -596,7 +584,7 @@ class AGYEngine(BaseEngine):
         )
         if target_agent_id:
             try:
-                import agent_configs
+                import bot.core.agent_configs as agent_configs
                 rt_dir = agent_configs.get_runtime_instruction_dir(target_agent_id)
                 if rt_dir and os.path.isdir(rt_dir):
                     mode_dir = rt_dir
@@ -666,7 +654,7 @@ ENGINE_REGISTRY: dict[str, BaseEngine] = {
 def get_engine_instance(engine: str | None = None) -> BaseEngine:
     eng = engine
     if not eng:
-        mod = sys.modules.get("engine_settings") or sys.modules.get("agent_engine")
+        mod = sys.modules.get("bot.engine.engine_settings") or sys.modules.get("bot.engine.agent_engine")
         if mod and hasattr(mod, "get_engine"):
             eng = mod.get_engine()
     if not eng or eng not in ENGINE_REGISTRY:

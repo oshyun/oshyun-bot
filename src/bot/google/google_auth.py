@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any
 
-from paths import GOOGLE_CREDENTIALS_FILE, GOOGLE_TOKEN_FILE
+from bot.core.paths import GOOGLE_CREDENTIALS_FILE, GOOGLE_TOKEN_FILE
 
 logger = logging.getLogger("oshyun-bot.google_auth")
 
@@ -75,7 +75,7 @@ class GoogleAuthManager:
 
     def _save_credentials(self, creds: Any) -> None:
         """Credentials 객체를 token.json 파일로 원자적 저장."""
-        from json_store import write_json_atomic
+        from bot.core.json_store import write_json_atomic
 
         token_dir = os.path.dirname(os.path.abspath(self.token_file))
         os.makedirs(token_dir, exist_ok=True)
@@ -89,7 +89,7 @@ class GoogleAuthManager:
 
     def save_credentials_file(self, content: dict | str) -> bool:
         """사용자가 업로드하거나 입력한 client credentials를 파일로 저장."""
-        from json_store import write_json_atomic
+        from bot.core.json_store import write_json_atomic
 
         cred_dir = os.path.dirname(os.path.abspath(self.credentials_file))
         os.makedirs(cred_dir, exist_ok=True)

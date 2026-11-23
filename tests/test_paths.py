@@ -11,7 +11,7 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import paths
+import bot.core.paths as paths
 
 
 class TestPaths(unittest.TestCase):

@@ -37,8 +37,8 @@ import time
 import uuid
 from typing import Any
 
-from json_store import read_json, write_json_atomic
-from paths import MASTER_MEMORY_FILE
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import MASTER_MEMORY_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def normalize_agent_id(agent_id: str | None = None) -> str:
         if slug:
             return f"custom_{slug}"
     try:
-        import agent_configs
+        import bot.core.agent_configs as agent_configs
         cfg = agent_configs.get_agent_config(raw)
         if cfg and cfg.get("memoryScope"):
             return str(cfg["memoryScope"])
@@ -1566,7 +1566,7 @@ def _try_merge_report_unlocked(
 
 async def _run_flash_low_summary(raw_text: str, *, kind: str, title: str) -> str:
     """경량 모델(flash low)로 원문을 개행 없는 1문장 핵심 요약으로 압축한다."""
-    from agy_wrapper import run_agy_cli
+    from bot.engine.agy_wrapper import run_agy_cli
 
     prompt = (
         "다음 마스터 에이전트 기억을 메모리 저장용으로 핵심 팩트·결론·수치·파일명만 남겨 "
@@ -2229,7 +2229,7 @@ async def _run_flash_low_rebalance_batch(
     """flash low 모델 1회 호출로 후보 항목들의 핵심 요약 및 적정 계층(hot/warm/cold/freeze)을 판단한다."""
     if not candidates:
         return {}
-    from agy_wrapper import run_agy_cli
+    from bot.engine.agy_wrapper import run_agy_cli
 
     compact_payload = [
         {

@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import chat_db
-import master_memory
+import bot.core.chat_db as chat_db
+import bot.master.master_memory as master_memory
 
 
 class TestExpertAgentsHierarchy(unittest.TestCase):

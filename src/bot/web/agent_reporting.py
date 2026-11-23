@@ -15,23 +15,15 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-import agent_configs
-import chat_db
-import child_error_report
-from bot_logger import logger
-import master_memory
-import master_tasks
+import bot.core.agent_configs as agent_configs
+import bot.core.chat_db as chat_db
+import bot.core.child_error_report as child_error_report
+from bot.core.bot_logger import logger
+import bot.master.master_memory as master_memory
+import bot.master.master_tasks as master_tasks
 
-from web_jobs import _is_task_rec_aborted
-from web_runtime_state import (
-    CORE_ORCHESTRATOR_ROOM_ID,
-    EXPERT_CODING_ROOM_ID,
-    EXPERT_GENERAL_ROOM_ID,
-    EXPERT_VAULT_ROOM_ID,
-    _get_mod_attr,
-    _is_orchestrator_room_id,
-    broadcast_ws_json,
-)
+from bot.web.jobs import _is_task_rec_aborted
+from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, EXPERT_CODING_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, _get_mod_attr, _is_orchestrator_room_id, broadcast_ws_json
 
 
 
@@ -198,7 +190,7 @@ async def _notify_master_agent(
     effort: str | None = None,
 ) -> None:
     """하위 작업 완료/중단 시 부모 에이전트(마스터 또는 담당 전문가) 방에 결과를 직접 바이패스 삽입하고 사용자에게 표출한다."""
-    from web_room_queue import enqueue_room_turn  # 순환 import 회피 지연 임포트
+    from bot.web.room_queue import enqueue_room_turn  # 순환 import 회피 지연 임포트
     if _is_orchestrator_room_id(room_id):
         return
     if task_id and not master_tasks.claim_report(task_id):
@@ -227,7 +219,7 @@ async def _notify_master_agent(
         room_title = raw_title.strip()
     else:
         try:
-            from web_rooms import _load_chat_rooms_index
+            from bot.web.rooms import _load_chat_rooms_index
             rooms = _load_chat_rooms_index()
             for r in rooms:
                 if isinstance(r, dict) and r.get("id") == room_id:
@@ -355,7 +347,7 @@ async def _notify_master_agent(
                 model = raw_m if isinstance(raw_m, str) else None
                 effort = raw_e if isinstance(raw_e, str) else None
             try:
-                import engine_settings
+                import bot.engine.engine_settings as engine_settings
                 allowed = engine_settings.get_all_model_labels()
             except Exception:
                 allowed = {}

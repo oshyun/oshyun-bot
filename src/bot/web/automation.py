@@ -14,15 +14,15 @@ from typing import Any
 
 from aiohttp import web
 
-import burn_runner
-import burn_todo
-import cron as cron_mod
-import scheduler
-import schedules
-from agent_engine import run_agent
-from bot_logger import logger, vault_log
-from paths import WORKDIR
-from web_execution import broadcast_ws_json
+import bot.scheduler.burn_runner as burn_runner
+import bot.core.burn_todo as burn_todo
+import bot.core.cron as cron_mod
+import bot.scheduler.scheduler as scheduler
+import bot.core.schedules as schedules
+from bot.engine.agent_engine import run_agent
+from bot.core.bot_logger import logger, vault_log
+from bot.core.paths import WORKDIR
+from bot.web.execution import broadcast_ws_json
 
 _NL_TO_CRON_PROMPT = (
     "다음 사용자의 정기 작업 요청을 5필드 cron 식과 실행 프롬프트, 한 줄 설명으로 변환하라.\n"
@@ -261,7 +261,7 @@ async def handle_schedules_run(request: web.Request) -> web.Response:
             status=404,
         )
 
-    from web_server import _notify_web_chat, _trigger_schedule_in_master
+    from bot.web.server import _notify_web_chat, _trigger_schedule_in_master
 
     extra_args = [x for x in (os.getenv("AGENT_EXTRA_ARGS", "")).split() if x]
     timeout = int(os.getenv("AGENT_TIMEOUT", "0"))
@@ -363,7 +363,7 @@ async def handle_burn_run(request: web.Request) -> web.Response:
     body = await _read_json_body(request)
     task_id = str(body.get("taskId") or "").strip() or None
 
-    from web_server import _notify_web_chat
+    from bot.web.server import _notify_web_chat
 
     async def _run_and_notify() -> None:
         try:

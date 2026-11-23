@@ -15,56 +15,20 @@ import os
 import time
 from typing import Any
 
-import chat_db
-from agent_engine import (
-    detached_pid_alive,
-    get_effort,
-    get_engine,
-    get_model,
-    kill_job,
-    watch_agent,
-)
-from bot_logger import logger
-from json_store import read_json, write_json_atomic
-from master_supervisor import MASTER_PATROL_CHANNEL
-import master_tasks
-from paths import JOBS_DIR
-from stream_parser import (
-    _EMPTY_OUTPUT_TEXT,
-    _NO_RESULT_TEXT,
-    extract_agy_transcript_final_response,
-)
-from web_jobs import (
-    _is_task_rec_aborted,
-    extract_steps_from_jsonl as _extract_steps_from_jsonl,
-    load_web_jobs as _load_web_jobs_from_file,
-    remove_job_files as _remove_job_files,
-    remove_web_job as _remove_web_job_from_file,
-    save_web_job as _save_web_job_to_file,
-    sweep_orphan_job_files as _sweep_orphan_job_files,
-)
+import bot.core.chat_db as chat_db
+from bot.engine.agent_engine import detached_pid_alive, get_effort, get_engine, get_model, kill_job, watch_agent
+from bot.core.bot_logger import logger
+from bot.core.json_store import read_json, write_json_atomic
+from bot.master.master_supervisor import MASTER_PATROL_CHANNEL
+import bot.master.master_tasks as master_tasks
+from bot.core.paths import JOBS_DIR
+from bot.engine.stream_parser import _EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, extract_agy_transcript_final_response
+from bot.web.jobs import _is_task_rec_aborted, extract_steps_from_jsonl as _extract_steps_from_jsonl, load_web_jobs as _load_web_jobs_from_file, remove_job_files as _remove_job_files, remove_web_job as _remove_web_job_from_file, save_web_job as _save_web_job_to_file, sweep_orphan_job_files as _sweep_orphan_job_files
 
-from web_agent_reporting import _notify_master_agent
-from web_room_queue import enqueue_room_turn
-from web_stream_watch import _watch_and_finish_web_job, extract_stream_events_from_line
-from web_runtime_state import (
-    ORCHESTRATOR_ROOM_IDS,
-    WEB_JOBS_FILE,
-    _active_agent_pids,
-    _active_watch_tasks,
-    _get_mod_attr,
-    _room_live_feeds,
-    _room_live_snapshots,
-    _room_queues,
-    _room_session_ids,
-    _room_workers,
-    _sync_global_session_if_needed,
-    _user_cancelled_rooms,
-    broadcast_ws_json,
-    build_active_runs_payload,
-    poke_master_supervisor,
-    is_shutting_down,
-)
+from bot.web.agent_reporting import _notify_master_agent
+from bot.web.room_queue import enqueue_room_turn
+from bot.web.stream_watch import _watch_and_finish_web_job, extract_stream_events_from_line
+from bot.web.runtime_state import ORCHESTRATOR_ROOM_IDS, WEB_JOBS_FILE, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _sync_global_session_if_needed, _user_cancelled_rooms, broadcast_ws_json, build_active_runs_payload, poke_master_supervisor, is_shutting_down
 
 
 
@@ -181,7 +145,7 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
 
     current_watch_agent = _get_mod_attr("watch_agent", watch_agent)
     current_chat_db = _get_mod_attr("chat_db", chat_db)
-    from web_rooms import _load_hidden_rooms, _update_room_metadata
+    from bot.web.rooms import _load_hidden_rooms, _update_room_metadata
 
     hidden = _load_hidden_rooms()
     if room_id not in ORCHESTRATOR_ROOM_IDS and (
@@ -395,7 +359,7 @@ async def _recover_web_jobs() -> None:
     # 복구 후 남은 활성 웹 작업 + 실행 중인 버닝 세션 ID를 보호하면서 오래된 고아 파일만 정리
     active_ids = set(_load_web_jobs().keys())
     try:
-        import burn_todo
+        import bot.core.burn_todo as burn_todo
         for t in burn_todo.list_all():
             if t.get("status") == "running" and t.get("session_id"):
                 active_ids.add(str(t["session_id"]))

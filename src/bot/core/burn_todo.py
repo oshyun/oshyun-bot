@@ -10,8 +10,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from json_store import read_json, write_json_atomic
-from paths import BURN_TODO_FILE
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import BURN_TODO_FILE
 
 # 기본 개선 작업 프리셋
 DEFAULT_BURN_TASKS: list[dict[str, Any]] = [

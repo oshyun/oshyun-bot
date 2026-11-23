@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import stream_parser
+import bot.engine.stream_parser as stream_parser
 
 
 class TestStreamParser(unittest.TestCase):

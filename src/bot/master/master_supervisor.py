@@ -30,9 +30,9 @@ import os
 import time
 from typing import Any
 
-import master_memory
-import master_tasks
-from bot_logger import logger
+import bot.master.master_memory as master_memory
+import bot.master.master_tasks as master_tasks
+from bot.core.bot_logger import logger
 
 CORE_ROOM_ID = "__core__"
 MASTER_PATROL_CHANNEL = "master_patrol"

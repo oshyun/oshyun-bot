@@ -15,7 +15,7 @@ _SRC = os.path.join(_ROOT, "src", "bot")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from gcal_manager import GoogleCalendarManager
+from bot.google.gcal_manager import GoogleCalendarManager
 
 
 def main() -> int:

@@ -10,9 +10,9 @@ import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import master_memory
-import master_supervisor
-import master_tasks
+import bot.master.master_memory as master_memory
+import bot.master.master_supervisor as master_supervisor
+import bot.master.master_tasks as master_tasks
 
 
 class TestMasterTasksLedger(unittest.TestCase):
@@ -22,8 +22,8 @@ class TestMasterTasksLedger(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.tasks_file = os.path.join(self.tmp_dir, "master_tasks.json")
         self.memory_file = os.path.join(self.tmp_dir, "master_memory.json")
-        self.patcher = patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file)
-        self.memory_patcher = patch("master_memory.MASTER_MEMORY_FILE", self.memory_file)
+        self.patcher = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
+        self.memory_patcher = patch("bot.master.master_memory.MASTER_MEMORY_FILE", self.memory_file)
         self.patcher.start()
         self.memory_patcher.start()
 
@@ -192,8 +192,8 @@ class TestMasterSupervisorLogic(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.tasks_file = os.path.join(self.tmp_dir, "master_tasks.json")
         self.memory_file = os.path.join(self.tmp_dir, "master_memory.json")
-        self.patcher = patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file)
-        self.memory_patcher = patch("master_memory.MASTER_MEMORY_FILE", self.memory_file)
+        self.patcher = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
+        self.memory_patcher = patch("bot.master.master_memory.MASTER_MEMORY_FILE", self.memory_file)
         self.patcher.start()
         self.memory_patcher.start()
 
@@ -449,8 +449,8 @@ class TestMasterSupervisorAsync(unittest.IsolatedAsyncioTestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.tasks_file = os.path.join(self.tmp_dir, "master_tasks.json")
         self.memory_file = os.path.join(self.tmp_dir, "master_memory.json")
-        self.patcher = patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file)
-        self.memory_patcher = patch("master_memory.MASTER_MEMORY_FILE", self.memory_file)
+        self.patcher = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
+        self.memory_patcher = patch("bot.master.master_memory.MASTER_MEMORY_FILE", self.memory_file)
         self.patcher.start()
         self.memory_patcher.start()
 
@@ -647,7 +647,7 @@ class TestMasterNotifyEndpoint(unittest.IsolatedAsyncioTestCase):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     async def test_handle_orchestrator_notify_enqueues_core_turn(self):
-        import web_orchestrator
+        import bot.web.orchestrator as web_orchestrator
         from aiohttp.test_utils import make_mocked_request
 
         fake_enqueue = AsyncMock(return_value={"already_running": False, "queue_size": 0})
@@ -662,7 +662,7 @@ class TestMasterNotifyEndpoint(unittest.IsolatedAsyncioTestCase):
         req = make_mocked_request("POST", "/api/orchestrator/notify")
         req.json = AsyncMock(return_value=payload)
 
-        with patch("web_orchestrator._get_mod_attr") as mock_attr:
+        with patch("bot.web.orchestrator._get_mod_attr") as mock_attr:
             def side_effect(name, fallback):
                 if name == "enqueue_room_turn":
                     return fake_enqueue
@@ -691,8 +691,8 @@ class TestAsyncReportSafetyNet(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
-        self.patcher = patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self.tmp_dir, "master_tasks.json"))
-        self.memory_patcher = patch("master_memory.MASTER_MEMORY_FILE", os.path.join(self.tmp_dir, "master_memory.json"))
+        self.patcher = patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self.tmp_dir, "bot.master.master_tasks.json"))
+        self.memory_patcher = patch("bot.master.master_memory.MASTER_MEMORY_FILE", os.path.join(self.tmp_dir, "bot.master.master_memory.json"))
         self.patcher.start()
         self.memory_patcher.start()
 

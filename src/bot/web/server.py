@@ -29,255 +29,49 @@ os.environ.setdefault("AIOHTTP_NOSENDFILE", "1")
 from aiohttp import WSMsgType, web, web_fileresponse
 web_fileresponse.NOSENDFILE = True
 
-import burn_runner
-import chat_db
-import scheduler
-import schedules
-from bot_logger import logger, setup_web_logger, vault_log
-from master_supervisor import (
-    CORE_ROOM_ID,
-    MASTER_PATROL_CHANNEL,
-    MasterSupervisor,
-)
-from paths import (
-    ATTACHED_FILES_DIR,
-    CHATS_DIR,
-    CHAT_ROOMS_FILE,
-    CODEDIR,
-    DEFAULT_SSL_CERT_FILE,
-    DEFAULT_SSL_KEY_FILE,
-    JOBS_DIR,
-    LOGS_DIR,
-    MASTER_STATE_FILE,
-    ROOT_DIR,
-    SESSION_LOG_FILE,
-    STATE_DIR,
-    WEB_JOBS_FILE,
-    WORKDIR,
-)
+import bot.scheduler.burn_runner as burn_runner
+import bot.core.chat_db as chat_db
+import bot.scheduler.scheduler as scheduler
+import bot.core.schedules as schedules
+from bot.core.bot_logger import logger, setup_web_logger, vault_log
+from bot.master.master_supervisor import CORE_ROOM_ID, MASTER_PATROL_CHANNEL, MasterSupervisor
+from bot.core.paths import ATTACHED_FILES_DIR, CHATS_DIR, CHAT_ROOMS_FILE, CODEDIR, DEFAULT_SSL_CERT_FILE, DEFAULT_SSL_KEY_FILE, JOBS_DIR, LOGS_DIR, MASTER_STATE_FILE, ROOT_DIR, SESSION_LOG_FILE, STATE_DIR, WEB_JOBS_FILE, WORKDIR
 
 CHAT_ROOMS_BACKUP_FILE = os.path.join(STATE_DIR, "chat_rooms_backup.json")
 
 # ── agent_engine 심볼 Re-export (테스트 mock 호환용) ──────────────────────
-import agent_engine
-from agent_engine import (
-    AGY_DEFAULT_MODEL,
-    ENGINE_LABELS,
-    ENGINES,
-    check_and_reset_if_idle,
-    clear_session,
-    delete_session_files,
-    detached_pid_alive,
-    fmt_cost,
-    get_coding_mode,
-    get_effort,
-    get_engine,
-    get_model,
-    get_model_candidates,
-    get_model_labels,
-    get_session,
-    get_supported_efforts,
-    get_cached_agy_usage,
-    refresh_agy_quota_cache,
-    is_quota_exhausted_error,
-    is_session_stale_error,
-    kill_job,
-    set_coding_mode,
-    set_effort,
-    set_engine,
-    set_model,
-    set_session,
-    spawn_agent,
-    update_last_activity,
-    watch_agent,
-)
+import bot.engine.agent_engine as agent_engine
+from bot.engine.agent_engine import AGY_DEFAULT_MODEL, ENGINE_LABELS, ENGINES, check_and_reset_if_idle, clear_session, delete_session_files, detached_pid_alive, fmt_cost, get_coding_mode, get_effort, get_engine, get_model, get_model_candidates, get_model_labels, get_session, get_supported_efforts, get_cached_agy_usage, refresh_agy_quota_cache, is_quota_exhausted_error, is_session_stale_error, kill_job, set_coding_mode, set_effort, set_engine, set_model, set_session, spawn_agent, update_last_activity, watch_agent
 
 # ── 서브모듈 심볼 Re-export (100% 하위 호환성 보장) ───────────────────────
-import web_auth
-from web_auth import (
-    AUTH_COOKIE_NAME,
-    AUTH_DELAY_SECONDS,
-    AUTH_LOCKOUT_DURATION_SECONDS,
-    AUTH_LOCKOUT_WINDOW_SECONDS,
-    AUTH_MAX_FAILURES,
-    AUTH_SESSION_SECRET,
-    AUTH_SESSION_TTL_SECONDS,
-    WEB_AUTH_REQUIRED,
-    WEB_TOKEN,
-    _create_session_cookie_value,
-    _failed_auth_attempts,
-    _get_client_ip,
-    _is_authenticated,
-    _is_ip_locked,
-    _record_failed_attempt,
-    _redirect_response,
-    _reset_failed_attempts,
-    _verify_session_cookie,
-    _verify_token,
-    auth_middleware,
-    cors_middleware,
-    handle_login_page,
-    handle_login_submit,
-    handle_logout,
-    render_login_page,
-)
+import bot.web.auth as web_auth
+from bot.web.auth import AUTH_COOKIE_NAME, AUTH_DELAY_SECONDS, AUTH_LOCKOUT_DURATION_SECONDS, AUTH_LOCKOUT_WINDOW_SECONDS, AUTH_MAX_FAILURES, AUTH_SESSION_SECRET, AUTH_SESSION_TTL_SECONDS, WEB_AUTH_REQUIRED, WEB_TOKEN, _create_session_cookie_value, _failed_auth_attempts, _get_client_ip, _is_authenticated, _is_ip_locked, _record_failed_attempt, _redirect_response, _reset_failed_attempts, _verify_session_cookie, _verify_token, auth_middleware, cors_middleware, handle_login_page, handle_login_submit, handle_logout, render_login_page
 
-import web_speech
-from web_speech import (
-    AVAILABLE_TTS_VOICES,
-    DEFAULT_TTS_MODE,
-    DEFAULT_TTS_VOICE,
-    VALID_TTS_MODES,
-    VALID_TTS_VOICE_IDS,
-    VOICE_MODE_PROMPT_SUFFIX,
-    _current_tts_mode,
-    _current_tts_voice,
-    clean_text_for_speech,
-    deduplicate_speech_text,
-    handle_tts,
-    synthesize_edge_tts_mp3,
-)
+import bot.web.speech as web_speech
+from bot.web.speech import AVAILABLE_TTS_VOICES, DEFAULT_TTS_MODE, DEFAULT_TTS_VOICE, VALID_TTS_MODES, VALID_TTS_VOICE_IDS, VOICE_MODE_PROMPT_SUFFIX, _current_tts_mode, _current_tts_voice, clean_text_for_speech, deduplicate_speech_text, handle_tts, synthesize_edge_tts_mp3
 
-import web_vault
-from web_vault import (
-    ALLOWED_NOTE_EXTENSIONS,
-    EXCLUDED_DIR_NAMES,
-    _build_directory_tree,
-    _resolve_vault_absolute_path,
-    handle_vault_create_file,
-    handle_vault_get_file,
-    handle_vault_recent,
-    handle_vault_save_file,
-    handle_vault_tree,
-)
+import bot.web.vault as web_vault
+from bot.web.vault import ALLOWED_NOTE_EXTENSIONS, EXCLUDED_DIR_NAMES, _build_directory_tree, _resolve_vault_absolute_path, handle_vault_create_file, handle_vault_get_file, handle_vault_recent, handle_vault_save_file, handle_vault_tree
 
-import web_google
-from web_google import (
-    handle_gmail_status,
-    handle_gmail_sync,
-    handle_google_auth_callback,
-    handle_google_auth_code,
-    handle_google_auth_url,
-    handle_google_credentials,
-    handle_google_disconnect,
-    handle_google_status,
-    handle_schedules_ensure_gmail,
-)
-from google_auth import default_google_auth
+import bot.web.google as web_google
+from bot.web.google import handle_gmail_status, handle_gmail_sync, handle_google_auth_callback, handle_google_auth_code, handle_google_auth_url, handle_google_credentials, handle_google_disconnect, handle_google_status, handle_schedules_ensure_gmail
+from bot.google.google_auth import default_google_auth
 
-import web_execution
-import web_runtime_state
-from web_execution import (
-    _active_agent_pids,
-    _active_watch_tasks,
-    _connected_websockets,
-    _format_tool_step_info,
-    _last_chat_requests,
-    _load_web_jobs,
-    _master_supervisor,
-    _master_supervisor_task,
-    _recover_single_web_job,
-    _recover_web_jobs,
-    _remove_web_job,
-    _room_live_feeds,
-    _room_live_snapshots,
-    _room_queues,
-    _room_session_ids,
-    _room_workers,
-    _save_web_job,
-    _serialize_live_run_entry,
-    _user_cancelled_rooms,
-    _watch_and_finish_web_job,
-    _zombie_reaper_task,
-    broadcast_ws_json,
-    build_active_runs_payload,
-    cancel_active_run,
-    enqueue_room_turn,
-    execute_chat_turn,
-    extract_stream_events_from_line,
-    get_live_run_for_room,
-    run_room_worker,
-)
+import bot.web.execution as web_execution
+import bot.web.runtime_state as web_runtime_state
+from bot.web.execution import _active_agent_pids, _active_watch_tasks, _connected_websockets, _format_tool_step_info, _last_chat_requests, _load_web_jobs, _master_supervisor, _master_supervisor_task, _recover_single_web_job, _recover_web_jobs, _remove_web_job, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _save_web_job, _serialize_live_run_entry, _user_cancelled_rooms, _watch_and_finish_web_job, _zombie_reaper_task, broadcast_ws_json, build_active_runs_payload, cancel_active_run, enqueue_room_turn, execute_chat_turn, extract_stream_events_from_line, get_live_run_for_room, run_room_worker
 
-import web_automation
-from web_automation import (
-    handle_burn_run,
-    handle_burn_status,
-    handle_burn_todo_create,
-    handle_burn_todo_delete,
-    handle_schedules_create,
-    handle_schedules_delete,
-    handle_schedules_list,
-    handle_schedules_run,
-    handle_schedules_update,
-)
-import web_rooms
-from web_rooms import (
-    CORE_ORCHESTRATOR_ROOM_ID,
-    CORE_ORCHESTRATOR_TITLE,
-    HIDDEN_ROOMS_FILE,
-    _append_room_message,
-    _get_room_chat_file,
-    _load_chat_rooms_backup,
-    _load_chat_rooms_index,
-    _load_hidden_rooms,
-    _load_room_messages,
-    _normalize_room_ts,
-    _save_chat_rooms_backup,
-    _save_chat_rooms_index,
-    _save_hidden_room,
-    _save_hidden_rooms,
-    _update_room_metadata,
-    handle_api_delete_session,
-    handle_api_rename_room,
-    handle_api_room_settings,
-    handle_api_upload,
-    handle_chat_history,
-    handle_chat_rooms,
-    handle_chat_rooms_backup,
-    handle_chat_rooms_backup_save,
-    handle_get_attachment,
-    handle_archive_chat_room,
-    handle_batch_archive_chat_rooms,
-    handle_search_chat_rooms,
-)
+import bot.web.automation as web_automation
+from bot.web.automation import handle_burn_run, handle_burn_status, handle_burn_todo_create, handle_burn_todo_delete, handle_schedules_create, handle_schedules_delete, handle_schedules_list, handle_schedules_run, handle_schedules_update
+import bot.web.rooms as web_rooms
+from bot.web.rooms import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_TITLE, HIDDEN_ROOMS_FILE, _append_room_message, _get_room_chat_file, _load_chat_rooms_backup, _load_chat_rooms_index, _load_hidden_rooms, _load_room_messages, _normalize_room_ts, _save_chat_rooms_backup, _save_chat_rooms_index, _save_hidden_room, _save_hidden_rooms, _update_room_metadata, handle_api_delete_session, handle_api_rename_room, handle_api_room_settings, handle_api_upload, handle_chat_history, handle_chat_rooms, handle_chat_rooms_backup, handle_chat_rooms_backup_save, handle_get_attachment, handle_archive_chat_room, handle_batch_archive_chat_rooms, handle_search_chat_rooms
 
-import agent_configs
-import web_orchestrator
-from web_orchestrator import (
-    _WebServerSupervisorHost,
-    _find_similar_orchestrator_room,
-    _format_updated_at,
-    _inspect_agy_brain,
-    _is_room_currently_running,
-    _resolve_orchestrator_target_room,
-    ensure_core_orchestrator_room,
-    handle_orchestrator_agent_delete,
-    handle_orchestrator_agent_preview,
-    handle_orchestrator_agent_upsert,
-    handle_orchestrator_agents_get,
-    handle_orchestrator_archive_session,
-    handle_orchestrator_dispatch,
-    handle_orchestrator_graph,
-    handle_orchestrator_memory_get,
-    handle_orchestrator_memory_post,
-    handle_orchestrator_skill_post,
-    handle_orchestrator_notify,
-    handle_orchestrator_patrol_trigger,
-    handle_orchestrator_read,
-    handle_orchestrator_reset,
-    handle_orchestrator_sessions,
-    handle_orchestrator_summaries,
-    handle_orchestrator_summary_update,
-    handle_orchestrator_room_mark_read,
-    handle_orchestrator_task_update,
-    handle_orchestrator_tasks,
-    handle_task_events_callback,
-    reset_core_orchestrator_state,
-)
+import bot.core.agent_configs as agent_configs
+import bot.web.orchestrator as web_orchestrator
+from bot.web.orchestrator import _WebServerSupervisorHost, _find_similar_orchestrator_room, _format_updated_at, _inspect_agy_brain, _is_room_currently_running, _resolve_orchestrator_target_room, ensure_core_orchestrator_room, handle_orchestrator_agent_delete, handle_orchestrator_agent_preview, handle_orchestrator_agent_upsert, handle_orchestrator_agents_get, handle_orchestrator_archive_session, handle_orchestrator_dispatch, handle_orchestrator_graph, handle_orchestrator_memory_get, handle_orchestrator_memory_post, handle_orchestrator_skill_post, handle_orchestrator_notify, handle_orchestrator_patrol_trigger, handle_orchestrator_read, handle_orchestrator_reset, handle_orchestrator_sessions, handle_orchestrator_summaries, handle_orchestrator_summary_update, handle_orchestrator_room_mark_read, handle_orchestrator_task_update, handle_orchestrator_tasks, handle_task_events_callback, reset_core_orchestrator_state
 
-import web_ws
-from web_ws import handle_websocket
+import bot.web.ws as web_ws
+from bot.web.ws import handle_websocket
 
 # ── 웹 서버 기본 설정 ─────────────────────────────────────────────────────
 WEB_ENABLED = os.getenv("WEB_ENABLED", os.getenv("VOICE_WEB_ENABLED", "1")).strip() != "0"

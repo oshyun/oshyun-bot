@@ -13,14 +13,14 @@ import uuid
 
 from aiohttp import web
 
-import agent_configs
-import chat_db
-from agent_engine import clear_session, delete_session_files, kill_job
-from bot_logger import logger, vault_log
-from engine_settings import get_coding_mode
-import paths
-from paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
-from web_runtime_state import _get_mod_attr, get_master_supervisor
+import bot.core.agent_configs as agent_configs
+import bot.core.chat_db as chat_db
+from bot.engine.agent_engine import clear_session, delete_session_files, kill_job
+from bot.core.bot_logger import logger, vault_log
+from bot.engine.engine_settings import get_coding_mode
+import bot.core.paths as paths
+from bot.core.paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
+from bot.web.runtime_state import _get_mod_attr, get_master_supervisor
 
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -208,7 +208,7 @@ def _load_room_messages(room_id: str) -> list[dict]:
         msgs = current_chat_db.get_messages(clean_rid)
         if _is_orchestrator_room_id(clean_rid) and msgs:
             try:
-                import web_orchestrator
+                import bot.web.orchestrator as web_orchestrator
                 for m in msgs:
                     if m.get("role") == "assistant" or m.get("sender") == "assistant":
                         chips = web_orchestrator.extract_delegated_subagents(
@@ -440,7 +440,7 @@ def _load_chat_rooms_index() -> list[dict]:
 
     # 실행 중인 활성 키 집합 조회
     active_keys: set[str] = set()
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if mod:
         for attr in ("_active_watch_tasks", "_active_agent_pids", "_room_queues", "_room_live_snapshots"):
             d = getattr(mod, attr, None)
@@ -591,7 +591,7 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
     for k in all_target_keys:
         if cancel_run_fn:
             cancel_run_fn(k)
-        mod = sys.modules.get("web_server")
+        mod = sys.modules.get("bot.web.server")
         if mod and hasattr(mod, "_room_session_ids"):
             mod._room_session_ids.pop(k, None)
 
@@ -614,7 +614,7 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
     if hideable_keys:
         _save_hidden_rooms(hideable_keys)
 
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if CORE_ORCHESTRATOR_ROOM_ID in all_target_keys:
         clear_session(ns="core_")
         if mod and hasattr(mod, "_room_session_ids"):
@@ -641,7 +641,7 @@ async def handle_api_delete_session(request: web.Request) -> web.Response:
 
         # 2-1. 마스터 위임 작업 원장에서도 삭제된 대화방 작업 자동 종결
         try:
-            import master_tasks
+            import bot.master.master_tasks as master_tasks
             master_tasks.handle_rooms_deleted(all_target_keys)
         except Exception:
             pass
@@ -916,7 +916,7 @@ async def handle_chat_rooms(_request: web.Request) -> web.Response:
     """GET /api/chat/rooms — 우리 앱 전용 대화방 목록 반환 (초고속 단일 진실 원천 SSOT)."""
     current_load_index = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
     rooms = current_load_index()
-    import web_execution
+    import bot.web.execution as web_execution
     build_payload_fn = _get_mod_attr("build_active_runs_payload", web_execution.build_active_runs_payload)
     return web.json_response({
         "ok": True,
@@ -969,7 +969,7 @@ async def handle_chat_history(request: web.Request) -> web.Response:
             if not messages and matched.get("messages"):
                 messages = matched.get("messages")
 
-    import web_execution
+    import bot.web.execution as web_execution
     get_live_run_fn = _get_mod_attr("get_live_run_for_room", web_execution.get_live_run_for_room)
     live_run = get_live_run_fn(resolved_room_id) or get_live_run_fn(room_id)
     if messages:

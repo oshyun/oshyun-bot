@@ -14,10 +14,10 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-from bot_logger import logger, vault_log
-from google_auth import GoogleAuthManager, default_google_auth
-from json_store import read_json, write_json_atomic
-from paths import GMAIL_SYNC_STATE_FILE, GMAIL_VAULT_FILE
+from bot.core.bot_logger import logger, vault_log
+from bot.google.google_auth import GoogleAuthManager, default_google_auth
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import GMAIL_SYNC_STATE_FILE, GMAIL_VAULT_FILE
 
 _GMAIL_BASE_URL = "https://mail.google.com/mail/u/0/#inbox"
 

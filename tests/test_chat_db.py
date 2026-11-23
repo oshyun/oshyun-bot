@@ -9,7 +9,7 @@ _SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import chat_db
+import bot.core.chat_db as chat_db
 
 
 class TestChatDb(unittest.TestCase):
@@ -420,11 +420,11 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         import copy
         import json
         from unittest.mock import patch
-        import engine_settings
+        import bot.engine.engine_settings as engine_settings
 
         settings_file = os.path.join(self.tmp_dir, "bot_settings.json")
         orig_settings = copy.deepcopy(engine_settings._settings)
-        with patch("engine_settings._SETTINGS_FILE", settings_file):
+        with patch("bot.engine.engine_settings._SETTINGS_FILE", settings_file):
             try:
                 with open(settings_file, "w", encoding="utf-8") as f:
                     json.dump({"engine": "agy", "agy_session_id": "tg-old"}, f)

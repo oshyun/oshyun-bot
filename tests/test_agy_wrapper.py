@@ -23,15 +23,15 @@ _SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import agy_wrapper
-import bot_logger
-import chat_db
-import engine_settings
-import master_tasks
-import stream_parser
-import web_execution
-import web_orchestrator
-import web_server
+import bot.engine.agy_wrapper as agy_wrapper
+import bot.core.bot_logger as bot_logger
+import bot.core.chat_db as chat_db
+import bot.engine.engine_settings as engine_settings
+import bot.master.master_tasks as master_tasks
+import bot.engine.stream_parser as stream_parser
+import bot.web.execution as web_execution
+import bot.web.orchestrator as web_orchestrator
+import bot.web.server as web_server
 
 
 def _load_session_ctl():
@@ -145,7 +145,7 @@ class TestTokenFirewallAndInspector(unittest.IsolatedAsyncioTestCase):
                 stderr="",
             )
 
-        with patch("agy_wrapper.run_agy_cli", side_effect=fake_run_cli):
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_cli):
             insp = await agy_wrapper.run_inspector_agy(
                 objective="에러 분석",
                 criteria="원인 라인 특정",
@@ -230,7 +230,7 @@ class TestTokenFirewallAndInspector(unittest.IsolatedAsyncioTestCase):
                 "",
             ),
         ]
-        with patch("agy_wrapper.run_agy_cli", side_effect=responses) as mock_cli:
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=responses) as mock_cli:
             insp = await agy_wrapper.run_inspector_agy(
                 objective="목표",
                 criteria="기준",
@@ -296,7 +296,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
         def capture_report(url: str, payload: dict, **_kwargs):
             reports.append({"url": url, "payload": payload})
 
-        with patch("agy_wrapper.run_agy_cli", side_effect=fake_run_cli), patch(
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_cli), patch(
             "agy_wrapper.report_to_master", side_effect=capture_report
         ):
             final = await agy_wrapper.supervise_task(
@@ -346,7 +346,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
             )
 
         sent_partial: list[dict] = []
-        with patch("agy_wrapper.run_agy_cli", side_effect=fake_partial), patch(
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_partial), patch(
             "agy_wrapper.report_to_master", side_effect=lambda _u, p, **_kw: sent_partial.append(p)
         ):
             res = await agy_wrapper.supervise_task(
@@ -371,7 +371,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
             )
 
         sent_fail: list[dict] = []
-        with patch("agy_wrapper.run_agy_cli", side_effect=fake_fail), patch(
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_fail), patch(
             "agy_wrapper.report_to_master", side_effect=lambda _u, p, **_kw: sent_fail.append(p)
         ):
             res_fail = await agy_wrapper.supervise_task(
@@ -435,18 +435,18 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
                 "bot_logger.BOT_LOG_PATH",
                 os.path.join(self._tmp_dir.name, "bot-log.md"),
             ),
-            patch("bot_logger._run_vault_log", AsyncMock()),
+            patch("bot.core.bot_logger._run_vault_log", AsyncMock()),
             patch.object(web_execution, "JOBS_DIR", jobs_dir),
         ]
         for p in self._runtime_patchers:
             p.start()
         self.db_path = os.path.join(self._tmp_dir.name, "chat_cb_test.db")
-        self._db_patcher = patch("chat_db.CHAT_DB_FILE", self.db_path)
+        self._db_patcher = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
         self._db_patcher.start()
         test_hidden = os.path.join(self._tmp_dir.name, "hidden_rooms.json")
-        self._hidden_patcher = patch("web_server.HIDDEN_ROOMS_FILE", test_hidden)
+        self._hidden_patcher = patch("bot.web.server.HIDDEN_ROOMS_FILE", test_hidden)
         self._hidden_patcher.start()
-        self._chat_db_hidden_patcher = patch("chat_db.HIDDEN_ROOMS_FILE", test_hidden)
+        self._chat_db_hidden_patcher = patch("bot.core.chat_db.HIDDEN_ROOMS_FILE", test_hidden)
         self._chat_db_hidden_patcher.start()
         self._chats_dir_patcher = patch(
             "web_server.CHATS_DIR", os.path.join(self._tmp_dir.name, "chats")
@@ -462,7 +462,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
             os.path.join(self._tmp_dir.name, "chat_rooms_backup.json"),
         )
         self._rooms_backup_patcher.start()
-        self._migrate_patcher = patch("chat_db.migrate_legacy_files_if_needed")
+        self._migrate_patcher = patch("bot.core.chat_db.migrate_legacy_files_if_needed")
         self._migrate_patcher.start()
         self._tasks_patcher = patch(
             "master_tasks.MASTER_TASKS_FILE",
@@ -475,7 +475,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
         )
         self._memory_patcher.start()
         self.state_file = os.path.join(self._tmp_dir.name, "master_state.json")
-        self._state_patcher = patch("web_orchestrator.MASTER_STATE_FILE", self.state_file)
+        self._state_patcher = patch("bot.web.orchestrator.MASTER_STATE_FILE", self.state_file)
         self._state_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
         web_server.WEB_AUTH_REQUIRED = True
@@ -517,7 +517,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
                 "raw_log_path": ".agy_workspace/task_98a7f6/full.log",
             },
         }
-        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
+        with patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
             "web_server.broadcast_ws_json", new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)
@@ -560,7 +560,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
             "summary": "1차 부분 결과",
             "requires_master_intervention": False,
         }
-        with patch("web_server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
+        with patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
             "web_server.broadcast_ws_json", new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)

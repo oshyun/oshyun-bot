@@ -13,7 +13,7 @@ _SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import chat_db
+import bot.core.chat_db as chat_db
 
 
 class TestChatDbArchive(unittest.TestCase):

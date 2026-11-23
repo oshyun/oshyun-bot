@@ -12,7 +12,7 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from gcal_manager import GoogleCalendarManager, format_event_range
+from bot.google.gcal_manager import GoogleCalendarManager, format_event_range
 
 
 class TestGoogleCalendarManager(unittest.TestCase):

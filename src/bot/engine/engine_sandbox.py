@@ -10,12 +10,7 @@ import shutil
 import sys
 from typing import Any
 
-from paths import (
-    AGENT_HOME_DIR as _AGENT_HOME_DIR,
-    AGENT_TMP_DIR as _AGENT_TMP_DIR,
-    ATTACHED_FILES_DIR as _ATTACHED_FILES_DIR,
-    JOBS_DIR as _JOBS_DIR,
-)
+from bot.core.paths import AGENT_HOME_DIR as _AGENT_HOME_DIR, AGENT_TMP_DIR as _AGENT_TMP_DIR, ATTACHED_FILES_DIR as _ATTACHED_FILES_DIR, JOBS_DIR as _JOBS_DIR
 
 _HOME = os.path.expanduser("~")
 _AGENT_INSTALL_DIR = os.path.join(_HOME, ".local", "share", "claude")
@@ -98,10 +93,10 @@ def _sandbox_prefix(workdir: str) -> list[str]:
 
 
 def _get_engine_instance_helper(engine: str | None = None) -> Any:
-    mod = sys.modules.get("engine_drivers") or sys.modules.get("agent_engine")
+    mod = sys.modules.get("bot.engine.engine_drivers") or sys.modules.get("bot.engine.agent_engine")
     if mod and hasattr(mod, "get_engine_instance"):
         return mod.get_engine_instance(engine)
-    from engine_drivers import get_engine_instance
+    from bot.engine.engine_drivers import get_engine_instance
 
     return get_engine_instance(engine)
 

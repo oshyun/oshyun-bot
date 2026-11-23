@@ -31,7 +31,7 @@ _BOT_DIR = os.path.join(_ROOT, "src", "bot")
 if _BOT_DIR not in sys.path:
     sys.path.insert(0, _BOT_DIR)
 try:
-    from env_compat import sync_domain_env
+    from bot.core.env_compat import sync_domain_env
     sync_domain_env()
 except ImportError:
     pass

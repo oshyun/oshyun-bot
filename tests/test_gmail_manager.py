@@ -14,13 +14,8 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from gmail_manager import (
-    GmailManager,
-    _decode_base64_payload,
-    _extract_body_text,
-    _format_header_date,
-)
-from google_auth import GoogleAuthManager
+from bot.google.gmail_manager import GmailManager, _decode_base64_payload, _extract_body_text, _format_header_date
+from bot.google.google_auth import GoogleAuthManager
 
 
 class TestGmailManager(unittest.TestCase):

@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp.test_utils import AioHTTPTestCase
 
-import chat_db
-import engine_sandbox
-import master_supervisor
-import master_tasks
-import web_execution
-import web_server
+import bot.core.chat_db as chat_db
+import bot.engine.engine_sandbox as engine_sandbox
+import bot.master.master_supervisor as master_supervisor
+import bot.master.master_tasks as master_tasks
+import bot.web.execution as web_execution
+import bot.web.server as web_server
 
 
 class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
@@ -31,9 +31,9 @@ class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
         chat_db.init_db(self.db_path, migrate_legacy=False)
 
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", self.db_path),
-            patch("master_tasks.MASTER_TASKS_FILE", self.tasks_file),
-            patch("master_memory.MASTER_MEMORY_FILE", os.path.join(self._tmp_dir.name, "master_memory.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file),
+            patch("bot.master.master_memory.MASTER_MEMORY_FILE", os.path.join(self._tmp_dir.name, "bot.master.master_memory.json")),
             patch.object(web_execution, "WEB_JOBS_FILE", self.jobs_file),
             patch.object(web_server, "WEB_JOBS_FILE", self.jobs_file),
             patch.object(web_execution, "JOBS_DIR", self.jobs_dir),
@@ -94,7 +94,7 @@ class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
             patch.object(web_server, "update_last_activity", MagicMock()),
             patch.object(web_execution, "vault_log", MagicMock()),
             patch.object(web_server, "vault_log", MagicMock()),
-            patch("web_execution.extract_agy_transcript_final_response", return_value=None),
+            patch("bot.web.execution.extract_agy_transcript_final_response", return_value=None),
         ):
             res = await web_execution.execute_chat_turn(
                 "하위 작업 상태 확인해줘",
@@ -124,7 +124,7 @@ class TestMasterAgentErrorPrevention(unittest.IsolatedAsyncioTestCase):
             patch.object(web_server, "chat_db", mock_db),
             patch.object(web_execution, "enqueue_room_turn", enqueue_mock),
             patch.object(web_server, "enqueue_room_turn", enqueue_mock),
-            patch("web_rooms._load_chat_rooms_index", return_value=[]),
+            patch("bot.web.rooms._load_chat_rooms_index", return_value=[]),
         ):
             await web_execution._notify_master_agent(
                 "room-test-magic",
@@ -165,7 +165,7 @@ class TestWebAppTestRunnerIsolation(AioHTTPTestCase):
 
     async def get_application(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
-        self._patch_db = patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "test.db"))
+        self._patch_db = patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "test.db"))
         self._patch_db.start()
         self._orig_auth = getattr(web_server, "WEB_AUTH_REQUIRED", True)
         web_server.WEB_AUTH_REQUIRED = False

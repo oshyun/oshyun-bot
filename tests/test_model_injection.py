@@ -16,14 +16,14 @@ _SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import agent_engine
-import bot_logger
-import chat_db
-import engine_settings
-import master_tasks
-import stream_parser
-import web_execution
-import web_server
+import bot.engine.agent_engine as agent_engine
+import bot.core.bot_logger as bot_logger
+import bot.core.chat_db as chat_db
+import bot.engine.engine_settings as engine_settings
+import bot.master.master_tasks as master_tasks
+import bot.engine.stream_parser as stream_parser
+import bot.web.execution as web_execution
+import bot.web.server as web_server
 
 
 class TestModelInjection(unittest.TestCase):
@@ -47,7 +47,7 @@ class TestModelInjection(unittest.TestCase):
                 "bot_logger.BOT_LOG_PATH",
                 os.path.join(self._test_dir, "bot-log.md"),
             ),
-            patch("bot_logger._run_vault_log", AsyncMock()),
+            patch("bot.core.bot_logger._run_vault_log", AsyncMock()),
             patch(
                 "master_tasks.MASTER_TASKS_FILE",
                 os.path.join(self._test_dir, "master_tasks.json"),
@@ -162,10 +162,10 @@ class TestModelInjection(unittest.TestCase):
             return mock_proc
 
         async def run_turn():
-            with patch("web_server.spawn_agent", side_effect=fake_spawn_agent), \
-                 patch("web_server.watch_agent", new_callable=AsyncMock) as mock_watch, \
-                 patch("web_server.chat_db.add_message", return_value=123), \
-                 patch("web_server.chat_db.update_message"):
+            with patch("bot.web.server.spawn_agent", side_effect=fake_spawn_agent), \
+                 patch("bot.web.server.watch_agent", new_callable=AsyncMock) as mock_watch, \
+                 patch("bot.web.server.chat_db.add_message", return_value=123), \
+                 patch("bot.web.server.chat_db.update_message"):
                 mock_watch.return_value = {"result": "응답 완료", "session_id": "sess-new"}
                 await web_server.execute_chat_turn(
                     "안녕",
@@ -203,11 +203,11 @@ class TestModelInjection(unittest.TestCase):
                 "model": "claude-sonnet-5-5",
                 "effort": "max",
             }
-            with patch("web_server.spawn_agent", side_effect=fake_spawn_agent), \
-                 patch("web_server.watch_agent", new_callable=AsyncMock) as mock_watch, \
-                 patch("web_server.chat_db.get_room", return_value=fake_room), \
-                 patch("web_server.chat_db.add_message", return_value=124), \
-                 patch("web_server.chat_db.update_message") as mock_update_msg:
+            with patch("bot.web.server.spawn_agent", side_effect=fake_spawn_agent), \
+                 patch("bot.web.server.watch_agent", new_callable=AsyncMock) as mock_watch, \
+                 patch("bot.web.server.chat_db.get_room", return_value=fake_room), \
+                 patch("bot.web.server.chat_db.add_message", return_value=124), \
+                 patch("bot.web.server.chat_db.update_message") as mock_update_msg:
                 mock_watch.return_value = {"result": "응답 완료", "session_id": "sess-custom"}
                 await web_server.execute_chat_turn(
                     "심층 분석해줘",
@@ -238,8 +238,8 @@ class TestModelInjection(unittest.TestCase):
                 "effort": "high",
             })
 
-            with patch("web_server.chat_db.update_room") as mock_update_room, \
-                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
+            with patch("bot.web.server.chat_db.update_room") as mock_update_room, \
+                 patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
                 resp = await web_server.handle_api_room_settings(mock_request)
                 self.assertEqual(resp.status, 200)
                 mock_update_room.assert_called_once_with(
@@ -266,8 +266,8 @@ class TestModelInjection(unittest.TestCase):
                 "workdir": "/custom/path/target",
             })
 
-            with patch("web_server.chat_db.update_room") as mock_update_room, \
-                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
+            with patch("bot.web.server.chat_db.update_room") as mock_update_room, \
+                 patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
                 resp = await web_server.handle_api_room_settings(mock_request)
                 self.assertEqual(resp.status, 200)
                 mock_update_room.assert_called_once_with(
@@ -298,11 +298,11 @@ class TestModelInjection(unittest.TestCase):
                 "wait": False,
             })
 
-            with patch("web_server._resolve_orchestrator_target_room", return_value={"id": "sub-room-1", "title": "서브 룸"}), \
-                 patch("master_tasks.create_task", return_value={"id": "mt-mock-effort"}) as mock_create_task, \
-                 patch("web_server.chat_db.update_room") as mock_update_room, \
-                 patch("web_server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
-                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock):
+            with patch("bot.web.server._resolve_orchestrator_target_room", return_value={"id": "sub-room-1", "title": "서브 룸"}), \
+                 patch("bot.master.master_tasks.create_task", return_value={"id": "mt-mock-effort"}) as mock_create_task, \
+                 patch("bot.web.server.chat_db.update_room") as mock_update_room, \
+                 patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
+                 patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock):
                 mock_enqueue.return_value = {"already_running": False, "queue_size": 0}
                 resp = await web_server.handle_orchestrator_dispatch(mock_request)
                 self.assertEqual(resp.status, 200)
@@ -356,13 +356,13 @@ class TestModelInjection(unittest.TestCase):
                 "model": "claude-sonnet-5-5",
                 "effort": "medium",
             }
-            with patch("web_server.spawn_agent", side_effect=fake_spawn_agent), \
-                 patch("web_server.watch_agent", new_callable=AsyncMock) as mock_watch, \
-                 patch("web_server.chat_db.get_room", return_value=fake_room), \
-                 patch("web_server.chat_db.update_room") as mock_update_room, \
-                 patch("web_server.chat_db.add_message", return_value=500), \
-                 patch("web_server.chat_db.update_message") as mock_update_msg, \
-                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock):
+            with patch("bot.web.server.spawn_agent", side_effect=fake_spawn_agent), \
+                 patch("bot.web.server.watch_agent", new_callable=AsyncMock) as mock_watch, \
+                 patch("bot.web.server.chat_db.get_room", return_value=fake_room), \
+                 patch("bot.web.server.chat_db.update_room") as mock_update_room, \
+                 patch("bot.web.server.chat_db.add_message", return_value=500), \
+                 patch("bot.web.server.chat_db.update_message") as mock_update_msg, \
+                 patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock):
                 mock_watch.side_effect = [
                     {
                         "result": "⚠️ Individual quota reached. Resets in 123h.",
@@ -419,11 +419,11 @@ class TestModelInjection(unittest.TestCase):
                 "wait": False,
             })
 
-            with patch("web_server.chat_db.get_or_create_room") as mock_create_room, \
-                 patch("web_server.chat_db.add_message", return_value=701), \
-                 patch("master_tasks.create_task", return_value={"id": "mt-rebalance"}), \
-                 patch("web_server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
-                 patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
+            with patch("bot.web.server.chat_db.get_or_create_room") as mock_create_room, \
+                 patch("bot.web.server.chat_db.add_message", return_value=701), \
+                 patch("bot.master.master_tasks.create_task", return_value={"id": "mt-rebalance"}), \
+                 patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock) as mock_enqueue, \
+                 patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock) as mock_broadcast:
                 mock_enqueue.return_value = {"already_running": False, "queue_size": 0}
                 resp = await web_server.handle_orchestrator_dispatch(mock_request)
                 self.assertEqual(resp.status, 200)

@@ -7,8 +7,8 @@ import os
 import time
 from typing import Callable
 
-from paths import SESSION_LOG_FILE as _SESSION_LOG_FILE
-from usage_pricing import _calc_cost
+from bot.core.paths import SESSION_LOG_FILE as _SESSION_LOG_FILE
+from bot.engine.usage_pricing import _calc_cost
 
 # 빈 응답 판정용 표시 문구 — _parse_stream 이 결과 텍스트로 만들고,
 # watch_agent 가 '사실상 비었는가' 판정에 재사용한다.

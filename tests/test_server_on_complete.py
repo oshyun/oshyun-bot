@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp.test_utils import AioHTTPTestCase
 
-import agent_engine
-import web_execution
-import web_orchestrator
-import web_server
+import bot.engine.agent_engine as agent_engine
+import bot.web.execution as web_execution
+import bot.web.orchestrator as web_orchestrator
+import bot.web.server as web_server
 
 
 class TestAgentEngineWatchOnComplete(unittest.IsolatedAsyncioTestCase):
@@ -251,9 +251,9 @@ class TestOrchestratorNotifyDedupAndRouting(AioHTTPTestCase):
     async def get_application(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
-            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "master_tasks.json")),
-            patch("master_memory.MASTER_MEMORY_FILE", os.path.join(self._tmp_dir.name, "master_memory.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "bot.master.master_tasks.json")),
+            patch("bot.master.master_memory.MASTER_MEMORY_FILE", os.path.join(self._tmp_dir.name, "bot.master.master_memory.json")),
             patch.object(web_execution, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
             patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
         ]

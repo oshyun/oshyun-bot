@@ -12,7 +12,7 @@ import time
 
 from aiohttp import web
 
-from bot_logger import logger
+from bot.core.bot_logger import logger
 
 # 보안 토큰 게이트웨이 설정
 WEB_AUTH_REQUIRED = os.getenv("WEB_AUTH_REQUIRED", os.getenv("VOICE_WEB_AUTH_REQUIRED", "1")).strip() != "0"
@@ -37,7 +37,7 @@ _failed_auth_attempts: dict[str, list[float]] = {}
 
 
 def _get_mod_val(attr_name: str, fallback: any) -> any:
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if mod and hasattr(mod, attr_name):
         return getattr(mod, attr_name)
     return fallback

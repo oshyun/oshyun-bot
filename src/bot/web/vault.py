@@ -9,15 +9,15 @@ import uuid
 
 from aiohttp import web
 
-from bot_logger import vault_log
-from paths import WORKDIR
+from bot.core.bot_logger import vault_log
+from bot.core.paths import WORKDIR
 
 EXCLUDED_DIR_NAMES = frozenset({".git", ".obsidian", ".trash", ".idea", ".vscode", "node_modules"})
 ALLOWED_NOTE_EXTENSIONS = frozenset({".md", ".base", ".canvas", ".txt"})
 
 
 def _get_workdir() -> str:
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     if mod and hasattr(mod, "WORKDIR"):
         return mod.WORKDIR
     return WORKDIR
@@ -217,7 +217,7 @@ async def handle_vault_save_file(request: web.Request) -> web.Response:
     encoded_rel_path = urllib.parse.quote(target_relative_path)
     obsid_url = f"https://obsid.net/?vault={vault_name}&file={encoded_rel_path}"
 
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     vault_log_fn = getattr(mod, "vault_log", vault_log) if mod else vault_log
     vault_log_fn("📝 노트저장", f"[세컨드브레인] {target_relative_path} ({len(content_text)}자)")
     return web.json_response({
@@ -260,7 +260,7 @@ async def handle_vault_create_file(request: web.Request) -> web.Response:
     if os.path.exists(absolute_target_path):
         return web.json_response({"error": "이미 동일한 이름의 파일 또는 폴더가 존재합니다."}, status=409)
 
-    mod = sys.modules.get("web_server")
+    mod = sys.modules.get("bot.web.server")
     vault_log_fn = getattr(mod, "vault_log", vault_log) if mod else vault_log
 
     if is_directory_creation:

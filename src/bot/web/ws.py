@@ -9,14 +9,9 @@ import time
 
 from aiohttp import WSMsgType, web
 
-from agent_engine import (
-    clear_session,
-    delete_session_files,
-    get_coding_mode,
-    get_session,
-)
-from bot_logger import logger, vault_log
-from web_speech import deduplicate_speech_text
+from bot.engine.agent_engine import clear_session, delete_session_files, get_coding_mode, get_session
+from bot.core.bot_logger import logger, vault_log
+from bot.web.speech import deduplicate_speech_text
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 EXPERT_GENERAL_ROOM_ID = "__expert_general__"
@@ -33,17 +28,7 @@ ORCHESTRATOR_ROOM_IDS = (
 
 async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     """GET /ws — 실시간 대화·음성 모드·진행 상태 스트리밍·즉시 취소 WebSocket 핸들러."""
-    from web_execution import (
-        _get_mod_attr,
-        _connected_websockets,
-        _active_watch_tasks,
-        _room_queues,
-        _room_session_ids,
-        _last_chat_requests,
-        cancel_active_run,
-        broadcast_ws_json,
-        enqueue_room_turn,
-    )
+    from bot.web.execution import _get_mod_attr, _connected_websockets, _active_watch_tasks, _room_queues, _room_session_ids, _last_chat_requests, cancel_active_run, broadcast_ws_json, enqueue_room_turn
 
     websocket = web.WebSocketResponse(heartbeat=25.0)
     await websocket.prepare(request)
@@ -235,7 +220,7 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                     else:
                         target_room = None
                     if target_room in ORCHESTRATOR_ROOM_IDS or (target_room and str(target_room).startswith("__custom_")):
-                        import web_orchestrator
+                        import bot.web.orchestrator as web_orchestrator
                         reset_fn = _get_mod_attr(
                             "reset_core_orchestrator_state",
                             web_orchestrator.reset_core_orchestrator_state,

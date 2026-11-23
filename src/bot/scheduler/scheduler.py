@@ -13,9 +13,9 @@ import logging
 from datetime import datetime
 from typing import Awaitable, Callable
 
-import schedules
-from agent_engine import fmt_cost, get_agy_usage_report, get_model, run_agent
-from cron import Cron
+import bot.core.schedules as schedules
+from bot.engine.agent_engine import fmt_cost, get_agy_usage_report, get_model, run_agent
+from bot.core.cron import Cron
 
 logger = logging.getLogger("oshyun-bot.scheduler")
 
@@ -118,7 +118,7 @@ async def _fire(
     mail_report: str | None = None
     if is_gmail:
         try:
-            from gmail_manager import default_gmail_manager
+            from bot.google.gmail_manager import default_gmail_manager
 
             sync_res = default_gmail_manager.sync_to_vault()
             mail_report = (

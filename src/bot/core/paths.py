@@ -20,7 +20,7 @@ load_dotenv(os.path.join(_ROOT_DIR, ".env.defaults"))
 load_dotenv(os.path.join(_ROOT_DIR, ".env"), override=True)
 
 # 도메인 기반 환경변수(DOMAIN__KEY)와 레거시 환경변수(KEY) 간 양방향 호환 동기화
-from env_compat import sync_domain_env
+from bot.core.env_compat import sync_domain_env
 sync_domain_env()
 
 # 운영 산출물 디렉토리. DATA_DIR 로 다른 위치로 분리 가능(기본: <리포 루트>/data).
@@ -155,7 +155,7 @@ def child_default_workdir(parent_agent_id: str | None) -> str | None:
         return CODEDIR or WORKDIR
     if parent_agent_id:
         try:
-            import agent_configs
+            import bot.core.agent_configs as agent_configs
             w = agent_configs.get_agent_workdir(str(parent_agent_id).strip())
             if w:
                 return w

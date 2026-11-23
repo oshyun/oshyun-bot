@@ -32,14 +32,8 @@ import time
 import uuid
 from typing import Any
 
-from json_store import read_json, write_json_atomic
-from paths import (
-    AGENT_CONFIGS_FILE,
-    CODEDIR,
-    INSTRUCTIONS_DIR,
-    RUNTIME_INSTRUCTIONS_DIR,
-    WORKDIR,
-)
+from bot.core.json_store import read_json, write_json_atomic
+from bot.core.paths import AGENT_CONFIGS_FILE, CODEDIR, INSTRUCTIONS_DIR, RUNTIME_INSTRUCTIONS_DIR, WORKDIR
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 EXPERT_GENERAL_ROOM_ID = "__expert_general__"

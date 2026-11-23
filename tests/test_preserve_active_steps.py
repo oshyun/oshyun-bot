@@ -8,8 +8,8 @@ SRC_BOT = os.path.join(REPO_ROOT, "src", "bot")
 if SRC_BOT not in sys.path:
     sys.path.insert(0, SRC_BOT)
 
-import web_execution
-import web_rooms
+import bot.web.execution as web_execution
+import bot.web.rooms as web_rooms
 
 
 class TestPreserveActiveSteps(unittest.TestCase):

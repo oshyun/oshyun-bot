@@ -63,7 +63,7 @@ def _get_api_config() -> tuple[str, str]:
             src_bot_dir = os.path.join(os.path.dirname(script_dir), "src", "bot")
             if src_bot_dir not in sys.path:
                 sys.path.insert(0, src_bot_dir)
-            from paths import DEFAULT_SSL_CERT_FILE
+            from bot.core.paths import DEFAULT_SSL_CERT_FILE
             ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
             if ssl_enabled:
                 proto = "https"
@@ -842,7 +842,7 @@ def cmd_memory(args: argparse.Namespace) -> int:
             ]:
                 if os.path.isdir(sp) and sp not in sys.path:
                     sys.path.insert(0, sp)
-            import master_memory
+            import bot.master.master_memory as master_memory
             lim = max(1, int(getattr(args, "limit", 20)))
             if args.add:
                 op = master_memory.add_memory(

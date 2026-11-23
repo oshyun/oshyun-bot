@@ -18,45 +18,17 @@ import re
 import time
 from typing import Any
 
-import chat_db
-from agent_engine import (
-    detached_pid_alive,
-    get_effort,
-    get_engine,
-    get_model,
-    kill_job,
-    watch_agent,
-)
-from bot_logger import logger
-import master_memory
-import master_tasks
-from stream_parser import (
-    _EMPTY_OUTPUT_TEXT,
-    _NO_RESULT_TEXT,
-    extract_agy_transcript_final_response,
-)
-from web_jobs import (
-    _is_task_rec_aborted,
-    compute_remaining_timeout as _compute_remaining_timeout,
-    remove_job_files as _remove_job_files,
-)
-from web_speech import clean_text_for_speech
+import bot.core.chat_db as chat_db
+from bot.engine.agent_engine import detached_pid_alive, get_effort, get_engine, get_model, kill_job, watch_agent
+from bot.core.bot_logger import logger
+import bot.master.master_memory as master_memory
+import bot.master.master_tasks as master_tasks
+from bot.engine.stream_parser import _EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, extract_agy_transcript_final_response
+from bot.web.jobs import _is_task_rec_aborted, compute_remaining_timeout as _compute_remaining_timeout, remove_job_files as _remove_job_files
+from bot.web.speech import clean_text_for_speech
 
-from web_agent_reporting import _finalize_orchestrator_completion, _notify_master_agent
-from web_runtime_state import (
-    ORCHESTRATOR_ROOM_IDS,
-    _active_agent_pids,
-    _active_watch_tasks,
-    _get_mod_attr,
-    _room_live_feeds,
-    _room_live_snapshots,
-    _room_session_ids,
-    _sync_global_session_if_needed,
-    _user_cancelled_rooms,
-    broadcast_ws_json,
-    poke_master_supervisor,
-    is_shutting_down,
-)
+from bot.web.agent_reporting import _finalize_orchestrator_completion, _notify_master_agent
+from bot.web.runtime_state import ORCHESTRATOR_ROOM_IDS, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _room_session_ids, _sync_global_session_if_needed, _user_cancelled_rooms, broadcast_ws_json, poke_master_supervisor, is_shutting_down
 
 
 
@@ -552,7 +524,7 @@ async def _watch_and_finish_web_job(
     current_watch_agent = _get_mod_attr("watch_agent", watch_agent)
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
-    from web_rooms import _load_hidden_rooms, _update_room_metadata
+    from bot.web.rooms import _load_hidden_rooms, _update_room_metadata
 
     live_snapshot = _room_live_snapshots.get(room_id) or {"streamText": ""}
     tail_stop_event = asyncio.Event()
@@ -835,7 +807,7 @@ async def _watch_and_finish_web_job(
 
 def _remove_web_job(job_id: str) -> None:
     """web_job 레코드 제거는 영속화 모듈(web_job_recovery)로 위임한다(순환 import 회피 지연 임포트)."""
-    from web_job_recovery import _remove_web_job as _remove
+    from bot.web.job_recovery import _remove_web_job as _remove
 
     _remove(job_id)
 
