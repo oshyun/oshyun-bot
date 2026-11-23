@@ -9,6 +9,7 @@ from aiohttp import web
 import edge_tts
 
 from bot.core.bot_logger import logger
+from bot.web.runtime_state import _is_test_double
 
 AVAILABLE_TTS_VOICES: tuple[dict[str, str], ...] = (
     {"id": "ko-KR-SunHiNeural", "label": "선희 (여성 · 자연스러운 한국어)"},
@@ -38,9 +39,21 @@ VOICE_MODE_PROMPT_SUFFIX = (
 
 
 def _get_mod_val(attr_name: str, fallback: any) -> any:
+    """심볼 값을 소유 모듈(자기 자신) 우선으로 조회한다.
+
+    런타임 갱신(web_server 가 web_speech 전역에 쓰는 TTS 보이스/모드)은
+    자기 모듈 값이 항상 최신이므로 기본은 자기 모듈 전역을 읽는다. 다만
+    테스트가 bot.web.server 사본에 mock 을 놓는 경우(기존 patch 관례)를
+    존중해 server 사본이 테스트 더블이면 그것을 우선한다 — _get_mod_attr 의
+    소유 모듈 우선 + 더블 단락회로 정책과 동일한 방향.
+    """
     mod = sys.modules.get("bot.web.server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
+    server_val = getattr(mod, attr_name, None) if mod is not None else None
+    if server_val is not None and _is_test_double(server_val):
+        return server_val
+    own_val = vars(sys.modules[__name__]).get(attr_name)
+    if own_val is not None:
+        return own_val
     return fallback
 
 
