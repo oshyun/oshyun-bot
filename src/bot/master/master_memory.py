@@ -1060,7 +1060,7 @@ _RE_META_SCHEDULER_NOISE = re.compile(
 _RE_DEV_CODE_SIGNAL = re.compile(
     r"(?:\b[a-zA-Z0-9_]+\.(?:py|html|js|ts|css|sb)\b|SKILL\.md|"
     r"\b(?:ReferenceError|TypeError|SyntaxError|ValueError|KeyError|AttributeError)\b|"
-    r"\b(?:session-ctl|chat_db|web_execution|web_orchestrator|master_memory|agy_wrapper|burn_runner)\b|"
+    r"\b(?:session-ctl|chat_db|web_execution|web_orchestrator|master_memory|agy_wrapper|burn_runner|bot\.(?:core|engine|master|scheduler|google|web)\.[a-z_]+)\b|"
     r"\b[a-zA-Z_][a-zA-Z0-9_]{2,}\(\)|\btest_[a-zA-Z0-9_]+\b|"
     r"단위\s*테스트|테스트\s*통과|전수\s*통과|정적\s*자산\s*테스트|단언문|passed|"
     r"버그\s*수정|렌더링\s*(?:실패|수정)|함수\s*수정|로직\s*(?:수정|검증)|방어\s*로직|안전장치\s*적용|"

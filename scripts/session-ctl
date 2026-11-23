@@ -60,9 +60,9 @@ def _get_api_config() -> tuple[str, str]:
         proto = "http"
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            src_bot_dir = os.path.join(os.path.dirname(script_dir), "src", "bot")
-            if src_bot_dir not in sys.path:
-                sys.path.insert(0, src_bot_dir)
+            src_dir = os.path.join(os.path.dirname(script_dir), "src")
+            if src_dir not in sys.path:
+                sys.path.insert(0, src_dir)
             from bot.core.paths import DEFAULT_SSL_CERT_FILE
             ssl_enabled = os.getenv("WEB_SSL_ENABLED", "").lower() not in ("0", "false", "no") and os.path.exists(DEFAULT_SSL_CERT_FILE)
             if ssl_enabled:
@@ -838,7 +838,7 @@ def cmd_memory(args: argparse.Namespace) -> int:
                 os.path.join(repo_root, ".venv", "lib", "python3.9", "site-packages"),
                 os.path.join(repo_root, ".venv", "lib", "python3.10", "site-packages"),
                 os.path.join(repo_root, ".venv", "lib", "python3.11", "site-packages"),
-                os.path.join(repo_root, "src", "bot"),
+                os.path.join(repo_root, "src"),
             ]:
                 if os.path.isdir(sp) and sp not in sys.path:
                     sys.path.insert(0, sp)

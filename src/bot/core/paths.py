@@ -11,8 +11,8 @@ import os
 
 from dotenv import load_dotenv
 
-# 이 모듈은 src/bot/ 하위 → 두 단계 위가 리포 루트.
-_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 이 모듈은 src/bot/core/ 하위 → 네 단계 위가 리포 루트.
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 ROOT_DIR = _ROOT_DIR
 # 기본값을 먼저 채우고 .env 가 전부 덮어쓴다 — 셸 common.sh 의 source 순서와 같은 단순 규칙.
 # DATA_DIR 로 경로가 달라질 수 있으므로 경로 계산 전에 로드한다.

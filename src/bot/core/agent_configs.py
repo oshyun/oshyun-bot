@@ -157,7 +157,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "childPromptTemplate": (
                 "[봇개발 하위 워커 동작 규칙]\n"
                 "1. 반드시 고유 `git worktree`를 생성하여 격리된 환경에서 코드를 수정하라 (`main` 직접 수정 절대 금지).\n"
-                "2. 작업 전후 단위 테스트(`PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests`)를 실행해 전수 통과를 확인하라.\n"
+                "2. 작업 전후 단위 테스트(`PYTHONPATH=src .venv/bin/python3 -m unittest discover -s tests`)를 실행해 전수 통과를 확인하라.\n"
                 "3. 구현 완료 후 `/simplify` 정리, `main` 병합, 워크트리 제거, 필요한 서비스 재시작 및 `git push origin main` 후 변경 파일·테스트 결과를 요약 보고하라."
             ),
             "injectChildTemplate": True,

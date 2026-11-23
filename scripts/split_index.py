@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""src/bot/static/index.html을 css/*.css, js/*.js로 무손실 분리하는 스크립트."""
+"""src/bot/web/static/index.html을 css/*.css, js/*.js로 무손실 분리하는 스크립트."""
 
 from __future__ import annotations
 
@@ -91,8 +91,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Split monolithic index.html into css/* and js/*")
     parser.add_argument(
         "--target",
-        default="src/bot/static/index.html",
-        help="대상 index.html 경로 (기본: src/bot/static/index.html)",
+        default="src/bot/web/static/index.html",
+        help="대상 index.html 경로 (기본: src/bot/web/static/index.html)",
     )
     parser.add_argument("--version", default="1", help="캐시 무효화 쿼리 버전 (?v=N)")
     parser.add_argument("--dry-run", action="store_true", help="파일을 쓰지 않고 라인 수만 미리 확인")

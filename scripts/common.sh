@@ -79,7 +79,7 @@ done
 
 PY="${PROJECT_ROOT}/.venv/bin/python"
 # 운영 산출물(로그/PID/세션/첨부) 디렉토리. DATA_DIR 로 리포 밖으로 분리 가능(기본: <루트>/data).
-# 파이썬 src/bot/paths.py 와 같은 규칙.
+# 파이썬 src/bot/core/paths.py 와 같은 규칙.
 DATA_DIR="${DATA_DIR:-${PROJECT_ROOT}/data}"
 LOGS_DIR="${DATA_DIR}/logs"
 

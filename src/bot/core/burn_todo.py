@@ -21,7 +21,7 @@ DEFAULT_BURN_TASKS: list[dict[str, Any]] = [
         "category": "test",
         "workdir_type": "repo",  # repo (워크트리에서 코드 개선) or vault (볼트 개선)
         "prompt": (
-            "src/bot/ 디렉토리의 핵심 모듈(tg_format.py, cron.py, json_store.py, paths.py 등)에 대한 "
+            "src/bot/ 디렉토리의 핵심 모듈(cron.py, json_store.py, paths.py 등)에 대한 "
             "pytest 단위 테스트를 tests/ 디렉토리에 작성하거나 보강해줘. "
             "독립적으로 실행 가능한 테스트여야 하며, 외부 API 의존성은 mock 처리해. "
             "작업 완료 후 반드시 pytest 를 실행해 통과하는지 검증하고 변경사항을 커밋해줘."
@@ -34,11 +34,11 @@ DEFAULT_BURN_TASKS: list[dict[str, Any]] = [
     },
     {
         "id": "burn-refactor-audit",
-        "title": "비대 모듈(telegram_bot.py/agent_engine.py) 복잡도 분석 및 리팩토링",
+        "title": "비대 모듈(master_memory.py/orchestrator.py) 복잡도 분석 및 리팩토링",
         "category": "refactor",
         "workdir_type": "repo",
         "prompt": (
-            "src/bot/telegram_bot.py 와 agent_engine.py 의 비대해진 함수와 중복 로직을 분석해줘. "
+            "src/bot/master/master_memory.py 와 src/bot/web/orchestrator.py 의 비대해진 함수와 중복 로직을 분석해줘. "
             "안전하게 분리할 수 있는 헬퍼 함수나 서브 모듈을 추출하고, 기존 기능이 깨지지 않도록 리팩토링해줘. "
             "문법 오류가 없는지 `python3 -m py_compile ...` 로 검증하고 요약 리포트를 커밋 메시지에 남겨줘."
         ),
@@ -70,7 +70,7 @@ DEFAULT_BURN_TASKS: list[dict[str, Any]] = [
         "category": "security",
         "workdir_type": "repo",
         "prompt": (
-            "src/bot/sandbox.sb 파일의 Seatbelt 샌드박스 정책과 paths.py, agent_engine.py 의 경로 처리 로직을 점검해줘. "
+            "src/bot/engine/sandbox.sb 파일의 Seatbelt 샌드박스 정책과 core/paths.py, engine/agent_engine.py 의 경로 처리 로직을 점검해줘. "
             "의도치 않은 홈 디렉토리 접근이나 파일 유출 가능성이 있는지 정적 분석하고, "
             "보안 분석 보고서(docs/security-audit.md)를 작성하거나 정책을 보강해줘."
         ),

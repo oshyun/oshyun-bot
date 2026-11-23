@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""agy_wrapper.py — `src/bot/agy_wrapper.py` 실행 진입점."""
+"""agy_wrapper.py — `bot.engine.agy_wrapper` 실행 진입점."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR = os.path.dirname(_SCRIPT_DIR)
-_SRC_DIR = os.path.join(_ROOT_DIR, "src", "bot")
+_SRC_DIR = os.path.join(_ROOT_DIR, "src")
 
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
