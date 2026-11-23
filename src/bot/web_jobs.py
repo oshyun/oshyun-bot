@@ -12,6 +12,17 @@ from json_store import read_json, write_json_atomic
 _WEB_JOBS_LOCK = threading.Lock()
 
 
+def _is_task_rec_aborted(rec: Any) -> bool:
+    """작업 레코드가 명시적으로 중단/취소되었는지 안전하게 판별한다(Mocking 내성)."""
+    if not isinstance(rec, dict):
+        return False
+    return bool(
+        rec.get("user_cancelled")
+        or rec.get("user_confirmed")
+        or rec.get("status") == "cancelled"
+    )
+
+
 def load_web_jobs(jobs_file: str) -> dict[str, Any]:
     """진행 중인 웹 비서 job 레코드를 읽어온다."""
     with _WEB_JOBS_LOCK:

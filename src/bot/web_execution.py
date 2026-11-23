@@ -56,7 +56,6 @@ from web_agent_reporting import (  # noqa: F401
 # ── web_room_queue 로 이전된 심볼 재-익스포트(호환 facade) ──
 from web_room_queue import (  # noqa: F401
     cancel_active_run,
-    _is_task_rec_aborted,
     run_room_worker,
     is_room_busy,
     enqueue_room_turn,

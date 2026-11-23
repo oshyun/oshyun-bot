@@ -106,16 +106,6 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
         poke_master_supervisor()
     return was_running
 
-def _is_task_rec_aborted(rec: Any) -> bool:
-    """작업 레코드가 명시적으로 중단/취소되었는지 안전하게 판별한다(Mocking 내성)."""
-    if not isinstance(rec, dict):
-        return False
-    return bool(
-        rec.get("user_cancelled")
-        or rec.get("user_confirmed")
-        or rec.get("status") == "cancelled"
-    )
-
 async def run_room_worker(r_key: str) -> None:
     from web_turn_execution import execute_chat_turn  # 순환 import 회피 지연 임포트
     """특정 대화방의 대기열(FIFO)에서 순차적으로 턴을 꺼내 실행한다."""

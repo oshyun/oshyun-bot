@@ -84,6 +84,7 @@ from web_runtime_state import (
     poke_master_supervisor,
     is_shutting_down,
 )
+from web_job_recovery import _remove_web_job, _save_web_job
 from web_stream_watch import _run_stream_tail_loop
 
 
@@ -969,16 +970,3 @@ async def execute_chat_turn(
         "elapsedSeconds": elapsed_seconds,
         "steps": collected_steps,
     }
-
-def _save_web_job(job_id: str, rec: dict) -> None:
-    """job 레코드 저장은 영속화 모듈(web_job_recovery)로 위임한다(순환 import 회피 지연 임포트)."""
-    from web_job_recovery import _save_web_job as _save
-
-    _save(job_id, rec)
-
-
-def _remove_web_job(job_id: str) -> None:
-    """web_job 레코드 제거는 영속화 모듈(web_job_recovery)로 위임한다(순환 import 회피용 지연 임포트)."""
-    from web_job_recovery import _remove_web_job as _remove
-
-    _remove(job_id)

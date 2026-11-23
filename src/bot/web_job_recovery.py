@@ -35,6 +35,7 @@ from stream_parser import (
     extract_agy_transcript_final_response,
 )
 from web_jobs import (
+    _is_task_rec_aborted,
     extract_steps_from_jsonl as _extract_steps_from_jsonl,
     load_web_jobs as _load_web_jobs_from_file,
     remove_job_files as _remove_job_files,
@@ -125,13 +126,6 @@ def persist_pending_room_turns() -> int:
         write_json_atomic(_get_web_pending_turns_file(), pending)
         logger.info("[web_jobs] 종료 시 대기열 미실행 턴 %d건 영속화 완료", len(pending))
     return len(pending)
-
-def _is_task_rec_aborted(rec: Any) -> bool:
-    """작업 레코드 중단 판별은 web_room_queue 로 위임한다(순환 import 회피 지연 임포트)."""
-    from web_room_queue import _is_task_rec_aborted as _fn
-
-    return _fn(rec)
-
 
 async def _restore_pending_room_turns() -> None:
     """서버 기동 시 이전에 영속화된 대기열 턴을 다시 큐에 적재한다."""

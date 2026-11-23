@@ -42,6 +42,7 @@ from web_jobs import (
 from web_speech import clean_text_for_speech
 
 from web_agent_reporting import _finalize_orchestrator_completion, _notify_master_agent
+from web_jobs import _is_task_rec_aborted
 from web_runtime_state import (
     ORCHESTRATOR_ROOM_IDS,
     _active_agent_pids,
@@ -836,8 +837,3 @@ def _remove_web_job(job_id: str) -> None:
     _remove(job_id)
 
 
-def _is_task_rec_aborted(rec: Any) -> bool:
-    """작업 레코드 중단 판별은 web_room_queue 로 위임한다(순환 import 회피 지연 임포트)."""
-    from web_room_queue import _is_task_rec_aborted as _fn
-
-    return _fn(rec)

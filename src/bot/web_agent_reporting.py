@@ -22,7 +22,7 @@ from bot_logger import logger
 import master_memory
 import master_tasks
 
-from web_room_queue import _is_task_rec_aborted
+from web_jobs import _is_task_rec_aborted
 from web_runtime_state import (
     CORE_ORCHESTRATOR_ROOM_ID,
     EXPERT_CODING_ROOM_ID,
