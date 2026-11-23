@@ -19,6 +19,8 @@ from bot_logger import logger
 from master_supervisor import MASTER_PATROL_CHANNEL
 import master_tasks
 
+
+
 from web_runtime_state import (
     CORE_ORCHESTRATOR_ROOM_ID,
     _active_agent_pids,
@@ -115,8 +117,8 @@ def _is_task_rec_aborted(rec: Any) -> bool:
     )
 
 async def run_room_worker(r_key: str) -> None:
+    from web_turn_execution import execute_chat_turn  # 순환 import 회피 지연 임포트
     """특정 대화방의 대기열(FIFO)에서 순차적으로 턴을 꺼내 실행한다."""
-    from web_execution import execute_chat_turn  # 임시: 분리 전환 중 facade 지연 참조
     q = _room_queues.get(r_key)
     if q is None:
         return
