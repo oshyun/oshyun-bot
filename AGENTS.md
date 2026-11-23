@@ -78,7 +78,6 @@ oshyun-bot = "Personal Intelligent Bot". 웹 UI(브라우저/모바일)에서 �
     `src/bot/web/static/index.html`을 직접 서빙한다.
 - **`bot/instructions/`** — 역할별 시스템 프롬프트 허브(엔진·웹·스케줄러 공유 자산). `bot/telegram` 은 향후 재도입용
   예약 네임스페이스(현재 코드 없음 — 텔레그램 봇은 커밋 daf4c4f 에서 제거됨).
-- 구경로 `src/bot/web_server.py` 는 신규 진입점으로 위임하는 thin launcher(호환 유지).
 
 ---
 
