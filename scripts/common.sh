@@ -23,9 +23,6 @@ _sync_env_pair() {
 }
 
 _sync_domain_env() {
-  _sync_env_pair "TELEGRAM__BOT_TOKEN" "TELEGRAM_BOT_TOKEN"
-  _sync_env_pair "TELEGRAM__ALLOWED_CHAT_IDS" "ALLOWED_CHAT_IDS"
-  _sync_env_pair "TELEGRAM__LOG_PATH" "BOT_LOG_PATH"
   _sync_env_pair "AGENT__WORKDIR" "AGENT_WORKDIR"
   _sync_env_pair "AGENT__CODEDIR" "AGENT_CODEDIR"
   _sync_env_pair "AGENT__TIMEOUT" "AGENT_TIMEOUT"

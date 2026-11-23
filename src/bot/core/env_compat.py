@@ -1,6 +1,6 @@
 """env_compat — 도메인별 환경변수(DOMAIN__KEY)와 레거시 환경변수(KEY) 간의 호환성 동기화 모듈.
 
-.env 파일에서 환경변수의 소속 도메인(TELEGRAM__, AGENT__, ANTHROPIC__, CALENDAR__, WEB__, DUCKDNS__ 등)을
+.env 파일에서 환경변수의 소속 도메인(AGENT__, ANTHROPIC__, CALENDAR__, WEB__, DUCKDNS__ 등)을
 명확히 구분할 수 있도록 `도메인__키=값` 네이밍을 지원하며, 기존 코드베이스 및 외부 라이브러리/CLI와의
 100% 호환성을 위해 양방향으로 동기화(alias 매핑)합니다.
 """
@@ -11,11 +11,6 @@ import os
 
 # (새로운 도메인 기반 키, 기존 레거시 키)
 DOMAIN_ENV_MAPPINGS: list[tuple[str, str]] = [
-    # ── 텔레그램 (TELEGRAM__) ──────────────────────────────────────────
-    ("TELEGRAM__BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
-    ("TELEGRAM__ALLOWED_CHAT_IDS", "ALLOWED_CHAT_IDS"),
-    ("TELEGRAM__LOG_PATH", "BOT_LOG_PATH"),
-
     # ── 에이전트 / 작업공간 / 코딩 (AGENT__) ────────────────────────────
     ("AGENT__WORKDIR", "AGENT_WORKDIR"),
     ("AGENT__CODEDIR", "AGENT_CODEDIR"),
