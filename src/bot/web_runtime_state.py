@@ -309,3 +309,14 @@ def get_master_supervisor() -> MasterSupervisor | None:
     새 코드는 이 accessor 로 읽는다.
     """
     return _master_supervisor
+
+def poke_master_supervisor() -> MasterSupervisor | None:
+    """주입된 마스터 슈퍼바이저를 깨워 즉시 점검(poke)한다.
+
+    supervisor 가 주입되어 있으면 .poke() 를 호출하고 그 객체를 반환하며,
+    없으면 None 을 반환한다(None 분기 보일러플레이트 제거용 헬퍼).
+    """
+    if _master_supervisor is None:
+        return None
+    _master_supervisor.poke()
+    return _master_supervisor

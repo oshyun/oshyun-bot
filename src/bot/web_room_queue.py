@@ -33,7 +33,7 @@ from web_runtime_state import (
     _room_workers,
     _user_cancelled_rooms,
     broadcast_ws_json,
-    get_master_supervisor,
+    poke_master_supervisor,
 )
 
 
@@ -102,8 +102,8 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
         _room_live_feeds.pop(r_key, None)
         if _room_live_snapshots.pop(r_key, None) is not None:
             was_running = True
-    if was_running and get_master_supervisor() is not None:
-        get_master_supervisor().poke()
+    if was_running:
+        poke_master_supervisor()
     return was_running
 
 def _is_task_rec_aborted(rec: Any) -> bool:

@@ -53,7 +53,7 @@ from web_runtime_state import (
     _sync_global_session_if_needed,
     _user_cancelled_rooms,
     broadcast_ws_json,
-    get_master_supervisor,
+    poke_master_supervisor,
     is_shutting_down,
 )
 
@@ -612,8 +612,7 @@ async def _watch_and_finish_web_job(
                 )
             except Exception:
                 pass
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
 
     should_cleanup_job = True
     try:
@@ -738,8 +737,7 @@ async def _watch_and_finish_web_job(
             except Exception:
                 pass
 
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
 
         try:
             await current_broadcast({
@@ -785,8 +783,7 @@ async def _watch_and_finish_web_job(
                 error_text="작업이 취소되었습니다.",
                 on_complete=None,
             )
-            if get_master_supervisor():
-                get_master_supervisor().poke()
+            poke_master_supervisor()
             try:
                 await current_broadcast({"type": "cancelled", "jobId": job_id, "roomId": room_id})
             except Exception:

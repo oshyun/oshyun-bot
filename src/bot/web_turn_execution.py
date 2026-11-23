@@ -81,7 +81,7 @@ from web_runtime_state import (
     _should_sync_global_session,
     _user_cancelled_rooms,
     broadcast_ws_json,
-    get_master_supervisor,
+    poke_master_supervisor,
     is_shutting_down,
 )
 from web_stream_watch import _run_stream_tail_loop
@@ -376,8 +376,7 @@ async def execute_chat_turn(
             feed="생각하는 중…",
             sessionId=current_session_id,
         )
-    if get_master_supervisor():
-        get_master_supervisor().poke()
+    poke_master_supervisor()
 
     await current_broadcast(
         {
@@ -474,8 +473,7 @@ async def execute_chat_turn(
             error_text=str(exc),
             on_complete=on_complete,
         )
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
         await current_broadcast(
             {
                 "type": "error",
@@ -554,8 +552,7 @@ async def execute_chat_turn(
                 stepCount=len(collected_steps),
                 lastActivityAt=time.time(),
             )
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
         await current_broadcast(
             {
                 "type": "progress",
@@ -595,8 +592,7 @@ async def execute_chat_turn(
                 error_text="작업이 취소되었습니다.",
                 on_complete=on_complete,
             )
-            if get_master_supervisor():
-                get_master_supervisor().poke()
+            poke_master_supervisor()
             await current_broadcast({"type": "cancelled", "jobId": job_id, "roomId": room_id})
             if asst_msg_id:
                 curr_txt = (live_snapshot.get("streamText") or "").strip()
@@ -936,8 +932,7 @@ async def execute_chat_turn(
                 master_memory.commit_memory_prompt_checkpoint(resolved_session_id, agent_id=orch_agent)
         except Exception:
             pass
-    if get_master_supervisor():
-        get_master_supervisor().poke()
+    poke_master_supervisor()
 
     result_payload = {
         "type": "result",

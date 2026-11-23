@@ -61,7 +61,7 @@ from web_runtime_state import (
     _user_cancelled_rooms,
     broadcast_ws_json,
     build_active_runs_payload,
-    get_master_supervisor,
+    poke_master_supervisor,
     is_shutting_down,
 )
 
@@ -266,8 +266,7 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
                 feed="실행 중 (재부착됨)…",
                 sessionId=session_id,
             )
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
         watch_task = asyncio.create_task(
             _watch_and_finish_web_job(job_id, rec, steps, initial_offset=initial_offset)
         )
@@ -383,8 +382,7 @@ async def _recover_single_web_job(job_id: str, rec: dict) -> None:
     elif is_success and rec.get("channel") in ("orchestrator", "task_report"):
         await _notify_master_agent(room_id, None, reply_text, is_success=True)
 
-    if get_master_supervisor():
-        get_master_supervisor().poke()
+    poke_master_supervisor()
 
     _remove_web_job(job_id)
     _remove_job_files(out_file, err_file)
@@ -638,8 +636,7 @@ async def reap_zombie_sessions(
         except Exception:
             pass
 
-        if get_master_supervisor():
-            get_master_supervisor().poke()
+        poke_master_supervisor()
 
         reaped_rooms.append(room_id)
 
