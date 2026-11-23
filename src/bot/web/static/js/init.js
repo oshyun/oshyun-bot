@@ -28,6 +28,9 @@ window.addEventListener('keydown', (e) => {
     if (typeof closeThreadPanel === 'function') {
       closeThreadPanel();
     }
+    if (typeof closeNoteViewer === 'function') {
+      closeNoteViewer();
+    }
     if (isRoomSelectionMode) {
       exitRoomSelectionMode();
       return;

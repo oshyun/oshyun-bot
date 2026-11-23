@@ -231,7 +231,9 @@ function buildPrettyLinkHtml(rawUrl, explicitLabel = '') {
     const fileParam = parsedUrl.searchParams.get('file') || '';
     const decodedFile = decodeSafeUrlPart(fileParam).replace(/^\/+|\/+$/g, '');
     const displayLabel = cleanExplicit || decodedFile || 'Obsidian 노트';
-    return renderChip(ICONS.file, displayLabel, '', decodedFile || cleanUrl, 'is-vault');
+    const targetFile = decodedFile || cleanUrl;
+    const jsTarget = targetFile.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="md-link-chip is-vault" onclick="onWikilinkClick('${escapeHtml(jsTarget)}')" title="${escapeHtml(targetFile)} (클릭 시 우측 사이드 패널에서 열람)">${ICONS.file}<span class="md-link-label">${escapeHtml(displayLabel)}</span><svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
   }
 
   const hostLower = parsedUrl.hostname.toLowerCase();
@@ -253,7 +255,11 @@ function buildPrettyLinkHtml(rawUrl, explicitLabel = '') {
       || /^(링크|확인\s*링크|공유\s*링크|노트\s*링크|바로가기|여기|link|url)$/i.test(cleanExplicit);
     const displayLabel = isGenericLabel ? noteNameWithExt : cleanExplicit;
     const metaText = (folderLabel && !displayLabel.includes(folderLabel)) ? folderLabel : '';
-    return renderChip(ICONS.file, displayLabel, metaText, fullDisplayPath, 'is-vault');
+    const metaHtml = metaText
+      ? `<span class="md-link-meta">· ${escapeHtml(metaText)}</span>`
+      : '';
+    const jsTarget = fullDisplayPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="md-link-chip is-vault" onclick="onWikilinkClick('${escapeHtml(jsTarget)}')" title="${escapeHtml(fullDisplayPath)} (클릭 시 우측 사이드 패널에서 열람)">${ICONS.file}<span class="md-link-label">${escapeHtml(displayLabel)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
   }
 
   const host = parsedUrl.hostname.replace(/^www\./i, '');
@@ -439,9 +445,19 @@ async function onWikilinkClick(noteTarget) {
     return fname === norm || fpath === norm || fpath.endsWith('/' + norm);
   });
   if (matched && matched.path) {
-    switchView('vault');
-    openVaultFile(matched.path);
+    if (typeof currentView !== 'undefined' && currentView === 'vault' && typeof openVaultFile === 'function') {
+      openVaultFile(matched.path);
+    } else if (typeof openNoteViewer === 'function') {
+      await openNoteViewer(matched.path);
+    } else {
+      switchView('vault');
+      openVaultFile(matched.path);
+    }
   } else {
+    if (typeof openNoteViewer === 'function' && (target.includes('/') || target.endsWith('.md'))) {
+      await openNoteViewer(target);
+      return;
+    }
     const input = document.getElementById('chat-input');
     if (input) {
       setChatInputText(`[[${target}]] 노트의 내용을 확인해서 요약해줘.`);

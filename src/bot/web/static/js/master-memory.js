@@ -159,6 +159,8 @@ function toggleMasterSidebar(forceState = null) {
   const willOpen = (forceState !== null) ? Boolean(forceState) : !sidebar.classList.contains('open');
 
   if (willOpen) {
+    if (typeof closeThreadPanel === 'function') closeThreadPanel();
+    if (typeof closeNoteViewer === 'function') closeNoteViewer();
     const targetAgent = getAppropriateMemoryAgentForCurrentContext();
     if (targetAgent && targetAgent !== currentMsbAgent) {
       switchMsbMemoryAgent(targetAgent);

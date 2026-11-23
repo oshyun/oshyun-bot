@@ -593,6 +593,16 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
   return wrap;
 }
 
+function openSubSessionChip(targetIdOrTitle, displayTitle = '') {
+  if (typeof openThreadPanel === 'function') {
+    openThreadPanel(null, targetIdOrTitle, displayTitle);
+    return;
+  }
+  if (typeof navigateToChatRoom === 'function') {
+    navigateToChatRoom(targetIdOrTitle);
+  }
+}
+
 /**
  * 말풍선 좌측 어시스턴트 발화자 표시 정보(역할/이름/아바타/뱃지)를 결정한다.
  * 마스터, 세컨브레인, 봇개발 전문가 및 하위 에이전트의 실제 역할/이름을 매핑한다.
@@ -786,8 +796,9 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const tagTitleAttr = parsed.badgeTitle ? ` title="${escapeHtml(parsed.badgeTitle)}"` : '';
     const matchedSubRoom = parsed.roomId ? getRoomById(parsed.roomId) : (parsed.roomTitle ? findChatRoom(parsed.roomTitle) : null);
     const navSubTarget = (matchedSubRoom && matchedSubRoom.id) || parsed.roomId || (matchedSubRoom ? matchedSubRoom.title : (findChatRoom(parsed.roomTitle) ? parsed.roomTitle : ''));
+    const displaySubTitle = parsed.roomTitle || (matchedSubRoom && matchedSubRoom.title) || navSubTarget;
     const roomChipHtml = navSubTarget
-      ? `<button type="button" class="sub-agent-room-btn" onclick="navigateToChatRoom('${escapeHtml(navSubTarget)}')" title="해당 세션으로 이동">${escapeHtml(parsed.roomTitle || (matchedSubRoom && matchedSubRoom.title) || navSubTarget)}</button>`
+      ? `<button type="button" class="sub-agent-room-btn" onclick="openSubSessionChip('${escapeHtml(navSubTarget)}', '${escapeHtml(displaySubTitle)}')" title="우측 스레드 패널에서 하위 세션 열람">${escapeHtml(displaySubTitle)}</button>`
       : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || '하위 에이전트')}</span>`;
     head.innerHTML = `<span class="assistant-avatar sub-agent-avatar${avatarErrCls}">${ICONS.spark}</span>${roomChipHtml}<span class="model-tag sub-agent-tag is-${parsed.statusKind}"${tagTitleAttr}>${escapeHtml(parsed.metaBadge)}</span>${buildMsgTimeHtml(m.createdAt)}`;
     row.appendChild(head);

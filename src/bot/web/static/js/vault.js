@@ -194,3 +194,141 @@ function askCurrentFileToAI() {
     try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   우측 사이드 패널: 노트 뷰어 (Note Viewer)
+   채팅 중 화면 이동 없이 문서를 즉시 열람 및 미리보기
+   ═══════════════════════════════════════════════════════════════ */
+let currentNoteViewerPath = null;
+let noteViewerHistory = [];
+let _noteViewerReqSeq = 0;
+
+async function openNoteViewer(targetPathOrName, isHistoryNav = false) {
+  const cleanTarget = String(targetPathOrName || '').trim().replace(/^\[\[|\]\]$/g, '').trim();
+  if (!cleanTarget) return;
+
+  // 0. 타 패널 닫기 (우측 패널 상호 배타적 단일 활성화 보장)
+  if (typeof closeRoomDrawer === 'function') closeRoomDrawer();
+  if (typeof toggleMasterSidebar === 'function') toggleMasterSidebar(false);
+  if (typeof closeThreadPanel === 'function') closeThreadPanel();
+
+  // 1. 패널 및 백드롭 즉시 표시 (UX 지연 최소화)
+  const panel = document.getElementById('note-viewer-panel');
+  const backdrop = document.getElementById('note-drawer-backdrop');
+  if (panel) panel.classList.add('open');
+  if (backdrop && window.innerWidth <= 1024) backdrop.classList.add('open');
+
+  // 2. 볼트 파일 트리 캐시 확인 및 경로 정밀 매칭
+  if (!vaultTreeCache || vaultTreeCache.length === 0) {
+    try {
+      const res = await fetch('/api/vault/tree');
+      const data = await res.json();
+      vaultTreeCache = data.items || data.tree || [];
+    } catch (_) {}
+  }
+  const files = flattenVaultFiles(vaultTreeCache);
+  const norm = cleanTarget.toLowerCase().replace(/\.md$/, '');
+  const matched = files.find(f => {
+    const fname = String(f.name || '').toLowerCase().replace(/\.md$/, '');
+    const fpath = String(f.path || '').toLowerCase().replace(/\.md$/, '');
+    return fname === norm || fpath === norm || fpath.endsWith('/' + norm);
+  });
+  const resolvedPath = matched ? matched.path : (cleanTarget.endsWith('.md') ? cleanTarget : `${cleanTarget}.md`);
+
+  // 3. 히스토리 스택 관리
+  if (!isHistoryNav && currentNoteViewerPath && currentNoteViewerPath !== resolvedPath) {
+    noteViewerHistory.push(currentNoteViewerPath);
+  }
+  const backBtn = document.getElementById('btn-note-nav-back');
+  if (backBtn) {
+    backBtn.style.display = noteViewerHistory.length > 0 ? 'inline-flex' : 'none';
+  }
+
+  currentNoteViewerPath = resolvedPath;
+  const parts = resolvedPath.split('/');
+  const fileName = parts.pop();
+  const dir = parts.length ? parts.join('/') : '';
+  const titleEl = document.getElementById('note-viewer-title');
+  const pathEl = document.getElementById('note-viewer-path');
+  if (titleEl) {
+    titleEl.textContent = fileName.replace(/\.md$/, '');
+    titleEl.title = resolvedPath;
+  }
+  if (pathEl) {
+    pathEl.textContent = dir || '루트';
+    pathEl.title = dir || '볼트 루트';
+    pathEl.style.display = dir ? 'inline-block' : 'none';
+  }
+
+  // 4. 본문 비동기 로드
+  const bodyEl = document.getElementById('note-viewer-body');
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = '<div class="thread-loading"><span class="run-spinner"></span> 노트를 불러오는 중…</div>';
+  const seq = ++_noteViewerReqSeq;
+
+  try {
+    const res = await fetch('/api/vault/file?path=' + encodeURIComponent(resolvedPath));
+    const data = await res.json();
+    if (_noteViewerReqSeq !== seq) return;
+
+    if (data && data.content !== undefined) {
+      const raw = data.content || '';
+      const html = typeof formatMarkdown === 'function' ? formatMarkdown(raw) : escapeHtml(raw);
+      bodyEl.innerHTML = `<div class="note-viewer-content md">${html || '<div class="thread-empty">내용이 비어 있습니다.</div>'}</div>`;
+      bodyEl.scrollTop = 0;
+    } else {
+      bodyEl.innerHTML = `
+        <div class="thread-empty" style="padding:32px 16px;text-align:center;">
+          <p style="font-weight:600;margin-bottom:6px;color:var(--text);">${escapeHtml(fileName)}</p>
+          <p style="font-size:12.5px;color:var(--text-3);margin-bottom:14px;">볼트에서 노트를 찾을 수 없습니다.</p>
+          <button type="button" class="btn sm primary" onclick="askNoteViewerToAI()">AI에게 질문하기</button>
+        </div>
+      `;
+    }
+  } catch (err) {
+    if (_noteViewerReqSeq !== seq) return;
+    bodyEl.innerHTML = `<div class="thread-empty" style="color:var(--danger,#ef4444);padding:24px 16px;">노트 로드 실패: ${escapeHtml(err.message || '네트워크 오류')}</div>`;
+  }
+}
+
+function closeNoteViewer() {
+  const panel = document.getElementById('note-viewer-panel');
+  const backdrop = document.getElementById('note-drawer-backdrop');
+  if (panel) panel.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  currentNoteViewerPath = null;
+  noteViewerHistory = [];
+}
+
+function navigateNoteViewerHistory(delta) {
+  if (delta < 0 && noteViewerHistory.length > 0) {
+    const prev = noteViewerHistory.pop();
+    if (prev) {
+      openNoteViewer(prev, true);
+    }
+  }
+}
+
+function openNoteInVaultFullEditor() {
+  if (!currentNoteViewerPath) return;
+  const target = currentNoteViewerPath;
+  closeNoteViewer();
+  if (typeof switchView === 'function') switchView('vault');
+  if (typeof openVaultFile === 'function') openVaultFile(target);
+}
+
+function askNoteViewerToAI() {
+  if (!currentNoteViewerPath) return;
+  const target = currentNoteViewerPath;
+  const fileName = target.split('/').pop().replace(/\.md$/, '');
+  closeNoteViewer();
+  if (typeof switchView === 'function' && currentView !== 'chat') switchView('chat');
+  const input = document.getElementById('chat-input');
+  if (input) {
+    setChatInputText(`[[${fileName}]] 노트를 바탕으로 `);
+    onChatInput();
+    try { input.focus({ preventScroll: true }); } catch (_) { input.focus(); }
+  }
+}
+

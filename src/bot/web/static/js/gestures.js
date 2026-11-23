@@ -63,8 +63,16 @@ function initMobileSwipeGestures() {
       const isLeftOpen = sidebar ? sidebar.classList.contains('open') : false;
       const masterSidebar = document.getElementById('master-sidebar');
       const isRightOpen = masterSidebar ? masterSidebar.classList.contains('open') : false;
+      const threadPanel = document.getElementById('thread-slide-panel');
+      const isThreadOpen = threadPanel ? threadPanel.classList.contains('open') : false;
+      const noteViewer = document.getElementById('note-viewer-panel');
+      const isNoteOpen = noteViewer ? noteViewer.classList.contains('open') : false;
 
-      if (isRightOpen) {
+      if (isNoteOpen) {
+        if (dx > 0 && typeof closeNoteViewer === 'function') closeNoteViewer();
+      } else if (isThreadOpen) {
+        if (dx > 0 && typeof closeThreadPanel === 'function') closeThreadPanel();
+      } else if (isRightOpen) {
         // 우측 4계층 메모리 패널이 열려있을 때 오른쪽 스와이프: 닫기
         if (dx > 0) toggleMasterSidebar(false);
       } else if (isLeftOpen) {

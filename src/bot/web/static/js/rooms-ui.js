@@ -533,11 +533,11 @@ function onRoomItemClick(event, roomId) {
     return;
   }
 
-  // 사용자가 마스터 에이전트 대화방에 머물고 있을 때 하위 작업 항목을 클릭하면,
-  // 메인 뷰 전체를 이동시키는 대신 우측 스레드 패널을 열어 마스터 맥락을 유지한다!
+  // 하위 작업/서브세션 항목을 클릭하면 메인 뷰 전체를 이동시키는 대신
+  // 우측 스레드 패널을 열어 현재 맥락을 유지한다!
   const clickedRoom = getRoomById(roomId);
-  const isMasterChild = clickedRoom && isMasterSubtaskRoom(clickedRoom);
-  if (isMasterChild && currentRoomId === CORE_ROOM_ID && typeof openThreadPanel === 'function') {
+  const isChild = clickedRoom && clickedRoom.parentId;
+  if (isChild && typeof openThreadPanel === 'function') {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
     if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
     if (typeof closeRoomDrawer === 'function') closeRoomDrawer();
@@ -1026,6 +1026,9 @@ async function openThreadPanel(taskId, roomId, title = '') {
   if (typeof toggleMasterSidebar === 'function') {
     toggleMasterSidebar(false);
   }
+  if (typeof closeNoteViewer === 'function') {
+    closeNoteViewer();
+  }
 
   // 1. 패널과 백드롭을 최우선으로 즉시 열어서 시각적 반응 보장!
   panel.classList.add('open');
@@ -1115,6 +1118,15 @@ function closeThreadPanel() {
   if (backdrop) backdrop.classList.remove('open');
   currentThreadRoomId = null;
   currentThreadTaskId = null;
+}
+
+function expandThreadToFullRoom() {
+  if (!currentThreadRoomId) return;
+  const targetId = currentThreadRoomId;
+  closeThreadPanel();
+  if (typeof selectRoom === 'function') {
+    selectRoom(targetId);
+  }
 }
 
 function renderThreadPanelBody() {

@@ -330,12 +330,16 @@ function findChatRoom(query) {
   return null;
 }
 
-function navigateToChatRoom(roomIdOrTitle) {
+function navigateToChatRoom(roomIdOrTitle, preferThreadPanel = true) {
   const query = String(roomIdOrTitle || '').trim();
   if (!query) return;
 
   const room = findChatRoom(query);
   if (room && room.id) {
+    if (preferThreadPanel && room.parentId && typeof openThreadPanel === 'function') {
+      openThreadPanel(null, room.id, room.title);
+      return;
+    }
     selectRoom(room.id);
     showToast(`'${room.title || query}' 채팅방으로 이동했습니다.`);
     return;
@@ -343,6 +347,11 @@ function navigateToChatRoom(roomIdOrTitle) {
 
   // 만약 query 자체가 room-xxx 형식인 경우
   if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+    const targetRoom = typeof getRoomById === 'function' ? getRoomById(query) : null;
+    if (preferThreadPanel && targetRoom && targetRoom.parentId && typeof openThreadPanel === 'function') {
+      openThreadPanel(null, query, targetRoom.title);
+      return;
+    }
     selectRoom(query);
     showToast(`대화방(${query})으로 이동했습니다.`);
     return;
@@ -353,9 +362,18 @@ function navigateToChatRoom(roomIdOrTitle) {
     syncRoomsWithServer().then(() => {
       const reRoom = findChatRoom(query);
       if (reRoom && reRoom.id) {
+        if (preferThreadPanel && reRoom.parentId && typeof openThreadPanel === 'function') {
+          openThreadPanel(null, reRoom.id, reRoom.title);
+          return;
+        }
         selectRoom(reRoom.id);
         showToast(`'${reRoom.title || query}' 채팅방으로 이동했습니다.`);
       } else if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
+        const reTarget = typeof getRoomById === 'function' ? getRoomById(query) : null;
+        if (preferThreadPanel && reTarget && reTarget.parentId && typeof openThreadPanel === 'function') {
+          openThreadPanel(null, query, reTarget.title);
+          return;
+        }
         selectRoom(query);
         showToast(`대화방(${query})으로 이동했습니다.`);
       } else {
@@ -379,9 +397,10 @@ function buildChatRoomChipHtml(room, explicitLabel = '') {
   const roomId = room ? (room.id || '') : '';
   const roomTitle = room ? (room.title || '') : '';
   const display = String(explicitLabel || roomTitle || roomId || '채팅방').trim();
+  const isChild = Boolean(room && room.parentId);
   const titleAttr = roomTitle
-    ? `${roomTitle} (클릭 시 해당 채팅방으로 이동)`
-    : `${display} (클릭 시 해당 채팅방으로 이동)`;
+    ? `${roomTitle} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`
+    : `${display} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`;
 
   let iconSvg = ICONS.chat || '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   let roleClass = 'is-room';
@@ -408,7 +427,11 @@ function buildChatRoomChipHtml(room, explicitLabel = '') {
     ? `<span class="md-link-meta">· ${escapeHtml(metaText)}</span>`
     : '';
 
-  return `<button type="button" class="md-link-chip ${roleClass}" onclick="navigateToChatRoom('${escapeHtml(jsEscaped)}')" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+  const clickHandler = isChild
+    ? `openThreadPanel(null, '${escapeHtml(jsEscaped)}', '${escapeHtml(roomTitle || display)}')`
+    : `navigateToChatRoom('${escapeHtml(jsEscaped)}')`;
+
+  return `<button type="button" class="md-link-chip ${roleClass}" onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
 }
 
 function ensureRoomLiveState(roomId) {
