@@ -131,7 +131,7 @@ def _resolve_agy_bin() -> str:
 
 
 def _format_agy_usage_json(raw: str) -> str:
-    """agy -p /usage --output-format json 의 출력을 텔레그램 친화적 마크다운으로 포맷팅한다."""
+    """agy -p /usage --output-format json 의 출력을 채팅 친화적 마크다운으로 포맷팅한다."""
     try:
         res = json.loads(raw)
     except Exception:

@@ -1,7 +1,7 @@
 """burn_runner — 주간 잔여 쿼터 토큰 버닝 개선 실행기.
 
 주간 리셋 6시간 미만 & 잔여 쿼터 30% 이상일 때, 또는 사용자의 수동 트리거(/burn run) 시
-burn_todo 에 등록된 개선 작업을 격리된 Git 워크트리에서 실행하고 결과를 텔레그램으로 보고한다.
+burn_todo 에 등록된 개선 작업을 격리된 Git 워크트리에서 실행하고 결과를 웹 채팅으로 보고한다.
 """
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ async def _finish_burn_task(
     initial_weekly_pct: int | None = None,
     vault_log=None,
 ) -> dict[str, Any]:
-    """버닝 작업 완료 후 Git 커밋/diff 검증, 토큰 사용량 집계 및 텔레그램 리포트를 발송한다."""
+    """버닝 작업 완료 후 Git 커밋/diff 검증, 토큰 사용량 집계 및 결과 리포트를 발송한다."""
     task_id = task["id"]
     title = task.get("title", task_id)
     session_id = task.get("session_id", "")

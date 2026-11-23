@@ -45,7 +45,7 @@
   (subpath (param "AGENT_HOME"))
   (subpath (param "AGENT_INSTALL"))
   (literal (param "AGENT_JSON"))
-  ;; 텔레그램으로 받은 첨부 파일 임시 폴더(봇이 내려받아 claude 가 읽음).
+  ;; 웹 업로드로 받은 첨부 파일 임시 폴더(봇이 내려받아 claude 가 읽음).
   (subpath (param "ATTACHED_FILES_DIR"))
   ;; 분리 실행 출력 파일(stdout/stderr) — Bun WriteStream 의 fstat(read-metadata) 허용.
   (subpath (param "JOBS_DIR"))
