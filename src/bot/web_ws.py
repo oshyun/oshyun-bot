@@ -31,17 +31,11 @@ ORCHESTRATOR_ROOM_IDS = (
 )
 
 
-def _get_mod_attr(attr_name: str, fallback: any) -> any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
-
 
 async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     """GET /ws — 실시간 대화·음성 모드·진행 상태 스트리밍·즉시 취소 WebSocket 핸들러."""
     from web_execution import (
+        _get_mod_attr,
         _connected_websockets,
         _active_watch_tasks,
         _room_queues,

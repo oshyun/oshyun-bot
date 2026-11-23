@@ -29,7 +29,7 @@ import agent_configs
 import master_memory
 import master_tasks
 from paths import MASTER_STATE_FILE, WORKDIR, child_default_workdir
-from web_runtime_state import get_master_supervisor
+from web_runtime_state import _get_mod_attr, get_master_supervisor
 
 AGY_BRAIN_DIR = os.path.expanduser("~/.gemini/antigravity/brain")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -62,13 +62,6 @@ def _is_orchestrator_room_id(room_id: str | None) -> bool:
     clean = str(room_id).strip()
     return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
-
-def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
 
 
 class _WebServerSupervisorHost:

@@ -20,7 +20,7 @@ from bot_logger import logger, vault_log
 from engine_settings import get_coding_mode
 import paths
 from paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
-from web_runtime_state import get_master_supervisor
+from web_runtime_state import _get_mod_attr, get_master_supervisor
 
 HIDDEN_ROOMS_FILE = os.path.join(STATE_DIR, "hidden_chat_rooms.json")
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
@@ -52,13 +52,6 @@ def _is_orchestrator_room_id(room_id: str | None) -> bool:
     clean = str(room_id).strip()
     return clean in ORCHESTRATOR_ROOM_IDS or clean in _all_orchestrator_room_ids()
 
-
-def _get_mod_attr(attr_name: str, fallback: Any) -> Any:
-    """web_server 모듈에서 동적 속성(또는 patch된 mock)을 조회하고 없을 시 fallback을 반환한다."""
-    mod = sys.modules.get("web_server")
-    if mod and hasattr(mod, attr_name):
-        return getattr(mod, attr_name)
-    return fallback
 
 
 def _get_hidden_file() -> str:

@@ -34,18 +34,22 @@ from agent_engine import (
 )
 from bot_logger import logger
 from master_supervisor import MasterSupervisor
-from paths import STATE_DIR
+from paths import WEB_JOBS_FILE
+from web_auth import WEB_TOKEN
 
+# 룸 ID 상수는 agent_configs(빌트인 에이전트 정의 SSOT)에서 가져온다.
+from agent_configs import (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+)
 
-
-WEB_JOBS_FILE = os.path.join(STATE_DIR, "web_jobs.json")
-CORE_ORCHESTRATOR_ROOM_ID = "__core__"
+# 타이틀 상수는 agent_configs 의 AGENTS dict 리터럴 값과 동일하지만 상수로
+# 노출되어 있지 않아 여기서 정의한다(출처: agent_configs.AGENTS[*].title).
 CORE_ORCHESTRATOR_TITLE = "마스터 에이전트"
-EXPERT_GENERAL_ROOM_ID = "__expert_general__"
 EXPERT_GENERAL_TITLE = "일반 대화"
-EXPERT_VAULT_ROOM_ID = "__expert_vault__"
 EXPERT_VAULT_TITLE = "세컨브레인 에이전트"
-EXPERT_CODING_ROOM_ID = "__expert_coding__"
 EXPERT_CODING_TITLE = "봇개발 에이전트"
 ORCHESTRATOR_ROOM_IDS = (
     CORE_ORCHESTRATOR_ROOM_ID,
@@ -65,8 +69,9 @@ def _is_orchestrator_room_id(room_id: str | None) -> bool:
         return agent_configs.is_orchestrator_room(clean)
     except Exception:
         return False
+# WEB_TOKEN 은 web_auth(임시 토큰 폴백 포함)의 정의를 따른다.
+# WEB_PORT 는 web_auth 에 정의가 없어(토큰 전용 모듈) 여기서 env 로 해석한다.
 WEB_PORT = int(os.getenv("WEB_PORT", os.getenv("VOICE_WEB_PORT", "8765")).strip() or "8765")
-WEB_TOKEN = os.getenv("WEB_TOKEN", os.getenv("VOICE_WEB_TOKEN", "")).strip()
 
 _connected_websockets: set[web.WebSocketResponse] = set()
 _active_watch_tasks: dict[str, asyncio.Task] = {}
