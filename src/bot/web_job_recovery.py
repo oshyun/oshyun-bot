@@ -43,6 +43,9 @@ from web_jobs import (
     sweep_orphan_job_files as _sweep_orphan_job_files,
 )
 
+from web_agent_reporting import _notify_master_agent
+from web_room_queue import enqueue_room_turn
+from web_stream_watch import _watch_and_finish_web_job, extract_stream_events_from_line
 from web_runtime_state import (
     ORCHESTRATOR_ROOM_IDS,
     WEB_JOBS_FILE,
@@ -132,7 +135,6 @@ def _is_task_rec_aborted(rec: Any) -> bool:
 
 async def _restore_pending_room_turns() -> None:
     """서버 기동 시 이전에 영속화된 대기열 턴을 다시 큐에 적재한다."""
-    from web_execution import enqueue_room_turn  # 임시: 분리 전환 중 facade 지연 참조
     pending_file = _get_web_pending_turns_file()
     if not os.path.exists(pending_file):
         return
@@ -174,12 +176,6 @@ async def _restore_pending_room_turns() -> None:
 
 async def _recover_single_web_job(job_id: str, rec: dict) -> None:
     """다운타임/재시작 동안 방치된 단일 web_job 을 검사하고 복구한다."""
-    from web_execution import (
-        _watch_and_finish_web_job,
-        extract_stream_events_from_line,
-        _is_task_rec_aborted,
-        _notify_master_agent,
-    )  # 임시: 분리 전환 중 facade 지연 참조
     room_id = rec.get("room_id") or "__default__"
     msg_id = rec.get("msg_id")
     out_file = rec.get("out_file")
@@ -460,7 +456,6 @@ async def reap_zombie_sessions(
     2. 무응답 타임아웃: 최근 max_inactive_seconds (기본 15분) 동안 스트림/로그/트랜스크립트 갱신이 전혀 없는 경우
     3. 최대 실행시간 초과: 총 경과 시간이 max_elapsed_seconds (기본 30분)를 초과한 경우
     """
-    from web_execution import _notify_master_agent  # 임시: 분리 전환 중 facade 지연 참조
     now = time.time()
     current_chat_db = _get_mod_attr("chat_db", chat_db)
     current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)

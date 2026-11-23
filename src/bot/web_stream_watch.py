@@ -41,6 +41,7 @@ from web_jobs import (
 )
 from web_speech import clean_text_for_speech
 
+from web_agent_reporting import _finalize_orchestrator_completion, _notify_master_agent
 from web_runtime_state import (
     ORCHESTRATOR_ROOM_IDS,
     _active_agent_pids,
@@ -524,7 +525,6 @@ async def _watch_and_finish_web_job(
     initial_offset: int = 0,
 ) -> None:
     """기동 시 아직 살아있는 백그라운드 에이전트 작업을 계속 감시하고 완료 시 결과를 배달한다."""
-    from web_execution import _finalize_orchestrator_completion, _notify_master_agent  # 임시: 분리 전환 중 facade 지연 참조
     room_id = rec.get("room_id") or "__default__"
     msg_id = rec.get("msg_id")
     out_file = rec.get("out_file")
