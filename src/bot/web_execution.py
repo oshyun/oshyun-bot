@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+import types
 from collections.abc import Callable
 from typing import Any
 import uuid
@@ -3012,3 +3013,32 @@ async def enqueue_room_turn(
         _room_workers[room_key] = asyncio.create_task(run_room_worker(room_key))
 
     return is_already_running, q.qsize()
+
+
+# ── 전달 프록시 facade ──────────────────────────────────────────────────────
+# 임시 facade — 새 모듈(web_runtime_state 등) 경유 전환 완료 후 축소 예정.
+# 제거 조건: 모든 importer 와 테스트가 새 모듈을 직접 참조·patch 하여
+# web_execution 재-익스포트를 사용하는 곳이 0건이 되었을 때 축소/제거한다.
+# 그 전에는 외부 import(web_server/web_orchestrator/web_ws/web_rooms/web_automation/
+# 테스트)가 깨지므로 facade 축소를 금지한다.
+#
+# 동작: 이 모듈 속성에 setattr 이 발생하면(테스트 mock.patch, web_server 의
+# 런타임 주입 등) 값을 아래 모듈들 중 같은 이름을 가진 모든 모듈에 전달한다.
+# 이로써 patch('web_execution.X') 가 새 모듈 내부 호출까지 관통한다.
+# mutable 전역(dict/set)은 어느 모듈에서도 재바인딩하지 않는다(요소 조작만).
+
+_NEW_STATE_MODULES = ("web_runtime_state",)
+
+
+class _FacadeModule(types.ModuleType):
+    """setattr 을 상태 소유 모듈(web_runtime_state 등)로 전달하는 모듈 프록시."""
+
+    def __setattr__(self, name: str, value: object) -> None:
+        for mod_name in _NEW_STATE_MODULES:
+            mod = sys.modules.get(mod_name)
+            if mod is not None and name in vars(mod):
+                setattr(mod, name, value)
+        super().__setattr__(name, value)
+
+
+sys.modules[__name__].__class__ = _FacadeModule
