@@ -61,6 +61,24 @@ _NEW_STATE_MODULES = (
     "bot.web.automation",
 )
 
+# 재-익스포트 심볼별 정의처(owner) 모듈 정적 매핑. import 시점에 facade 속성의
+# __module__(모듈 객체면 모듈 자체 이름)을 기준으로 한 번만 계산한다.
+# setattr 시점에 "설정 중인 값"의 __module__ 을 보지 않는 이유: mock.patch 적용 시
+# 원본의 owner 가 잡히지만 복원 시 vars(facade) 에 이미 mock 이 있어 owner 가
+# 'unittest.mock' 으로 바뀌어 복원이 정의처에 도달하지 못하는 비대칭(set/restore
+# 갈라짐 — agent_engine.watch_agent 에 AsyncMock 이 새는 hang 유발)이 생긴다.
+_OWNER_BY_SYMBOL: dict[str, str] = {}
+for _name, _value in tuple(vars(sys.modules[__name__]).items()):
+    if _name.startswith("__"):
+        continue
+    if isinstance(_value, types.ModuleType):
+        _owner = _value.__name__
+    else:
+        _owner = getattr(_value, "__module__", None)
+    if _owner and _owner in sys.modules and _owner != __name__:
+        _OWNER_BY_SYMBOL[_name] = _owner
+del _name, _value, _owner
+
 
 class _FacadeModule(types.ModuleType):
     """setattr/getattr 을 상태 소유 모듈(web_runtime_state 등)로 전달하는 모듈 프록시.
@@ -76,7 +94,7 @@ class _FacadeModule(types.ModuleType):
         # + 조립 모듈(bot.web.server)의 from-import 사본. 이로써 facade 단일 patch 가
         # _get_mod_attr 의 소유 모듈 우선 조회와 server 사본 조회까지 모두 관통한다.
         targets = list(_NEW_STATE_MODULES)
-        owner_mod_name = getattr(vars(self).get(name), "__module__", None)
+        owner_mod_name = _OWNER_BY_SYMBOL.get(name)
         if owner_mod_name and owner_mod_name not in targets:
             targets.append(owner_mod_name)
         targets.append("bot.web.server")
