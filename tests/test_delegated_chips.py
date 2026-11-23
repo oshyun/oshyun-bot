@@ -5,8 +5,8 @@ import os
 import unittest
 from unittest.mock import MagicMock
 
-# src/bot 경로 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
+# src(패키지 루트) 경로 추가
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from bot.web.orchestrator import extract_delegated_subagents
 

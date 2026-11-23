@@ -19,7 +19,7 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
@@ -500,7 +500,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     async def test_tts_endpoint_returns_mp3_bytes(self):
         with patch(
-            "web_server.synthesize_edge_tts_mp3",
+            'bot.web.server.synthesize_edge_tts_mp3',
             new_callable=AsyncMock,
             return_value=b"ID3-mock-mp3-audio",
         ) as mock_synth:
@@ -530,11 +530,11 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ), patch("bot.web.server.set_session"), patch(
-            "web_server.update_last_activity"
+            'bot.web.server.update_last_activity'
         ), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 initial_msg = await ws_conn.receive_json()
@@ -573,11 +573,11 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ), patch("bot.web.server.set_session"), patch(
-            "web_server.update_last_activity"
+            'bot.web.server.update_last_activity'
         ), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 initial_msg = await ws_conn.receive_json()
@@ -623,11 +623,11 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ), patch("bot.web.server.get_session", return_value="old-global-session"), patch(
-            "web_server.set_session"
+            'bot.web.server.set_session'
         ), patch("bot.web.server.update_last_activity"), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 await ws_conn.receive_json()  # initial status
@@ -676,7 +676,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ):
@@ -730,7 +730,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     def test_web_static_dir_resolution(self):
         self.assertTrue(
-            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "bot", "static"))
+            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "static"))
         )
 
 
@@ -931,7 +931,7 @@ class TestPwaSupport(AioHTTPTestCase):
         web_server.HIDDEN_ROOMS_FILE = test_hidden
         chat_db.HIDDEN_ROOMS_FILE = test_hidden
         web_server.CHAT_ROOMS_BACKUP_FILE = os.path.join(self.test_vault_dir, "backup.json")
-        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):
@@ -1002,7 +1002,7 @@ class TestHubApi(AioHTTPTestCase):
         chat_db.init_db(test_db, migrate_legacy=False)
         os.makedirs(web_server.CHATS_DIR, exist_ok=True)
 
-        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):
@@ -1529,7 +1529,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
                 return {"result": "[테스트] 턴2 답변 완료", "session_id": "session-turn-1", "model": "agy"}
 
         with patch("bot.web.server.spawn_agent") as mock_spawn, patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
         ):
             mock_spawn.side_effect = [fake_proc_1, fake_proc_2]
 
@@ -1603,7 +1603,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
                 raise
 
         with patch("bot.web.server.spawn_agent", return_value=fake_proc_1), patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
         ), patch("bot.web.server.kill_job") as mock_kill:
             ws = await self.client.ws_connect("/ws")
             await ws.receive_json(timeout=3.0)  # status
@@ -1651,7 +1651,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
             return {"result": "[테스트] 턴1 정상 답변", "session_id": "sess-3001", "model": "agy"}
 
         with patch("bot.web.server.spawn_agent", return_value=fake_proc_1) as mock_spawn, patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
         ):
             ws = await self.client.ws_connect("/ws")
             await ws.receive_json(timeout=3.0)  # status
@@ -1730,12 +1730,12 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
         self._db_patcher.start()
         test_hidden = os.path.join(self._tmp_dir.name, "hidden_rooms.json")
         self._hidden_patcher = patch(
-            "web_server.HIDDEN_ROOMS_FILE",
+            'bot.web.server.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._hidden_patcher.start()
         self._chat_db_hidden_patcher = patch(
-            "chat_db.HIDDEN_ROOMS_FILE",
+            'bot.core.chat_db.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._chat_db_hidden_patcher.start()
@@ -1848,39 +1848,39 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self._db_patcher.start()
         test_hidden = os.path.join(self._tmp_dir.name, "hidden_rooms.json")
         self._hidden_patcher = patch(
-            "web_server.HIDDEN_ROOMS_FILE",
+            'bot.web.server.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._hidden_patcher.start()
         self._chat_db_hidden_patcher = patch(
-            "chat_db.HIDDEN_ROOMS_FILE",
+            'bot.core.chat_db.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._chat_db_hidden_patcher.start()
         self._chats_dir_patcher = patch(
-            "web_server.CHATS_DIR",
+            'bot.web.server.CHATS_DIR',
             os.path.join(self._tmp_dir.name, "chats"),
         )
         self._chats_dir_patcher.start()
         self._rooms_file_patcher = patch(
-            "web_server.CHAT_ROOMS_FILE",
+            'bot.web.server.CHAT_ROOMS_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms.json"),
         )
         self._rooms_file_patcher.start()
         self._rooms_backup_patcher = patch(
-            "web_server.CHAT_ROOMS_BACKUP_FILE",
+            'bot.web.server.CHAT_ROOMS_BACKUP_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms_backup.json"),
         )
         self._rooms_backup_patcher.start()
         self._migrate_patcher = patch("bot.core.chat_db.migrate_legacy_files_if_needed")
         self._migrate_patcher.start()
         self._tasks_patcher = patch(
-            "master_tasks.MASTER_TASKS_FILE",
+            'bot.master.master_tasks.MASTER_TASKS_FILE',
             os.path.join(self._tmp_dir.name, "master_tasks.json"),
         )
         self._tasks_patcher.start()
         self._memory_patcher = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self._tmp_dir.name, "master_memory.json"),
         )
         self._memory_patcher.start()
@@ -1951,11 +1951,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         }
 
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             # 1) 기존 세션에 동기(wait=True) 지시 전송
             res_send = await self.client.post(
@@ -1987,11 +1987,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_spawn_watch,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             res_spawn = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2023,11 +2023,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         }
 
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ), patch("bot.web.execution._notify_master_agent", new_callable=AsyncMock):
             # 1. 비동기 스폰 요청 (마스터 완료보고 턴은 mock 이 같은 session_id 를 돌려줘 방이 병합되므로 격리)
             res = await self.client.post(
@@ -2113,11 +2113,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         }
 
         with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_reuse,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             # 1) 매우 유사한 주제로 spawn 요청 -> 기존 room-card-11 재사용
             res_reuse = await self.client.post(
@@ -2157,11 +2157,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_new,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             res_unrelated = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2353,11 +2353,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             res_spawn = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2385,11 +2385,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             async with self.client.ws_connect("/ws") as ws_conn:
                 await ws_conn.receive_json()  # initial status
@@ -2677,11 +2677,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             # 1. dispatch 호출 시 taskId 반환 확인
             res_disp = await self.client.post(
@@ -2977,10 +2977,10 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             return {"result": "사용자 질문에 답변합니다.", "session_id": "core-sess", "model": "g3-flash"}
 
         with patch("bot.web.server.spawn_agent", side_effect=[mock_proc_patrol, mock_proc_user]), patch(
-            "web_server.watch_agent",
+            'bot.web.server.watch_agent',
             side_effect=fake_watch,
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ):
             # 1. 배경 점검 턴 적재 (channel="master_patrol")
             patrol_fut = asyncio.get_running_loop().create_future()
@@ -3239,7 +3239,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             ), patch.object(
                 web_server, "vault_log"
             ), patch(
-                "web_execution._notify_master_agent", new_callable=AsyncMock
+                'bot.web.execution._notify_master_agent', new_callable=AsyncMock
             ):
                 res = await self.client.post(
                     "/api/orchestrator/dispatch",
@@ -3342,7 +3342,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             ), patch.object(
                 web_server, "vault_log"
             ), patch(
-                "web_execution._notify_master_agent", new_callable=AsyncMock
+                'bot.web.execution._notify_master_agent', new_callable=AsyncMock
             ):
                 # 1. 첫 턴 시작
                 await ws.send_json({
@@ -3923,9 +3923,9 @@ class TestWebCrashRecovery(unittest.TestCase):
             "interrupted": False,
         }
         with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent", new_callable=AsyncMock, return_value=mock_watch
+            'bot.web.server.watch_agent', new_callable=AsyncMock, return_value=mock_watch
         ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
-            "web_server.vault_log"
+            'bot.web.server.vault_log'
         ), patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock):
             asyncio.run(
                 web_server.execute_chat_turn(

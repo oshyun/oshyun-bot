@@ -637,7 +637,7 @@ class TestMasterNotifyEndpoint(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.memory_patcher = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self.tmp_dir, "master_memory.json"),
         )
         self.memory_patcher.start()
@@ -748,11 +748,11 @@ class TestMasterMemoryTiers(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.tasks_patcher = patch(
-            "master_tasks.MASTER_TASKS_FILE",
+            'bot.master.master_tasks.MASTER_TASKS_FILE',
             os.path.join(self.tmp_dir, "master_tasks.json"),
         )
         self.memory_patcher = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self.tmp_dir, "master_memory.json"),
         )
         self.tasks_patcher.start()

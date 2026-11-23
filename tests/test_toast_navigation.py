@@ -4,7 +4,7 @@ import os
 import unittest
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_STATIC_DIR = os.path.join(_REPO_ROOT, "src", "bot", "static")
+_STATIC_DIR = os.path.join(_REPO_ROOT, "src", "static")
 
 
 class TestToastRoomClickNavigation(unittest.TestCase):

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import bot.master.master_memory as master_memory
 
 

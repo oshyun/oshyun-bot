@@ -11,7 +11,7 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)

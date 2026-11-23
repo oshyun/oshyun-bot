@@ -9,7 +9,7 @@ from aiohttp.test_utils import AioHTTPTestCase
 import bot.master.master_tasks as master_tasks
 from bot.web.orchestrator import handle_orchestrator_room_mark_read, handle_orchestrator_task_update
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "static")
 
 
 def read_static_bundle(static_dir: str) -> str:

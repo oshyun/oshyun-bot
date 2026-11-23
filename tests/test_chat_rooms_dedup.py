@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 # 프로젝트 루트 경로 추가
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SRC_BOT = os.path.join(REPO_ROOT, "src", "bot")
+SRC_BOT = os.path.join(REPO_ROOT, "src")
 if SRC_BOT not in sys.path:
     sys.path.insert(0, SRC_BOT)
 

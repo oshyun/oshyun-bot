@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 from aiohttp.test_utils import AioHTTPTestCase
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
@@ -191,11 +191,11 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
     async def test_burn_status_and_todo_crud(self):
         fake_usage = {"groups": [{"name": "Test Group", "buckets": []}]}
         with patch(
-            "web_automation.burn_runner.get_agy_usage_data",
+            'bot.web.automation.burn_runner.get_agy_usage_data',
             new_callable=AsyncMock,
             return_value=(fake_usage, ""),
         ), patch(
-            "web_automation.burn_runner.evaluate_burn_condition",
+            'bot.web.automation.burn_runner.evaluate_burn_condition',
             return_value=(
                 False,
                 "리셋까지 10.0시간 남아있습니다.",

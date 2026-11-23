@@ -36,7 +36,7 @@ class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
 
         self.patch_tasks = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_file)
         self.patch_memory = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self.tmp_dir, "master_memory.json"),
         )
         self.patch_jobs = patch.object(web_execution, "WEB_JOBS_FILE", self.web_jobs_file)
@@ -45,15 +45,15 @@ class TestWebJobReattachment(unittest.IsolatedAsyncioTestCase):
         self.patch_server_jobs_dir = patch.object(web_server, "JOBS_DIR", self.jobs_dir)
         self.patch_db = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
         self.patch_settings = patch(
-            "engine_settings._SETTINGS_FILE",
+            'bot.engine.engine_settings._SETTINGS_FILE',
             os.path.join(self.tmp_dir, "bot_settings.json"),
         )
         self.patch_session_log = patch(
-            "stream_parser._SESSION_LOG_FILE",
+            'bot.engine.stream_parser._SESSION_LOG_FILE',
             os.path.join(self.tmp_dir, "session_log.jsonl"),
         )
         self.patch_vault_log_path = patch(
-            "bot_logger.BOT_LOG_PATH",
+            'bot.core.bot_logger.BOT_LOG_PATH',
             os.path.join(self.tmp_dir, "bot-log.md"),
         )
         self.patch_run_vault_log = patch("bot.core.bot_logger._run_vault_log", AsyncMock())

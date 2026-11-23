@@ -19,7 +19,7 @@ import urllib.error
 from aiohttp.test_utils import AioHTTPTestCase
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
@@ -195,7 +195,7 @@ class TestTokenFirewallAndInspector(unittest.IsolatedAsyncioTestCase):
         sub_res = agy_wrapper.SubAgyRunResult("NORMAL", 0, "완료", "")
         raw_insp = ("A" * 500) + "<VERDICT>PASS</VERDICT>\n" + ("Z" * 300)
         with patch(
-            "agy_wrapper.run_agy_cli",
+            'bot.engine.agy_wrapper.run_agy_cli',
             new_callable=AsyncMock,
             return_value=agy_wrapper.SubAgyRunResult("NORMAL", 0, raw_insp, ""),
         ) as mock_cli:
@@ -297,7 +297,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
             reports.append({"url": url, "payload": payload})
 
         with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_cli), patch(
-            "agy_wrapper.report_to_master", side_effect=capture_report
+            'bot.engine.agy_wrapper.report_to_master', side_effect=capture_report
         ):
             final = await agy_wrapper.supervise_task(
                 task_id="task_98a7f6",
@@ -347,7 +347,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
 
         sent_partial: list[dict] = []
         with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_partial), patch(
-            "agy_wrapper.report_to_master", side_effect=lambda _u, p, **_kw: sent_partial.append(p)
+            'bot.engine.agy_wrapper.report_to_master', side_effect=lambda _u, p, **_kw: sent_partial.append(p)
         ):
             res = await agy_wrapper.supervise_task(
                 task_id="task_max",
@@ -372,7 +372,7 @@ class TestSuperviseTaskIntegration(unittest.IsolatedAsyncioTestCase):
 
         sent_fail: list[dict] = []
         with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_fail), patch(
-            "agy_wrapper.report_to_master", side_effect=lambda _u, p, **_kw: sent_fail.append(p)
+            'bot.engine.agy_wrapper.report_to_master', side_effect=lambda _u, p, **_kw: sent_fail.append(p)
         ):
             res_fail = await agy_wrapper.supervise_task(
                 task_id="task_fail",
@@ -424,15 +424,15 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
         os.makedirs(jobs_dir, exist_ok=True)
         self._runtime_patchers = [
             patch(
-                "engine_settings._SETTINGS_FILE",
+                'bot.engine.engine_settings._SETTINGS_FILE',
                 os.path.join(self._tmp_dir.name, "bot_settings.json"),
             ),
             patch(
-                "stream_parser._SESSION_LOG_FILE",
+                'bot.engine.stream_parser._SESSION_LOG_FILE',
                 os.path.join(self._tmp_dir.name, "session_log.jsonl"),
             ),
             patch(
-                "bot_logger.BOT_LOG_PATH",
+                'bot.core.bot_logger.BOT_LOG_PATH',
                 os.path.join(self._tmp_dir.name, "bot-log.md"),
             ),
             patch("bot.core.bot_logger._run_vault_log", AsyncMock()),
@@ -449,28 +449,28 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
         self._chat_db_hidden_patcher = patch("bot.core.chat_db.HIDDEN_ROOMS_FILE", test_hidden)
         self._chat_db_hidden_patcher.start()
         self._chats_dir_patcher = patch(
-            "web_server.CHATS_DIR", os.path.join(self._tmp_dir.name, "chats")
+            'bot.web.server.CHATS_DIR', os.path.join(self._tmp_dir.name, "chats")
         )
         self._chats_dir_patcher.start()
         self._rooms_file_patcher = patch(
-            "web_server.CHAT_ROOMS_FILE",
+            'bot.web.server.CHAT_ROOMS_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms.json"),
         )
         self._rooms_file_patcher.start()
         self._rooms_backup_patcher = patch(
-            "web_server.CHAT_ROOMS_BACKUP_FILE",
+            'bot.web.server.CHAT_ROOMS_BACKUP_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms_backup.json"),
         )
         self._rooms_backup_patcher.start()
         self._migrate_patcher = patch("bot.core.chat_db.migrate_legacy_files_if_needed")
         self._migrate_patcher.start()
         self._tasks_patcher = patch(
-            "master_tasks.MASTER_TASKS_FILE",
+            'bot.master.master_tasks.MASTER_TASKS_FILE',
             os.path.join(self._tmp_dir.name, "master_tasks.json"),
         )
         self._tasks_patcher.start()
         self._memory_patcher = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self._tmp_dir.name, "master_memory.json"),
         )
         self._memory_patcher.start()
@@ -518,7 +518,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
             },
         }
         with patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
-            "web_server.broadcast_ws_json", new_callable=AsyncMock
+            'bot.web.server.broadcast_ws_json', new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)
 
@@ -561,7 +561,7 @@ class TestTaskEventsCallbackEndpoint(AioHTTPTestCase):
             "requires_master_intervention": False,
         }
         with patch("bot.web.server.enqueue_room_turn", new_callable=AsyncMock, return_value={"already_running": False, "queue_size": 0}) as mock_enq, patch(
-            "web_server.broadcast_ws_json", new_callable=AsyncMock
+            'bot.web.server.broadcast_ws_json', new_callable=AsyncMock
         ) as mock_bc:
             res = await self.client.post("/v1/callbacks/task-events", json=payload)
 

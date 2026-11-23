@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
@@ -36,24 +36,24 @@ class TestModelInjection(unittest.TestCase):
         os.makedirs(jobs_dir, exist_ok=True)
         self._isolation_patchers = [
             patch(
-                "engine_settings._SETTINGS_FILE",
+                'bot.engine.engine_settings._SETTINGS_FILE',
                 os.path.join(self._test_dir, "bot_settings.json"),
             ),
             patch(
-                "stream_parser._SESSION_LOG_FILE",
+                'bot.engine.stream_parser._SESSION_LOG_FILE',
                 os.path.join(self._test_dir, "session_log.jsonl"),
             ),
             patch(
-                "bot_logger.BOT_LOG_PATH",
+                'bot.core.bot_logger.BOT_LOG_PATH',
                 os.path.join(self._test_dir, "bot-log.md"),
             ),
             patch("bot.core.bot_logger._run_vault_log", AsyncMock()),
             patch(
-                "master_tasks.MASTER_TASKS_FILE",
+                'bot.master.master_tasks.MASTER_TASKS_FILE',
                 os.path.join(self._test_dir, "master_tasks.json"),
             ),
             patch(
-                "master_memory.MASTER_MEMORY_FILE",
+                'bot.master.master_memory.MASTER_MEMORY_FILE',
                 os.path.join(self._test_dir, "master_memory.json"),
             ),
             patch.object(web_execution, "JOBS_DIR", jobs_dir),

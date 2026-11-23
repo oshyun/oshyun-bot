@@ -9,7 +9,7 @@ import unittest
 class TestSidepanelMarkdownUnification(unittest.TestCase):
     def setUp(self):
         self.static_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "src", "bot", "static")
+            os.path.join(os.path.dirname(__file__), "..", "src", "static")
         )
 
     def test_chat_css_has_md_compact(self):
