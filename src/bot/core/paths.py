@@ -143,12 +143,15 @@ GMAIL_VAULT_FILE = os.path.join(
 def child_default_workdir(parent_agent_id: str | None) -> str | None:
     """상위 에이전트(봇개발 및 커스텀 에이전트) 하위 방의 기본 작업경로. 해당 없으면 None(기존 폴백 유지)."""
     if parent_agent_id == "__expert_coding__":
-        return CODEDIR or WORKDIR
+        d = CODEDIR or WORKDIR
+        if d and os.path.isdir(d):
+            return d
+        return ROOT_DIR if os.path.isdir(ROOT_DIR) else None
     if parent_agent_id:
         try:
             import bot.core.agent_configs as agent_configs
             w = agent_configs.get_agent_workdir(str(parent_agent_id).strip())
-            if w:
+            if w and os.path.isdir(w):
                 return w
         except Exception:
             pass

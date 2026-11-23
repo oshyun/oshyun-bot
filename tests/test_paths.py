@@ -115,6 +115,17 @@ class TestPaths(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(paths._resolve_codedir())
 
+    def test_child_default_workdir_fallback(self):
+        """child_default_workdir: __expert_coding__ 일 때 무효 경로면 ROOT_DIR 로 안전 폴백"""
+        with patch.object(paths, "CODEDIR", "/nonexistent/invalid/repo/path"), \
+             patch.object(paths, "WORKDIR", "/nonexistent/invalid/vault/path"):
+            resolved = paths.child_default_workdir("__expert_coding__")
+            self.assertEqual(resolved, paths.ROOT_DIR)
+
+        with patch.object(paths, "CODEDIR", paths.ROOT_DIR):
+            resolved = paths.child_default_workdir("__expert_coding__")
+            self.assertEqual(resolved, paths.ROOT_DIR)
+
 
 if __name__ == "__main__":
     unittest.main()

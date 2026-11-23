@@ -50,6 +50,17 @@ def _build_invocation(
 ) -> dict:
     """엔진(claude / agy) 호출의 명령행·환경변수·정규화된 workdir 를 담은 dict 를 만든다."""
     workdir = os.path.realpath(workdir)
+    if not os.path.isdir(workdir):
+        from bot.core.paths import ROOT_DIR, WORKDIR
+        logger.warning(
+            "[agent_engine] 지정된 workdir 경로가 존재하지 않습니다: %s (안전 폴백 적용)",
+            workdir,
+        )
+        fallback = ROOT_DIR if (coding or expert_coding) else WORKDIR
+        if not (fallback and os.path.isdir(fallback)):
+            fallback = ROOT_DIR if os.path.isdir(ROOT_DIR) else WORKDIR
+        if fallback and os.path.isdir(fallback):
+            workdir = os.path.realpath(fallback)
     engine_inst = get_engine_instance()
     effective_model = (model or get_model()).strip()
     effective_effort = effort if effort is not None else get_effort()
