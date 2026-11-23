@@ -1,6 +1,6 @@
 """통합 SQLite 대화 데이터베이스 모듈 (chat_db.py).
 
-텔레그램 채널(telegram_bot.py)과 웹/음성 채널(web_server.py)이 공통으로 바라보는
+웹/음성 채널(bot.web.server)이 공통으로 바라보는
 단일 진실 원천(SSOT) 대화 저장소.
 - WAL(Write-Ahead Logging) 모드로 멀티 프로세스 동시 읽기/쓰기 안전성 보장.
 - 대화방(rooms) 메타데이터 및 메시지(messages) 내역 영속화.
@@ -976,30 +976,6 @@ def get_room(room_id_or_session_id: str, db_path: str | None = None) -> dict | N
             LIMIT 1;
             """,
             (target, target),
-        )
-        return _row_to_room_dict(cur.fetchone())
-
-
-def get_latest_telegram_room(
-    max_age_seconds: float = 6 * 3600,
-    db_path: str | None = None,
-) -> dict | None:
-    """최근 max_age_seconds 이내에 갱신된 활성 텔레그램 대화방 1개를 반환한다."""
-    cutoff = time.time() - max_age_seconds
-    with get_connection(db_path) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT {_ROOM_SELECT_COLS}
-            FROM rooms r
-            WHERE r.last_channel = 'telegram'
-              AND r.is_hidden = 0
-              AND COALESCE(r.is_archived, 0) = 0
-              AND r.updated_at >= ?
-            ORDER BY r.updated_at DESC
-            LIMIT 1;
-            """,
-            (cutoff,),
         )
         return _row_to_room_dict(cur.fetchone())
 
