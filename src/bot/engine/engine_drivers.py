@@ -19,7 +19,7 @@ ProgressCb = Callable[[str], Awaitable[None]]
 
 
 def get_instruction_dir(mode: str) -> str:
-    """모드별 AGY 시스템 지침 디렉토리 경로 반환 (common, telegram, web, coding, orchestrator)."""
+    """모드별 AGY 시스템 지침 디렉토리 경로 반환 (common, web, coding, orchestrator)."""
     return os.path.join(_INSTRUCTIONS_DIR, mode)
 
 
@@ -46,7 +46,7 @@ def _combine_instructions(mode: str, fallback_prompt: str) -> str:
     return fallback_prompt
 
 
-# 기본 공통 탐색·응답 원칙 (텔레그램/웹 공통)
+# 기본 공통 탐색·응답 원칙 (웹 채널 공통)
 _VAULT_FIRST_DIRECTIVE = """\
 [탐색 우선순위 & 초고속 1차 응답 원칙]
 사용자에게는 **빠른 1차 응답**이 최우선이다. 웹 페이지 검색(`search_web`/`read_url_content`)은 지연의 주원인이므로 아래 원칙을 엄격히 따른다:
@@ -58,25 +58,6 @@ _VAULT_FIRST_DIRECTIVE = """\
 2. 빠른 응답(Fast Response) & 보충 제안:
    - 캐시나 핵심 노트 1~2개 확인으로 답할 수 있으면 불필요한 연쇄 탐색을 멈추고 즉시 간결하게 답한다.
    - 볼트로 1차 응답을 완료한 뒤 시중 비교·외부 최신 확인이 추가로 유용할 것 같다면, 웹 검색을 바로 돌리며 기다리게 하지 말고 먼저 볼트 답변을 완료한 상태에서 말미에 *"필요 시 시중/외부 정보도 추가로 찾아봐 드릴까요?"* 정도로만 가볍게 제안하라."""
-
-# claude/agy 에 덧붙이는 시스템 프롬프트 (텔레그램 기본)
-_FALLBACK_TELEGRAM_PROMPT = f"""\
-너는 개인 AI 비서다. 사용자가 텔레그램 메신저로 너와 대화한다.
-너는 사용자의 Obsidian 볼트(마크다운 노트 모음) 안에서 동작하며, 그 노트들이 너의 작업 대상이다.
-샌드박스로 격리되어 있어 볼트 밖의 파일에는 접근할 수 없다.
-
-{_VAULT_FIRST_DIRECTIVE}
-
-[출력 형식 — 텔레그램 평문]
-너의 답변은 텔레그램 메시지에 평문 그대로 표시된다. 마크다운이나 HTML 서식은 렌더링되지 않으니 사용하지 마라:
-- 쓰지 말 것: **굵게**, # 제목, 표(| ... |), 코드펜스(```), 인라인 코드(백틱), <span> 등 모든 HTML 태그.
-- 강조가 필요하면 따옴표나 이모지(✅ 🔴 ⚠️ 📌)로 표현한다.
-- 목록은 '•' 나 '-' 와 줄바꿈으로 구조를 표현한다.
-- 단, 노트 공유 링크나 외부 URL은 날것의 긴 주소로 노출하지 말고 마크다운 링크([link:파일명.md](https://obsid.net/...) 또는 [표시텍스트](https://...)) 형식을 사용한다.
-- 휴대폰 화면에 맞게 핵심부터 간결한 평문으로 답한다."""
-
-_DEFAULT_SYSTEM_PROMPT = _combine_instructions("telegram", _FALLBACK_TELEGRAM_PROMPT)
-SYSTEM_PROMPT = os.getenv("OSHYUN_BOT_SYSTEM_PROMPT", _DEFAULT_SYSTEM_PROMPT)
 
 _VAULT_NAME = (
     os.path.basename(os.path.realpath(os.getenv("AGENT_WORKDIR", "")))
@@ -101,6 +82,11 @@ _DEFAULT_WEB_SYSTEM_PROMPT = _combine_instructions("web", _FALLBACK_WEB_PROMPT)
 WEB_SYSTEM_PROMPT = os.getenv(
     "OSHYUN_BOT_WEB_SYSTEM_PROMPT", _DEFAULT_WEB_SYSTEM_PROMPT
 )
+
+# 기본 폴백 시스템 프롬프트 — 채널 미지정 실행(정기작업·자동화 등)도 결과가 웹 앱으로
+# 전달되므로 웹 채널 프롬프트를 기본으로 사용한다. AGENT__SYSTEM_PROMPT(레거시
+# OSHYUN_BOT_SYSTEM_PROMPT) 환경변수로 덮어쓸 수 있다.
+SYSTEM_PROMPT = os.getenv("OSHYUN_BOT_SYSTEM_PROMPT", _DEFAULT_WEB_SYSTEM_PROMPT)
 
 
 def get_quota_alert_prompt(
@@ -176,14 +162,14 @@ def _resolve_system_prompt(
 
 # 코딩 모드용 시스템 프롬프트
 _FALLBACK_CODING_PROMPT = """\
-코딩 모드다. 사용자가 텔레그램(주로 휴대폰)으로 너와 대화하며 코드 작업을 시킨다.
+코딩 모드다. 사용자가 웹 앱(주로 휴대폰)으로 너와 대화하며 코드 작업을 시킨다.
 너는 현재 작업 디렉토리(코드 저장소) 안에서 동작하며, 그 안의 코드가 너의 작업 대상이다.
 도구로 파일을 읽고 수정하고 명령을 실행할 수 있다.
 
-답변은 텔레그램 메시지로 표시된다. 휴대폰 화면에 맞게 간결하게 답하라:
+답변은 웹 채팅으로 표시된다. 화면에 맞게 간결하게 답하라:
 - 무엇을 했는지·무엇을 바꿨는지 핵심만 요약한다. 장황한 설명과 코드 전체 덤프는 피한다.
 - 코드는 꼭 필요한 짧은 조각만 보여라. 코드펜스(```)와 인라인 백틱(`)은 그대로 써도 된다(렌더링됨).
-- 표(| ... |)와 # 제목 같은 다른 마크다운 서식은 렌더링되지 않으니 쓰지 마라.
+- 표(| ... |)와 # 제목 같은 마크다운 서식도 렌더링되니 필요할 때만 절제해서 써라.
 - 강조가 필요하면 이모지(✅ 🔴 ⚠️ 📌)나 줄바꿈으로 표현한다."""
 
 _DEFAULT_CODING_SYSTEM_PROMPT = _combine_instructions("coding", _FALLBACK_CODING_PROMPT)
@@ -577,7 +563,7 @@ class AGYEngine(BaseEngine):
                 else (
                     "expert_coding"
                     if expert_coding
-                    else ("coding" if coding else ("web" if web else "telegram"))
+                    else ("coding" if coding else "web")
                 )
             )
         )

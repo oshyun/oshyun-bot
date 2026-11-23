@@ -1,6 +1,6 @@
 """agent_engine — `claude -p` / `agy` 호출 및 비동기 프로세스 스트리밍 엔진.
 
-텔레그램 및 웹에서 받은 프롬프트를 로컬 CLI로 실행하고 결과 텍스트와
+웹 앱 등에서 받은 프롬프트를 로컬 CLI로 실행하고 결과 텍스트와
 session_id를 돌려준다. 비동기(subprocess)라 이벤트 루프를 막지 않는다.
 하위 모듈(engine_sandbox, engine_drivers, engine_settings)을 조합하는 통합 파사드.
 """
@@ -18,7 +18,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from bot.engine.engine_drivers import AGY_DEFAULT_MODEL, AGY_MODEL_CANDIDATES, AGY_MODELS, CODING_SYSTEM_PROMPT, DEFAULT_ENGINE, DEFAULT_MODEL, EFFORT_LEVELS, ENGINE_LABELS, ENGINE_REGISTRY, ENGINES, MODEL_CANDIDATES, MODEL_LABELS, ORCHESTRATOR_SYSTEM_PROMPT, SYSTEM_PROMPT, AGYEngine, BaseEngine, ClaudeEngine, ProgressCb, _LEGACY_AGY_MODEL_ALIASES, get_engine_instance, get_instruction_dir, get_quota_alert_prompt
+from bot.engine.engine_drivers import AGY_DEFAULT_MODEL, AGY_MODEL_CANDIDATES, AGY_MODELS, CODING_SYSTEM_PROMPT, DEFAULT_ENGINE, DEFAULT_MODEL, EFFORT_LEVELS, ENGINE_LABELS, ENGINE_REGISTRY, ENGINES, MODEL_CANDIDATES, MODEL_LABELS, ORCHESTRATOR_SYSTEM_PROMPT, AGYEngine, BaseEngine, ClaudeEngine, ProgressCb, _LEGACY_AGY_MODEL_ALIASES, get_engine_instance, get_instruction_dir, get_quota_alert_prompt
 from bot.engine.engine_sandbox import SANDBOX_ENABLED, _resolve_agy_model_effort, _resolve_claude_bin, _sandbox_prefix, _seed_claude_home, sandbox_placement_warnings
 from bot.engine.engine_settings import _DEFAULTS, _load_settings, _save_settings, _settings, check_and_reset_if_idle, clear_session, delete_session_files, get_coding_mode, get_effort, get_engine, get_last_activity, get_model, get_model_candidates, get_model_labels, get_session, get_supported_efforts, get_verbose, set_coding_mode, set_effort, set_engine, set_model, set_session, set_verbose, update_last_activity
 from bot.engine.stream_parser import _EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, _append_session_log, _clip, _event_feed_lines, _filter_stderr, _parse_stream, _tool_label

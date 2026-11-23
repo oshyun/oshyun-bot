@@ -37,7 +37,7 @@ class TestChatDb(unittest.TestCase):
             room_id="room-1",
             role="user",
             text="오늘 오사카 날씨 어때?",
-            channel="telegram",
+            channel="web",
             session_id="sess-osaka-1",
             db_path=self.db_path,
         )
@@ -48,7 +48,7 @@ class TestChatDb(unittest.TestCase):
         self.assertIsNotNone(room)
         self.assertEqual(room["title"], "오늘 오사카 날씨 어때?")
         self.assertEqual(room["sessionId"], "sess-osaka-1")
-        self.assertEqual(room["lastChannel"], "telegram")
+        self.assertEqual(room["lastChannel"], "web")
         self.assertEqual(room["messageCount"], 1)
 
         # 2. 어시스턴트 답변 추가
@@ -56,7 +56,7 @@ class TestChatDb(unittest.TestCase):
             room_id="room-1",
             role="assistant",
             text="오사카는 현재 맑고 기온은 18도입니다.",
-            channel="telegram",
+            channel="web",
             steps=[{"type": "tool", "name": "weather"}],
             model="gemini-flash",
             cost=0.0002,
@@ -75,7 +75,7 @@ class TestChatDb(unittest.TestCase):
         msgs = chat_db.get_messages("room-1", db_path=self.db_path)
         self.assertEqual(len(msgs), 2)
         self.assertEqual(msgs[0]["role"], "user")
-        self.assertEqual(msgs[0]["channel"], "telegram")
+        self.assertEqual(msgs[0]["channel"], "web")
         self.assertEqual(msgs[1]["role"], "assistant")
         self.assertEqual(len(msgs[1]["steps"]), 1)
         self.assertEqual(msgs[1]["steps"][0]["name"], "weather")
@@ -308,7 +308,7 @@ class TestChatDb(unittest.TestCase):
 
 
 class TestSessionContinuityAndSync(unittest.TestCase):
-    """텔레그램 연속 대화방 유지, 비DB 세션 복구 및 다중 프로세스 설정 동기화 회귀 테스트."""
+    """웹 연속 대화방 유지, 비DB 세션 복구 및 다중 프로세스 설정 동기화 회귀 테스트."""
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="session_cont_test_")
@@ -324,14 +324,14 @@ class TestSessionContinuityAndSync(unittest.TestCase):
             "tg-sess-1",
             session_id="tg-sess-1",
             title="오늘은 주말이라 주식 못 사",
-            channel="telegram",
+            channel="web",
             db_path=self.db_path,
         )
         chat_db.add_message(
             "tg-sess-1",
             "user",
             "오늘은 주말이라 주식 못 사",
-            channel="telegram",
+            channel="web",
             session_id="tg-sess-1",
             db_path=self.db_path,
         )
@@ -339,7 +339,7 @@ class TestSessionContinuityAndSync(unittest.TestCase):
             "tg-sess-1",
             "assistant",
             "네, 주말에는 휴장입니다.",
-            channel="telegram",
+            channel="web",
             session_id="tg-sess-1",
             db_path=self.db_path,
         )
@@ -349,7 +349,7 @@ class TestSessionContinuityAndSync(unittest.TestCase):
             "tg-sess-1",
             session_id="tg-sess-2",
             title="근데 네가 50만원 구매하라고 했잖아",
-            channel="telegram",
+            channel="web",
             db_path=self.db_path,
         )
         self.assertEqual(merged_room["id"], "tg-sess-1")
@@ -360,7 +360,7 @@ class TestSessionContinuityAndSync(unittest.TestCase):
             "tg-sess-1",
             "user",
             "근데 네가 50만원 구매하라고 했잖아",
-            channel="telegram",
+            channel="web",
             session_id="tg-sess-2",
             db_path=self.db_path,
         )
@@ -372,51 +372,8 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         msgs = chat_db.get_messages("tg-sess-1", db_path=self.db_path)
         self.assertEqual(len(msgs), 3)
 
-    def test_get_latest_telegram_room_respects_channel_and_max_age(self):
-        """가장 최근 텔레그램 방을 조회할 때 웹 방은 무시하고 max_age_seconds를 준수한다."""
-        import time
-
-        now = time.time()
-        chat_db.get_or_create_room(
-            "tg-room-recent",
-            session_id="tg-room-recent",
-            title="최근 텔레그램 방",
-            channel="telegram",
-            db_path=self.db_path,
-        )
-        chat_db.add_message(
-            "tg-room-recent",
-            "user",
-            "텔레그램 질문",
-            channel="telegram",
-            created_at=now - 120,
-            db_path=self.db_path,
-        )
-        chat_db.get_or_create_room(
-            "web-room-newer",
-            session_id="web-room-newer",
-            title="더 최신 웹 방",
-            channel="web",
-            db_path=self.db_path,
-        )
-        chat_db.add_message(
-            "web-room-newer",
-            "user",
-            "웹 질문",
-            channel="web",
-            created_at=now - 5,
-            db_path=self.db_path,
-        )
-
-        found = chat_db.get_latest_telegram_room(max_age_seconds=3600, db_path=self.db_path)
-        self.assertIsNotNone(found)
-        self.assertEqual(found["id"], "tg-room-recent")
-
-        expired = chat_db.get_latest_telegram_room(max_age_seconds=10, db_path=self.db_path)
-        self.assertIsNone(expired)
-
     def test_engine_settings_multiprocess_sync_preserves_external_session_and_core_keys(self):
-        """외부 프로세스가 bot_settings.json에 기록한 텔레그램 세션이 다른 프로세스의 set_session으로 덮이지 않는다."""
+        """외부 프로세스가 bot_settings.json에 기록한 세션이 다른 프로세스의 set_session으로 덮이지 않는다."""
         import copy
         import json
         from unittest.mock import patch
@@ -431,7 +388,7 @@ class TestSessionContinuityAndSync(unittest.TestCase):
                 engine_settings._sync_from_disk()
                 self.assertEqual(engine_settings.get_session(""), "tg-old")
 
-                # 다른 프로세스(telegram_bot)가 디스크의 agy_session_id를 tg-live로 갱신했다고 가정
+                # 다른 웹 프로세스가 디스크의 agy_session_id를 tg-live로 갱신했다고 가정
                 with open(settings_file, "w", encoding="utf-8") as f:
                     json.dump({"engine": "agy", "agy_session_id": "tg-live"}, f)
 

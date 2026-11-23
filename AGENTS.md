@@ -76,8 +76,7 @@ oshyun-bot = "Personal Intelligent Bot". 웹 UI(브라우저/모바일)에서 �
     `web/job_recovery.py`·`web/stream_watch.py`·`web/turn_execution.py`·`web/room_queue.py`·`web/agent_reporting.py`·`web/auth.py`.
   - `web/static/` — 순수 HTML/CSS/JS 모던 클린 라이트(화이트/에메랄드) 테마 프론트엔드. 별도 빌드 없이 `server.py`가
     `src/bot/web/static/index.html`을 직접 서빙한다.
-- **`bot/instructions/`** — 역할별 시스템 프롬프트 허브(엔진·웹·스케줄러 공유 자산). `bot/telegram` 은 향후 재도입용
-  예약 네임스페이스(현재 코드 없음 — 텔레그램 봇은 커밋 daf4c4f 에서 제거됨).
+- **`bot/instructions/`** — 역할별 시스템 프롬프트 허브(엔진·웹·스케줄러 공유 자산).
 
 ---
 
@@ -92,7 +91,7 @@ cd oshyun-bot
 
 # .env 설정 (.env.defaults 복사 후 필수 키 입력)
 cp .env.defaults .env
-# .env 파일에서 TELEGRAM_BOT_TOKEN 및 AGENT_WORKDIR(Obsidian 볼트 절대 경로) 설정
+# .env 파일에서 AGENT_WORKDIR(Obsidian 볼트 절대 경로) 등 필수 키 설정
 ```
 
 ### 2. 백엔드 Python 가상환경 셋업

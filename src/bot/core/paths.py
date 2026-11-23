@@ -86,7 +86,7 @@ JOBS_DIR = os.path.join(DATA_DIR, "jobs")
 CHATS_DIR = os.path.join(DATA_DIR, "chats")
 # 대화방 메타데이터 인덱스 파일 (레거시).
 CHAT_ROOMS_FILE = os.path.join(STATE_DIR, "chat_rooms.json")
-# 통합 SQLite 대화 데이터베이스 (텔레그램 & 웹 공통 SSOT).
+# 통합 SQLite 대화 데이터베이스 (웹 채널 공통 SSOT).
 CHAT_DB_FILE = os.path.join(STATE_DIR, "chat.db")
 # claude CLI 의 설정·인증·세션 디렉토리(~/.claude) 를 봇 전용으로 분리한 위치 — AGENT_CONFIG_DIR
 # 로 여기를 가리킨다. 인증(.credentials.json)은 사용자가 한 번 대화형 /login 으로 채워야 한다

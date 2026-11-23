@@ -173,7 +173,7 @@ def _should_sync_global_session(
     current_session_id: str | None,
     global_session_id: str | None,
 ) -> bool:
-    """웹 대화방 턴이 전역(텔레그램/코어) 세션을 동기화·덮어쓰기해야 하는지 판별한다."""
+    """웹 대화방 턴이 전역(코어) 세션을 동기화·덮어쓰기해야 하는지 판별한다."""
     if not room_id or room_id == "__default__" or _is_orchestrator_room_id(room_id):
         return True
     if global_session_id and global_session_id in (room_id, current_session_id):

@@ -7,7 +7,7 @@
 매 주기마다 전체를 다시 받아 노트를 통째로 다시 쓴다(버킷은 표시 구분일 뿐 갱신 주기와
 무관). 볼트에 트리거 파일(.cal-refresh)이 생기면 주기를 기다리지 않고 즉시 동기화한다.
 
-봇(telegram_bot.py)과 별개의 프로세스로 돌린다(scripts/start.sh 가 함께 띄움).
+봇 백엔드(bot.web.server)와 별개의 프로세스로 돌린다(scripts/start.sh 가 함께 띄움).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ try:
 except ImportError:
     pass
 
-# 운영 산출물 디렉토리(로그). telegram-bot 의 paths.py / 셸 common.sh 과 같은 규칙
+# 운영 산출물 디렉토리(로그). 봇 백엔드의 paths.py / 셸 common.sh 과 같은 규칙
 # (DATA_DIR 환경변수 또는 <루트>/data). cal-sync 는 별개 컴포넌트라 paths.py 를 쓰지 않는다.
 _DATA_DIR = os.path.abspath(
     os.path.expanduser(os.getenv("DATA_DIR", "").strip() or os.path.join(_ROOT, "data"))
@@ -48,7 +48,7 @@ _LOG_FILE = os.path.join(_LOGS_DIR, "cal-sync.log")
 class _CappedFileHandler(logging.Handler):
     """cal-sync.log 에 직접 기록하되 최근 100줄만 유지해 파일 크기를 묶는다.
 
-    셸 리다이렉트가 무한정 append 하던 것을 데몬이 직접 관리한다(telegram-bot 과 동일 정책).
+    셸 리다이렉트가 무한정 append 하던 것을 데몬이 직접 관리한다(봇 백엔드와 동일 정책).
     셸은 크래시 stderr 만 별도 .err.log 로 받으므로 이 파일의 유일한 기록자다.
     """
 

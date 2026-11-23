@@ -647,8 +647,8 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
                 # roomId가 지정되고 sessionId가 None이면 old-global-session을 물려받지 않고 None으로 시작해야 함
                 self.assertIsNone(mock_spawn.call_args[0][1])
 
-    async def test_websocket_new_session_on_web_room_preserves_telegram_global_session(self):
-        """웹 대화방에서 new_session을 요청해도 텔레그램 전역 세션(ns='')은 초기화되지 않는다."""
+    async def test_websocket_new_session_on_web_room_preserves_global_session(self):
+        """웹 대화방에서 new_session을 요청해도 전역(코어) 세션(ns='')은 초기화되지 않는다."""
         engine_settings.set_engine("agy")
         engine_settings.set_session("tg-live-sess-123", ns="")
         web_server._room_session_ids["room-web-iso-1"] = "web-room-sess-old"
@@ -664,8 +664,8 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
         finally:
             web_server._room_session_ids.pop("room-web-iso-1", None)
 
-    async def test_web_execution_on_room_preserves_telegram_global_session(self):
-        """특정 웹 대화방 실행(execute_chat_turn) 완료 시 텔레그램 전역 세션이 덮어쓰이지 않는다."""
+    async def test_web_execution_on_room_preserves_global_session(self):
+        """특정 웹 대화방 실행(execute_chat_turn) 완료 시 전역(코어) 세션이 덮어쓰이지 않는다."""
         engine_settings.set_engine("agy")
         engine_settings.set_session("tg-live-sess-999", ns="")
         mock_proc = MagicMock(pid=77777)
@@ -2498,11 +2498,9 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
         common_dir = agent_engine.get_instruction_dir("common")
         web_dir = agent_engine.get_instruction_dir("web")
-        tg_dir = agent_engine.get_instruction_dir("telegram")
 
         self.assertIn(f"--add-dir {common_dir}", web_cmd)
         self.assertIn(f"--add-dir {web_dir}", web_cmd)
-        self.assertNotIn(f"--add-dir {tg_dir}", web_cmd)
 
         # web 지침 파일 내용 검증
         with open(os.path.join(web_dir, "AGENTS.md"), "r", encoding="utf-8") as f:
@@ -2510,9 +2508,10 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         self.assertIn("웹 UI에서는 마크다운", web_content)
         self.assertNotIn("마크다운이나 HTML 서식은 렌더링되지 않으니 사용하지 마라", web_content)
 
-        inv_tg = engine.build_cmd(
+        # 채널 미지정(web=False) 폴백 실행도 웹 지침 디렉토리를 사용한다
+        inv_default = engine.build_cmd(
             "연저펀 이벤트 알려줘",
-            session_id="tg-conv-1",
+            session_id="default-conv-1",
             model="gemini-3.8-flash",
             effort="medium",
             workdir="/Users/user/obsidian/oshyun",
@@ -2522,14 +2521,13 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             coding=False,
             web=False,
         )
-        tg_cmd = " ".join(inv_tg["cmd"])
+        default_cmd = " ".join(inv_default["cmd"])
         # 순수 프롬프트 확인
-        tg_p_idx = inv_tg["cmd"].index("-p")
-        self.assertEqual(inv_tg["cmd"][tg_p_idx + 1], "연저펀 이벤트 알려줘")
+        default_p_idx = inv_default["cmd"].index("-p")
+        self.assertEqual(inv_default["cmd"][default_p_idx + 1], "연저펀 이벤트 알려줘")
 
-        self.assertIn(f"--add-dir {common_dir}", tg_cmd)
-        self.assertIn(f"--add-dir {tg_dir}", tg_cmd)
-        self.assertNotIn(f"--add-dir {web_dir}", tg_cmd)
+        self.assertIn(f"--add-dir {common_dir}", default_cmd)
+        self.assertIn(f"--add-dir {web_dir}", default_cmd)
 
     def test_expert_agents_system_prompts_and_directives(self):
         """전문가 에이전트(세컨브레인, 봇개발) 전용 시스템 프롬프트, 인스트럭션 디렉토리, UI 계층 구조 검증."""
