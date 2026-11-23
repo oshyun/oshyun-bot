@@ -166,6 +166,7 @@ from web_google import (
 from google_auth import default_google_auth
 
 import web_execution
+import web_runtime_state
 from web_execution import (
     _active_agent_pids,
     _active_watch_tasks,
@@ -627,7 +628,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
         interval_seconds=int(os.getenv("MASTER_PATROL_INTERVAL", "0")),
         stall_seconds=int(os.getenv("MASTER_STALL_SECONDS", "900")),
     )
-    web_execution._master_supervisor = _master_supervisor
+    web_runtime_state._master_supervisor = _master_supervisor
 
     web_app = web.Application(middlewares=[cors_middleware, auth_middleware])
 
@@ -654,11 +655,11 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
                     max_elapsed_seconds=float(os.getenv("ZOMBIE_MAX_ELAPSED_SECONDS", "1800.0")),
                 )
             )
-            web_execution._zombie_reaper_task = _zombie_reaper_task
+            web_runtime_state._zombie_reaper_task = _zombie_reaper_task
 
             if _master_supervisor is not None:
                 _master_supervisor_task = asyncio.create_task(_master_supervisor.run_forever())
-                web_execution._master_supervisor_task = _master_supervisor_task
+                web_runtime_state._master_supervisor_task = _master_supervisor_task
 
         if not is_test_env and os.getenv("WEB_SCHEDULER_ENABLED", "1") != "0":
             try:
@@ -714,8 +715,8 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
         _scheduler_task = None
         _burn_recover_task = None
         _zombie_reaper_task = None
-        web_execution._master_supervisor_task = None
-        web_execution._zombie_reaper_task = None
+        web_runtime_state._master_supervisor_task = None
+        web_runtime_state._zombie_reaper_task = None
         web_execution.set_shutting_down(False)
 
     web_app.on_startup.append(_on_web_startup)
