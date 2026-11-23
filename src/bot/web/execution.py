@@ -72,9 +72,11 @@ for _name, _value in tuple(vars(sys.modules[__name__]).items()):
     if _name.startswith("__"):
         continue
     if isinstance(_value, types.ModuleType):
-        _owner = _value.__name__
-    else:
-        _owner = getattr(_value, "__module__", None)
+        # 모듈 객체는 owner 매핑이 no-op(vars(mod)에 자기 이름이 없어 setattr
+        # 전달이 항상 스킵됨)이므로 등록하지 않는다. facade 속성(import) 자체는
+        # 테스트 patch.object 계약이라 유지.
+        continue
+    _owner = getattr(_value, "__module__", None)
     if _owner and _owner in sys.modules and _owner != __name__:
         _OWNER_BY_SYMBOL[_name] = _owner
 del _name, _value, _owner

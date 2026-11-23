@@ -28,7 +28,7 @@ from bot.web.jobs import _is_task_rec_aborted, extract_steps_from_jsonl as _extr
 from bot.web.agent_reporting import _notify_master_agent
 from bot.web.room_queue import enqueue_room_turn
 from bot.web.stream_watch import _watch_and_finish_web_job, extract_stream_events_from_line
-from bot.web.runtime_state import ORCHESTRATOR_ROOM_IDS, WEB_JOBS_FILE, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _room_workers, _sync_global_session_if_needed, _user_cancelled_rooms, broadcast_ws_json, build_active_runs_payload, poke_master_supervisor, is_shutting_down
+from bot.web.runtime_state import ORCHESTRATOR_ROOM_IDS, WEB_JOBS_FILE, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _room_queues, _room_session_ids, _sync_global_session_if_needed, _user_cancelled_rooms, broadcast_ws_json, build_active_runs_payload, poke_master_supervisor, is_shutting_down
 
 
 

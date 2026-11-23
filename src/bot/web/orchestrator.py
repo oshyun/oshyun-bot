@@ -19,7 +19,7 @@ import bot.core.chat_db as chat_db
 from bot.engine.agent_engine import clear_session, get_session
 from bot.core.bot_logger import logger, vault_log
 from bot.core.json_store import read_json, write_json_atomic
-from bot.master.master_supervisor import CORE_ROOM_ID, MASTER_PATROL_CHANNEL, MasterSupervisor, build_graph as build_master_graph
+from bot.master.master_supervisor import MASTER_PATROL_CHANNEL, build_graph as build_master_graph
 import bot.core.agent_configs as agent_configs
 import bot.master.master_memory as master_memory
 import bot.master.master_tasks as master_tasks
