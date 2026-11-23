@@ -828,3 +828,119 @@
   color: var(--text-3);
   font-size: calc(12.5px * var(--ui-scale, 1));
 }
+
+/* ═══ 노트 뷰어 슬라이드오버 패널 (Note Viewer Panel) ═══ */
+.note-sidebar {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  z-index: 50;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+@media (min-width: 1025px) {
+  .note-sidebar {
+    position: relative;
+    box-shadow: none;
+  }
+}
+.note-sidebar.open {
+  display: flex;
+}
+.note-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.note-viewer-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.note-viewer-title-wrap #note-viewer-title {
+  font-size: calc(13.5px * var(--ui-scale, 1));
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-viewer-path-badge {
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  color: var(--text-3);
+  background: var(--bg-subtle);
+  padding: 1px 6px;
+  border-radius: 4px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.note-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.note-viewer-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 18px 40px;
+  font-size: calc(13.5px * var(--ui-scale, 1));
+  color: var(--text);
+  line-height: 1.65;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.note-viewer-body .md {
+  word-break: break-word;
+}
+.note-viewer-body .md h1,
+.note-viewer-body .md h2,
+.note-viewer-body .md h3,
+.note-viewer-body .md h4 {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.note-viewer-body .md p {
+  margin-bottom: 10px;
+}
+.note-viewer-body .md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: calc(12.5px * var(--ui-scale, 1));
+}
+.note-viewer-body .md th,
+.note-viewer-body .md td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.note-viewer-body .md th {
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+.note-viewer-body .md pre,
+.note-viewer-body .md code {
+  font-family: var(--mono);
+}
+

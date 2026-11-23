@@ -859,9 +859,14 @@
             <span id="thread-panel-title">하위 작업</span>
             <span class="thread-status-badge" id="thread-panel-status">대기</span>
           </div>
-          <button class="drawer-close-btn" onclick="closeThreadPanel()" title="스레드 닫기" aria-label="닫기">
-            <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button type="button" class="icon-btn" onclick="expandThreadToFullRoom()" title="전체 대화방으로 열기" aria-label="전체 대화방으로 열기" style="width:32px;height:32px;">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            </button>
+            <button class="drawer-close-btn" onclick="closeThreadPanel()" title="스레드 닫기" aria-label="닫기">
+              <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </div>
         <div class="thread-sidebar-body" id="thread-panel-body">
           <div class="thread-empty">하위 작업을 선택하면 실행 단계와 상세 로그가 표시됩니다.</div>
@@ -874,6 +879,38 @@
         </div>
       </aside>
       <div id="thread-drawer-backdrop" class="thread-drawer-backdrop" onclick="closeThreadPanel()"></div>
+
+      <!-- 우측 노트 뷰어 패널 (Note Viewer Slide-over Panel) -->
+      <aside class="thread-sidebar note-sidebar" id="note-viewer-panel" aria-label="노트 뷰어 패널">
+        <div class="thread-sidebar-header note-viewer-header">
+          <div class="thread-sidebar-title note-viewer-title-wrap">
+            <span class="note-icon" style="display:inline-flex;align-items:center;color:var(--accent);">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <span id="note-viewer-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">노트</span>
+            <span id="note-viewer-path" class="note-viewer-path-badge" style="font-size:10.5px;color:var(--text-3);background:var(--bg-subtle);padding:1px 6px;border-radius:4px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          </div>
+          <div class="note-viewer-actions" style="display:flex;align-items:center;gap:4px;">
+            <button type="button" class="icon-btn" onclick="navigateNoteViewerHistory(-1)" id="btn-note-nav-back" title="이전 노트" style="display:none;width:28px;height:28px;">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button type="button" class="btn sm ghost" onclick="askNoteViewerToAI()" id="btn-note-ask-ai" title="AI에게 이 노트 질문하기" style="font-size:11px;padding:3px 7px;display:inline-flex;align-items:center;gap:3px;">
+              <svg class="i" viewBox="0 0 16 16" style="width:12px;height:12px;" stroke-width="1.5"><circle cx="8" cy="2" r="0.8"/><line x1="8" y1="2.9" x2="8" y2="5"/><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><circle cx="6" cy="9" r="0.8"/><circle cx="10" cy="9" r="0.8"/><line x1="5.5" y1="13.5" x2="5.5" y2="15"/><line x1="10.5" y1="13.5" x2="10.5" y2="15"/></svg>
+              <span>질문</span>
+            </button>
+            <button type="button" class="icon-btn" onclick="openNoteInVaultFullEditor()" title="볼트 전체 에디터에서 열기" style="width:28px;height:28px;">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </button>
+            <button class="drawer-close-btn" onclick="closeNoteViewer()" title="노트 뷰어 닫기" aria-label="닫기">
+              <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="note-viewer-body" id="note-viewer-body">
+          <div class="thread-empty">노트를 불러오는 중…</div>
+        </div>
+      </aside>
+      <div id="note-drawer-backdrop" class="thread-drawer-backdrop" onclick="closeNoteViewer()"></div>
     </div> <!-- end of #main-views-wrap -->
 
     </div>
