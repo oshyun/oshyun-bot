@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from cron import Cron
-import scheduler
+from bot.core.cron import Cron
+import bot.scheduler.scheduler as scheduler
 
 
 class TestScheduler(unittest.IsolatedAsyncioTestCase):
@@ -37,7 +37,7 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
 
         mock_run_result = {"result": "요약 결과입니다.", "cost": 0.005}
 
-        with patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = mock_run_result
             await scheduler._fire(
                 bot,
@@ -76,8 +76,8 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
         send_to_chat = AsyncMock()
         vault_log = MagicMock()
 
-        with patch("scheduler.get_agy_usage_report", new_callable=AsyncMock) as mock_report, \
-             patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.get_agy_usage_report", new_callable=AsyncMock) as mock_report, \
+             patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             mock_report.return_value = "현재 주간 사용량: 45%"
 
             await scheduler._fire(
@@ -107,7 +107,7 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
         send_to_chat = AsyncMock()
         vault_log = MagicMock()
 
-        with patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.side_effect = RuntimeError("Claude CLI 프로세스 비정상 종료")
 
             await scheduler._fire(
@@ -138,7 +138,7 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
         send_to_chat = AsyncMock()
         vault_log = MagicMock()
 
-        with patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {"result": "조건 미달로 패스", "cost": 0.0}
             await scheduler._fire(
                 bot,
@@ -174,7 +174,7 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
         vault_log = MagicMock()
         trigger_master = AsyncMock()
 
-        with patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             await scheduler._fire(
                 bot,
                 entry,
@@ -211,8 +211,8 @@ class TestScheduler(unittest.IsolatedAsyncioTestCase):
         send_to_chat = AsyncMock()
         trigger_master = AsyncMock()
 
-        with patch("scheduler.get_agy_usage_report", new_callable=AsyncMock) as mock_report, \
-             patch("scheduler.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.scheduler.scheduler.get_agy_usage_report", new_callable=AsyncMock) as mock_report, \
+             patch("bot.scheduler.scheduler.run_agent", new_callable=AsyncMock) as mock_run:
             mock_report.return_value = "주간 잔여 72%"
             await scheduler._fire(
                 None,

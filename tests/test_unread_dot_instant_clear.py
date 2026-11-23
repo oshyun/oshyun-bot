@@ -6,10 +6,10 @@ from unittest.mock import patch, MagicMock
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
-import master_tasks
-from web_orchestrator import handle_orchestrator_room_mark_read, handle_orchestrator_task_update
+import bot.master.master_tasks as master_tasks
+from bot.web.orchestrator import handle_orchestrator_room_mark_read, handle_orchestrator_task_update
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "web", "static")
 
 
 def read_static_bundle(static_dir: str) -> str:
@@ -73,7 +73,7 @@ class TestOrchestratorRoomMarkReadApi(AioHTTPTestCase):
 
     async def test_room_mark_read_endpoint_success(self):
         """POST /api/orchestrator/room/mark-read 정상 호출 시 marked 개수와 200 반환 검증."""
-        with patch("master_tasks.mark_room_reviewed", return_value=3) as mock_mark:
+        with patch("bot.master.master_tasks.mark_room_reviewed", return_value=3) as mock_mark:
             resp = await self.client.post("/api/orchestrator/room/mark-read", json={"roomId": "room-xyz"})
             self.assertEqual(resp.status, 200)
             data = await resp.json()
@@ -92,7 +92,7 @@ class TestOrchestratorRoomMarkReadApi(AioHTTPTestCase):
 
     async def test_task_update_endpoint_fallback_room_id(self):
         """taskId 없이 roomId 만 전달되었을 때도 mark_room_reviewed 로 정상 처리되는지 검증."""
-        with patch("master_tasks.mark_room_reviewed", return_value=1) as mock_mark:
+        with patch("bot.master.master_tasks.mark_room_reviewed", return_value=1) as mock_mark:
             resp = await self.client.post("/api/orchestrator/task/update", json={"roomId": "room-fallback"})
             self.assertEqual(resp.status, 200)
             data = await resp.json()

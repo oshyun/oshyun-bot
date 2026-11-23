@@ -27,11 +27,11 @@ load_dotenv(os.path.join(_ROOT, ".env"), override=True)
 
 # 도메인 기반 환경변수(DOMAIN__KEY) 호환 동기화
 import sys
-_BOT_DIR = os.path.join(_ROOT, "src", "bot")
-if _BOT_DIR not in sys.path:
-    sys.path.insert(0, _BOT_DIR)
+_SRC_DIR = os.path.join(_ROOT, "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 try:
-    from env_compat import sync_domain_env
+    from bot.core.env_compat import sync_domain_env
     sync_domain_env()
 except ImportError:
     pass

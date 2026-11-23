@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import agent_configs
-import chat_db
-import paths
-import web_orchestrator
+import bot.core.agent_configs as agent_configs
+import bot.core.chat_db as chat_db
+import bot.core.paths as paths
+import bot.web.orchestrator as web_orchestrator
 
 
 class DummyRequest:
@@ -172,7 +172,7 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
                 "injectChildTemplate": True,
             }
         )
-        with mock.patch("web_execution.broadcast_ws_json", new=mock.AsyncMock()):
+        with mock.patch("bot.web.execution.broadcast_ws_json", new=mock.AsyncMock()):
             resp_create = await web_orchestrator.handle_orchestrator_agent_upsert(req_create)
         data_create = json.loads(resp_create.text)
         self.assertTrue(data_create["ok"])
@@ -209,18 +209,11 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
             }
         )
         import contextlib
-        import sys
 
         patches = [
-            mock.patch("web_execution.broadcast_ws_json", new=mock.AsyncMock()),
-            mock.patch("web_execution.enqueue_room_turn", side_effect=fake_enqueue_room_turn),
+            mock.patch("bot.web.execution.broadcast_ws_json", new=mock.AsyncMock()),
+            mock.patch("bot.web.execution.enqueue_room_turn", side_effect=fake_enqueue_room_turn),
         ]
-        if "web_server" in sys.modules:
-            ws_mod = sys.modules["web_server"]
-            if hasattr(ws_mod, "broadcast_ws_json"):
-                patches.append(mock.patch.object(ws_mod, "broadcast_ws_json", new=mock.AsyncMock()))
-            if hasattr(ws_mod, "enqueue_room_turn"):
-                patches.append(mock.patch.object(ws_mod, "enqueue_room_turn", side_effect=fake_enqueue_room_turn))
 
         with contextlib.ExitStack() as stack:
             for p in patches:
@@ -235,7 +228,7 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
 
         # 4. POST /api/orchestrator/agents/delete
         req_del = DummyRequest(body={"agentId": custom_id, "deleteRoom": True})
-        with mock.patch("web_execution.broadcast_ws_json", new=mock.AsyncMock()):
+        with mock.patch("bot.web.execution.broadcast_ws_json", new=mock.AsyncMock()):
             resp_del = await web_orchestrator.handle_orchestrator_agent_delete(req_del)
         data_del = json.loads(resp_del.text)
         self.assertTrue(data_del["ok"])

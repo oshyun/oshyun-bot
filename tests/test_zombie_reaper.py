@@ -8,8 +8,8 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-import chat_db
-import web_execution
+import bot.core.chat_db as chat_db
+import bot.web.execution as web_execution
 
 
 class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
@@ -21,7 +21,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
         web_execution._active_agent_pids.clear()
         web_execution._active_watch_tasks.clear()
         web_execution._room_live_feeds.clear()
-        self._load_patcher = patch("web_execution._load_web_jobs", return_value={})
+        self._load_patcher = patch("bot.web.execution._load_web_jobs", return_value={})
         self._load_patcher.start()
 
     def tearDown(self) -> None:
@@ -50,7 +50,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
         }
         web_execution._active_agent_pids[fake_room_id] = fake_pid
 
-        with patch("web_execution._get_mod_attr") as mock_attr:
+        with patch("bot.web.execution._get_mod_attr") as mock_attr:
             def side_effect(name, fallback):
                 if name == "chat_db":
                     return mock_db
@@ -61,7 +61,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
                 return fallback
             mock_attr.side_effect = side_effect
 
-            with patch("web_execution.detached_pid_alive", return_value=False):
+            with patch("bot.web.execution.detached_pid_alive", return_value=False):
                 reaped = await web_execution.reap_zombie_sessions(max_inactive_seconds=900, max_elapsed_seconds=1800)
 
         self.assertIn(fake_room_id, reaped)
@@ -96,7 +96,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
         web_execution._active_agent_pids[fake_room_id] = fake_pid
 
         mock_kill = MagicMock()
-        with patch("web_execution._get_mod_attr") as mock_attr:
+        with patch("bot.web.execution._get_mod_attr") as mock_attr:
             def side_effect(name, fallback):
                 if name == "chat_db":
                     return mock_db
@@ -107,7 +107,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
                 return fallback
             mock_attr.side_effect = side_effect
 
-            with patch("web_execution.detached_pid_alive", return_value=True):
+            with patch("bot.web.execution.detached_pid_alive", return_value=True):
                 # 900초 이상 비활동 세션 회수
                 reaped = await web_execution.reap_zombie_sessions(max_inactive_seconds=900, max_elapsed_seconds=3600)
 
@@ -138,7 +138,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
         }
         web_execution._active_agent_pids[fake_room_id] = fake_pid
 
-        with patch("web_execution._get_mod_attr") as mock_attr:
+        with patch("bot.web.execution._get_mod_attr") as mock_attr:
             def side_effect(name, fallback):
                 if name == "chat_db":
                     return mock_db
@@ -147,7 +147,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
                 return fallback
             mock_attr.side_effect = side_effect
 
-            with patch("web_execution.detached_pid_alive", return_value=True):
+            with patch("bot.web.execution.detached_pid_alive", return_value=True):
                 reaped = await web_execution.reap_zombie_sessions(max_inactive_seconds=3600, max_elapsed_seconds=1800)
 
         self.assertIn(fake_room_id, reaped)
@@ -171,7 +171,7 @@ class TestZombieSessionReaper(unittest.IsolatedAsyncioTestCase):
             else [{"id": 102, "role": "assistant", "text": "정상 응답입니다."}]
         )
 
-        with patch("web_execution._get_mod_attr") as mock_attr:
+        with patch("bot.web.execution._get_mod_attr") as mock_attr:
             def side_effect(name, fallback):
                 if name == "chat_db":
                     return mock_db

@@ -4,7 +4,7 @@ import os
 import re
 import unittest
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "bot", "web", "static")
 
 
 def read_static_bundle(static_dir: str) -> str:

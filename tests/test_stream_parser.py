@@ -7,14 +7,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import stream_parser
+import bot.engine.stream_parser as stream_parser
 
 
 class TestStreamParser(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.patch_session_log = patch(
-            "stream_parser._SESSION_LOG_FILE",
+            'bot.engine.stream_parser._SESSION_LOG_FILE',
             os.path.join(self.temp_dir, "session_log.jsonl"),
         )
         self.patch_session_log.start()

@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from env_compat import DOMAIN_ENV_MAPPINGS, get_domain_env, sync_domain_env
+from bot.core.env_compat import DOMAIN_ENV_MAPPINGS, get_domain_env, sync_domain_env
 
 
 class TestEnvCompat(unittest.TestCase):

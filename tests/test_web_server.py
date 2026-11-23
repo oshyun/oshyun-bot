@@ -19,18 +19,19 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import agent_engine
-import bot_logger
-import chat_db
-import engine_settings
-import master_tasks
-import stream_parser
-import web_execution
-import web_server
+import bot.engine.agent_engine as agent_engine
+import bot.core.bot_logger as bot_logger
+import bot.core.chat_db as chat_db
+import bot.engine.engine_settings as engine_settings
+import bot.master.master_tasks as master_tasks
+import bot.engine.stream_parser as stream_parser
+import bot.web.execution as web_execution
+import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 _STATIC_BUNDLE_CACHE: dict[str, str] = {}
@@ -127,12 +128,12 @@ def _install_runtime_isolation(temp_dir: str):
     web_jobs_file = os.path.join(temp_dir, "web_jobs.json")
     os.makedirs(jobs_dir, exist_ok=True)
     patchers = [
-        patch("engine_settings._SETTINGS_FILE", os.path.join(temp_dir, "bot_settings.json")),
-        patch("stream_parser._SESSION_LOG_FILE", os.path.join(temp_dir, "session_log.jsonl")),
-        patch("bot_logger.BOT_LOG_PATH", os.path.join(temp_dir, "bot-log.md")),
-        patch("bot_logger._run_vault_log", AsyncMock()),
-        patch("master_tasks.MASTER_TASKS_FILE", os.path.join(temp_dir, "master_tasks.json")),
-        patch("master_memory.MASTER_MEMORY_FILE", os.path.join(temp_dir, "master_memory.json")),
+        patch("bot.engine.engine_settings._SETTINGS_FILE", os.path.join(temp_dir, "bot_settings.json")),
+        patch("bot.engine.stream_parser._SESSION_LOG_FILE", os.path.join(temp_dir, "session_log.jsonl")),
+        patch("bot.core.bot_logger.BOT_LOG_PATH", os.path.join(temp_dir, "bot-log.md")),
+        patch("bot.core.bot_logger._run_vault_log", AsyncMock()),
+        patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(temp_dir, "bot.master.master_tasks.json")),
+        patch("bot.master.master_memory.MASTER_MEMORY_FILE", os.path.join(temp_dir, "bot.master.master_memory.json")),
         patch.object(web_execution, "JOBS_DIR", jobs_dir),
         patch.object(web_execution, "WEB_JOBS_FILE", web_jobs_file),
         patch.object(web_server, "JOBS_DIR", jobs_dir),
@@ -203,7 +204,7 @@ class TestSpeechTextCleaning(unittest.TestCase):
 
     def test_is_session_stale_error(self):
         """세션 만료/유실/접근불가 오류 식별 검증."""
-        from agent_engine import is_session_stale_error
+        from bot.engine.agent_engine import is_session_stale_error
 
         # 1. AGY trajectory 미존재
         self.assertTrue(
@@ -357,8 +358,8 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
         chat_db.init_db(self.test_chat_db, migrate_legacy=False)
 
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "test-secret-token-1234"
-        web_server.AUTH_DELAY_SECONDS = 0.0  # 테스트 실행 속도를 위해 딜레이 비활성화
+        web_auth.WEB_TOKEN = "test-secret-token-1234"
+        web_auth.AUTH_DELAY_SECONDS = 0.0  # 테스트 실행 속도를 위해 딜레이 비활성화
 
         # 테스트용 볼트 파일 생성
         os.makedirs(os.path.join(self.test_vault_dir, "개인"), exist_ok=True)
@@ -476,7 +477,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
         self.assertIn("플러터 앱 테스트", new_payload["content"])
 
     async def test_settings_endpoint_returns_ok_flag(self):
-        with patch("web_server.set_effort"):
+        with patch("bot.web.server.set_effort"):
             res = await self.client.request(
                 "POST",
                 "/api/settings",
@@ -500,7 +501,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     async def test_tts_endpoint_returns_mp3_bytes(self):
         with patch(
-            "web_server.synthesize_edge_tts_mp3",
+            'bot.web.server.synthesize_edge_tts_mp3',
             new_callable=AsyncMock,
             return_value=b"ID3-mock-mp3-audio",
         ) as mock_synth:
@@ -529,13 +530,13 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "model": "sonnet",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
-        ), patch("web_server.set_session"), patch(
-            "web_server.update_last_activity"
-        ), patch("web_server.vault_log"):
+        ), patch("bot.web.server.set_session"), patch(
+            'bot.web.server.update_last_activity'
+        ), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 initial_msg = await ws_conn.receive_json()
                 self.assertEqual(initial_msg["type"], "status")
@@ -572,13 +573,13 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "model": "sonnet",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
-        ), patch("web_server.set_session"), patch(
-            "web_server.update_last_activity"
-        ), patch("web_server.vault_log"):
+        ), patch("bot.web.server.set_session"), patch(
+            'bot.web.server.update_last_activity'
+        ), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 initial_msg = await ws_conn.receive_json()
                 self.assertEqual(initial_msg["type"], "status")
@@ -622,13 +623,13 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "model": "flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
-        ), patch("web_server.get_session", return_value="old-global-session"), patch(
-            "web_server.set_session"
-        ), patch("web_server.update_last_activity"), patch("web_server.vault_log"):
+        ), patch("bot.web.server.get_session", return_value="old-global-session"), patch(
+            'bot.web.server.set_session'
+        ), patch("bot.web.server.update_last_activity"), patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 await ws_conn.receive_json()  # initial status
                 await ws_conn.send_json(
@@ -675,8 +676,8 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
             "model": "gemini-3.8-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
         ):
@@ -712,7 +713,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     async def test_websocket_cancel_with_terminate_session(self):
         """WebSocket 을 통해 cancel(terminateSession=True) 수신 시 세션 정리 및 sessionTerminated 회신 검증."""
-        with patch("web_server.clear_session") as mock_clear, patch("web_server.vault_log"):
+        with patch("bot.web.server.clear_session") as mock_clear, patch("bot.web.server.vault_log"):
             async with self.client.ws_connect("/ws") as ws_conn:
                 await ws_conn.receive_json()  # initial status
                 await ws_conn.send_json(
@@ -730,7 +731,7 @@ class TestVoiceWebServerEndpoints(AioHTTPTestCase):
 
     def test_web_static_dir_resolution(self):
         self.assertTrue(
-            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "bot", "static"))
+            web_server.DEFAULT_WEB_BUILD_DIR.endswith(os.path.join("src", "bot", "web", "static"))
         )
 
 
@@ -745,8 +746,8 @@ class TestAuthGateway(AioHTTPTestCase):
         chat_db.CHAT_DB_FILE = self.test_chat_db
         chat_db.init_db(self.test_chat_db, migrate_legacy=False)
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         return web_server.create_web_app(static_dir="/nonexistent")
 
@@ -921,8 +922,8 @@ class TestPwaSupport(AioHTTPTestCase):
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
         chat_db.CHAT_DB_FILE = os.path.join(self.test_vault_dir, "test_chat.db")
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         self.orig_hidden_file = web_server.HIDDEN_ROOMS_FILE
         self.orig_chat_db_hidden_file = getattr(chat_db, "HIDDEN_ROOMS_FILE", None)
@@ -931,7 +932,7 @@ class TestPwaSupport(AioHTTPTestCase):
         web_server.HIDDEN_ROOMS_FILE = test_hidden
         chat_db.HIDDEN_ROOMS_FILE = test_hidden
         web_server.CHAT_ROOMS_BACKUP_FILE = os.path.join(self.test_vault_dir, "backup.json")
-        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "web", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):
@@ -981,8 +982,8 @@ class TestHubApi(AioHTTPTestCase):
         self.test_vault_dir = tempfile.mkdtemp()
         self._cleanup_runtime = _install_runtime_isolation(self.test_vault_dir)
         web_server.WORKDIR = self.test_vault_dir
-        web_server.WEB_TOKEN = "super-secret-password-999"
-        web_server.AUTH_DELAY_SECONDS = 0.0
+        web_auth.WEB_TOKEN = "super-secret-password-999"
+        web_auth.AUTH_DELAY_SECONDS = 0.0
         web_server._failed_auth_attempts.clear()
         self.orig_hidden_file = web_server.HIDDEN_ROOMS_FILE
         self.orig_chat_db_hidden_file = getattr(chat_db, "HIDDEN_ROOMS_FILE", None)
@@ -1002,7 +1003,7 @@ class TestHubApi(AioHTTPTestCase):
         chat_db.init_db(test_db, migrate_legacy=False)
         os.makedirs(web_server.CHATS_DIR, exist_ok=True)
 
-        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "static")
+        static_dir = os.path.join(_REPO_ROOT, "src", "bot", "web", "static")
         return web_server.create_web_app(static_dir=static_dir)
 
     def tearDown(self):
@@ -1130,7 +1131,7 @@ class TestHubApi(AioHTTPTestCase):
     async def test_room_stream_jsonl_storage_and_history_api(self):
         """data/chats/<roomId>.jsonl 실시간 스트림 영속화 및 히스토리 조회, 방 삭제 검증."""
         headers = {"Authorization": "Bearer super-secret-password-999"}
-        from web_server import _append_room_message, _update_room_metadata, _load_room_messages
+        from bot.web.server import _append_room_message, _update_room_metadata, _load_room_messages
 
         room_id = "room-stream-jsonl-test"
 
@@ -1211,7 +1212,7 @@ class TestHubApi(AioHTTPTestCase):
     async def test_chat_rooms_excludes_zero_user_messages_and_hidden_rooms(self):
         """GET /api/chat/rooms 가 유저 메시지 0건 세션을 제외하고 숨김 처리된 세션을 올바르게 제외하는지 검증."""
         headers = {"Authorization": "Bearer super-secret-password-999"}
-        from web_server import _save_hidden_room, _load_hidden_rooms
+        from bot.web.server import _save_hidden_room, _load_hidden_rooms
 
         res = await self.client.request("GET", "/api/chat/rooms", headers=headers)
         self.assertEqual(res.status, 200)
@@ -1239,8 +1240,8 @@ class TestWebServerStandalone(unittest.TestCase):
     """웹 서버 단독 프로세스 실행 및 로깅, 락 단위 테스트."""
 
     def test_setup_web_logger(self):
-        from bot_logger import setup_web_logger
-        from paths import WEB_LOG_FILE
+        from bot.core.bot_logger import setup_web_logger
+        from bot.core.paths import WEB_LOG_FILE
 
         logger = setup_web_logger()
         self.assertEqual(logger.name, "oshyun-web")
@@ -1248,7 +1249,7 @@ class TestWebServerStandalone(unittest.TestCase):
         self.assertIn(WEB_LOG_FILE, paths_in_handlers)
 
     def test_instance_lock(self):
-        import web_server
+        import bot.web.server as web_server
         with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.object(web_server, "LOGS_DIR", tmp_dir):
                 self.assertTrue(web_server._acquire_instance_lock())
@@ -1257,7 +1258,7 @@ class TestWebServerStandalone(unittest.TestCase):
                     web_server._instance_lock_file = None
 
     def test_main_disabled_exits_zero(self):
-        import web_server
+        import bot.web.server as web_server
         with patch.object(web_server, "WEB_ENABLED", False):
             with self.assertRaises(SystemExit) as cm:
                 web_server.main()
@@ -1266,7 +1267,7 @@ class TestWebServerStandalone(unittest.TestCase):
     def test_static_index_html_empty_room_selection_renders_messages(self):
         """메시지가 없는 새 대화방 선택 시 기존 대화가 노출되지 않도록 renderMessagesForCurrentRoom 호출을 보장하는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1284,7 +1285,7 @@ class TestWebServerStandalone(unittest.TestCase):
     def test_static_index_html_voice_input_clears_prompt_and_has_no_overlay(self):
         """음성 바로가기 오버레이가 제거되고, 음성 입력 전송 시 프롬프트창이 초기화되며, voice 주소 접속 시 원래 페이지에서 음성 입력이 활성화되는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1306,7 +1307,7 @@ class TestWebServerStandalone(unittest.TestCase):
     def test_static_index_html_retry_skips_input_focus(self):
         """다시 실행(retryMessageByIndex) 시 입력창 focus()가 호출되지 않고 blur 처리되는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1317,7 +1318,7 @@ class TestWebServerStandalone(unittest.TestCase):
     def test_static_index_html_abort_preserves_chat_input(self):
         """답변 생성 중단 버튼 클릭 시 작성 중이던 입력창 텍스트가 지워지지 않고 보존되는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1331,7 +1332,7 @@ class TestWebServerStandalone(unittest.TestCase):
     def test_image_attach_icon_and_direct_open_in_index_html(self):
         """index.html 에 이미지 첨부 전용 아이콘 및 파일 선택기 원클릭 직접 실행, 클립보드 Paste 호환성이 올바르게 구현되어 있는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         html = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1375,11 +1376,11 @@ class TestVoiceRouteServing(AioHTTPTestCase):
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
         chat_db.CHAT_DB_FILE = os.path.join(self.test_db_dir, "test_chat.db")
         chat_db.init_db(chat_db.CHAT_DB_FILE, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         if getattr(self, "orig_chat_db_file", None):
             chat_db.CHAT_DB_FILE = self.orig_chat_db_file
         if hasattr(self, "_cleanup_runtime"):
@@ -1414,7 +1415,7 @@ class TestVoiceRouteServing(AioHTTPTestCase):
     def test_static_index_html_chat_turn_queue(self):
         """index.html 의 대기열(Queue) UI 동작 로직이 올바르게 구현되어 있는지 검증."""
         import os
-        from web_server import INTERNAL_STATIC_DIR
+        from bot.web.server import INTERNAL_STATIC_DIR
 
         content = _read_static_bundle(INTERNAL_STATIC_DIR)
 
@@ -1482,7 +1483,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
     """WebSocket /ws 상에서 에이전트 응답 진행 중 인입된 채팅 요청이 큐(FIFO)로 적재되고 순차 실행되는지 검증."""
 
     async def get_application(self):
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         self.test_db_dir = tempfile.mkdtemp()
         self._cleanup_runtime = _install_runtime_isolation(self.test_db_dir)
         self.orig_chat_db_file = getattr(chat_db, "CHAT_DB_FILE", None)
@@ -1499,7 +1500,7 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         if getattr(self, "orig_chat_db_file", None):
             chat_db.CHAT_DB_FILE = self.orig_chat_db_file
         if getattr(self, "orig_hidden_file", None):
@@ -1528,8 +1529,8 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
             else:
                 return {"result": "[테스트] 턴2 답변 완료", "session_id": "session-turn-1", "model": "agy"}
 
-        with patch("web_server.spawn_agent") as mock_spawn, patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
+        with patch("bot.web.server.spawn_agent") as mock_spawn, patch(
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
         ):
             mock_spawn.side_effect = [fake_proc_1, fake_proc_2]
 
@@ -1602,9 +1603,9 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
             except asyncio.CancelledError:
                 raise
 
-        with patch("web_server.spawn_agent", return_value=fake_proc_1), patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
-        ), patch("web_server.kill_job") as mock_kill:
+        with patch("bot.web.server.spawn_agent", return_value=fake_proc_1), patch(
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
+        ), patch("bot.web.server.kill_job") as mock_kill:
             ws = await self.client.ws_connect("/ws")
             await ws.receive_json(timeout=3.0)  # status
 
@@ -1650,8 +1651,8 @@ class TestChatTurnQueueWebSocket(AioHTTPTestCase):
             await turn1_gate.wait()
             return {"result": "[테스트] 턴1 정상 답변", "session_id": "sess-3001", "model": "agy"}
 
-        with patch("web_server.spawn_agent", return_value=fake_proc_1) as mock_spawn, patch(
-            "web_server.watch_agent", side_effect=fake_watch_agent
+        with patch("bot.web.server.spawn_agent", return_value=fake_proc_1) as mock_spawn, patch(
+            'bot.web.server.watch_agent', side_effect=fake_watch_agent
         ):
             ws = await self.client.ws_connect("/ws")
             await ws.receive_json(timeout=3.0)  # status
@@ -1721,30 +1722,30 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
     """모바일 최적화 UI, 대화방 길게 누르기 다중 선택/일괄 삭제/이름 변경 API 및 정적 HTML 검증."""
 
     async def get_application(self):
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._cleanup_runtime = _install_runtime_isolation(self._tmp_dir.name)
         self.db_path = os.path.join(self._tmp_dir.name, "chat_test.db")
-        self._db_patcher = patch("chat_db.CHAT_DB_FILE", self.db_path)
+        self._db_patcher = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
         self._db_patcher.start()
         test_hidden = os.path.join(self._tmp_dir.name, "hidden_rooms.json")
         self._hidden_patcher = patch(
-            "web_server.HIDDEN_ROOMS_FILE",
+            'bot.web.server.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._hidden_patcher.start()
         self._chat_db_hidden_patcher = patch(
-            "chat_db.HIDDEN_ROOMS_FILE",
+            'bot.core.chat_db.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._chat_db_hidden_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         self._hidden_patcher.stop()
         if hasattr(self, "_chat_db_hidden_patcher"):
             self._chat_db_hidden_patcher.stop()
@@ -1756,7 +1757,7 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
 
     async def test_api_batch_delete_rooms(self):
         """POST /api/session/batch-delete 호출 시 선택된 여러 대화방이 한 번에 삭제되는지 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("room-a", session_id="sess-a", title="[테스트] 대화방 A")
         chat_db.get_or_create_room("room-b", session_id="sess-b", title="[테스트] 대화방 B")
@@ -1782,7 +1783,7 @@ class TestMobileUiAndBatchRoomManagement(AioHTTPTestCase):
 
     async def test_api_rename_room(self):
         """POST /api/chat/room/rename 호출 시 대화방 제목이 변경되는지 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("room-rename-1", session_id="sess-rename-1", title="[테스트] 기존 제목")
 
@@ -1839,57 +1840,57 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
     """총괄 에이전트(Core Orchestrator Agent) API, AGY 세션 제어 및 UI 슬롯 검증."""
 
     async def get_application(self):
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._cleanup_runtime = _install_runtime_isolation(self._tmp_dir.name)
         self.db_path = os.path.join(self._tmp_dir.name, "chat_orch_test.db")
-        self._db_patcher = patch("chat_db.CHAT_DB_FILE", self.db_path)
+        self._db_patcher = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
         self._db_patcher.start()
         test_hidden = os.path.join(self._tmp_dir.name, "hidden_rooms.json")
         self._hidden_patcher = patch(
-            "web_server.HIDDEN_ROOMS_FILE",
+            'bot.web.server.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._hidden_patcher.start()
         self._chat_db_hidden_patcher = patch(
-            "chat_db.HIDDEN_ROOMS_FILE",
+            'bot.core.chat_db.HIDDEN_ROOMS_FILE',
             test_hidden,
         )
         self._chat_db_hidden_patcher.start()
         self._chats_dir_patcher = patch(
-            "web_server.CHATS_DIR",
+            'bot.web.server.CHATS_DIR',
             os.path.join(self._tmp_dir.name, "chats"),
         )
         self._chats_dir_patcher.start()
         self._rooms_file_patcher = patch(
-            "web_server.CHAT_ROOMS_FILE",
+            'bot.web.server.CHAT_ROOMS_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms.json"),
         )
         self._rooms_file_patcher.start()
         self._rooms_backup_patcher = patch(
-            "web_server.CHAT_ROOMS_BACKUP_FILE",
+            'bot.web.server.CHAT_ROOMS_BACKUP_FILE',
             os.path.join(self._tmp_dir.name, "chat_rooms_backup.json"),
         )
         self._rooms_backup_patcher.start()
-        self._migrate_patcher = patch("chat_db.migrate_legacy_files_if_needed")
+        self._migrate_patcher = patch("bot.core.chat_db.migrate_legacy_files_if_needed")
         self._migrate_patcher.start()
         self._tasks_patcher = patch(
-            "master_tasks.MASTER_TASKS_FILE",
+            'bot.master.master_tasks.MASTER_TASKS_FILE',
             os.path.join(self._tmp_dir.name, "master_tasks.json"),
         )
         self._tasks_patcher.start()
         self._memory_patcher = patch(
-            "master_memory.MASTER_MEMORY_FILE",
+            'bot.master.master_memory.MASTER_MEMORY_FILE',
             os.path.join(self._tmp_dir.name, "master_memory.json"),
         )
         self._memory_patcher.start()
         chat_db.init_db(db_path=self.db_path, migrate_legacy=False)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app(static_dir=web_server.INTERNAL_STATIC_DIR)
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = True
+        web_auth.WEB_AUTH_REQUIRED = True
         web_server._room_session_ids.pop("__core__", None)
         self._memory_patcher.stop()
         self._tasks_patcher.stop()
@@ -1908,7 +1909,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_sessions_list_and_read(self):
         """GET /api/orchestrator/sessions 및 /api/orchestrator/session/read 로 AGY 세션 조회 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("sess-alpha-111", session_id="sess-alpha-111", title="[테스트] 주식 포트폴리오 점검")
         chat_db.add_message("sess-alpha-111", "user", "[테스트] 현재 보유 주식 정리해줘", session_id="sess-alpha-111")
@@ -1938,7 +1939,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_dispatch_send_and_spawn(self):
         """POST /api/orchestrator/dispatch 로 기존 세션 메시지 전송 및 신규 AGY 세션 스폰 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("sess-target-1", session_id="sess-target-1", title="[테스트] 캘린더 일정 방")
 
@@ -1950,12 +1951,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
 
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             # 1) 기존 세션에 동기(wait=True) 지시 전송
             res_send = await self.client.post(
@@ -1986,12 +1987,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "model": "g3-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_spawn_watch,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             res_spawn = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2012,7 +2013,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_spawned_room_immediately_appears_in_chat_rooms_index(self):
         """마스터 에이전트가 비동기(wait=False)로 스폰한 채팅방이 /api/chat/rooms 목록에 즉시 잡히는지 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         mock_proc = MagicMock(pid=65432, out_file="/tmp/mock_spawn_async.jsonl")
         mock_watch = {
@@ -2022,13 +2023,13 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
 
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
-        ), patch("web_execution._notify_master_agent", new_callable=AsyncMock):
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
+        ), patch("bot.web.execution._notify_master_agent", new_callable=AsyncMock):
             # 1. 비동기 스폰 요청 (마스터 완료보고 턴은 mock 이 같은 session_id 를 돌려줘 방이 병합되므로 격리)
             res = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2069,8 +2070,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_spawn_reuses_similar_room(self):
         """유사한 주제/질문을 다루던 기존 채팅방이 있으면 spawn 시 새 방을 만들지 않고 기존 방을 이어서 진행하는지 검증."""
-        import chat_db
-        import web_orchestrator
+        import bot.core.chat_db as chat_db
+        import bot.web.orchestrator as web_orchestrator
 
         # 기존 방 1: 카드 혜택 방
         chat_db.get_or_create_room(
@@ -2112,12 +2113,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "interrupted": False,
         }
 
-        with patch("web_server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_reuse,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             # 1) 매우 유사한 주제로 spawn 요청 -> 기존 room-card-11 재사용
             res_reuse = await self.client.post(
@@ -2156,12 +2157,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "model": "g3-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_new,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             res_unrelated = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2200,8 +2201,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     def test_orchestrator_room_similarity_scoring_and_target_fallback(self):
         """한국어 복합어·조사 정규화, 시간축 분리 및 target 유사 검색 폴백 검증."""
-        import chat_db
-        import web_orchestrator
+        import bot.core.chat_db as chat_db
+        import bot.web.orchestrator as web_orchestrator
 
         # 복합명사/조사 매칭: '실손보험 청구' <-> '보험청구 내역 업데이트' (임계값 0.68 상향 후에도 충분히 높은 0.85로 통과)
         score_insurance = web_orchestrator._score_room_similarity(
@@ -2275,7 +2276,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_room_summaries_matching_and_apis(self):
         """room_summaries 가 preview 덮어쓰기 상황에서도 유사 방 매칭에 활용되며 summaries/summary API가 정상 동작하는지 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         # 기존 방 생성 후 preview 가 일반 문구로 덮어쓰여진 상태 시뮬레이션
         chat_db.get_or_create_room(
@@ -2352,12 +2353,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "model": "g3-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             res_spawn = await self.client.post(
                 "/api/orchestrator/dispatch",
@@ -2384,12 +2385,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "model": "g3-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc) as mock_spawn, patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch_return,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             async with self.client.ws_connect("/ws") as ws_conn:
                 await ws_conn.receive_json()  # initial status
@@ -2415,7 +2416,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     def test_agy_engine_orchestrator_prompt_and_step_formatting(self):
         """AGYEngine(orchestrator=True) 호출 시 instructions/common 및 instructions/orchestrator 디렉토리가 --add-dir로 주입되고 프롬프트는 순수하게 전달되는지 검증."""
-        import agent_engine
+        import bot.engine.agent_engine as agent_engine
 
         engine = agent_engine.AGYEngine()
         inv = engine.build_cmd(
@@ -2475,7 +2476,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     def test_agy_engine_web_prompt_and_vault_first(self):
         """AGYEngine(web=True) 호출 시 common 및 web 디렉토리 주입, 볼트 최우선 지침 및 웹 마크다운 허용 검증."""
-        import agent_engine
+        import bot.engine.agent_engine as agent_engine
 
         engine = agent_engine.AGYEngine()
         inv_web = engine.build_cmd(
@@ -2532,8 +2533,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     def test_expert_agents_system_prompts_and_directives(self):
         """전문가 에이전트(세컨브레인, 봇개발) 전용 시스템 프롬프트, 인스트럭션 디렉토리, UI 계층 구조 검증."""
-        import agent_engine
-        import engine_drivers
+        import bot.engine.agent_engine as agent_engine
+        import bot.engine.engine_drivers as engine_drivers
 
         # 1. _resolve_system_prompt 검증
         vault_prompt = engine_drivers._resolve_system_prompt(expert_vault=True)
@@ -2615,7 +2616,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_notify_master_agent_bypasses_direct_message_without_enqueue(self):
         """_notify_master_agent 가 완료 시 2차 턴(enqueue_room_turn) 없이 긴 응답도 부모 방에 직접 바이패스 저장 및 브로드캐스트하는지 검증."""
-        import web_execution
+        import bot.web.execution as web_execution
 
         long_response = "상세 분석 결과: " + ("나" * 900)
         mock_enqueue = AsyncMock()
@@ -2665,7 +2666,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_tasks_and_update_lifecycle(self):
         """POST /api/orchestrator/dispatch 위임 작업 등록 -> GET /api/orchestrator/tasks 조회 -> POST /api/orchestrator/task/update 판정 및 종결 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("sub-room-1", session_id="sub-sess-1", title="[테스트] 세무 신고")
 
@@ -2676,12 +2677,12 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             "model": "g3-flash",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent',
             new_callable=AsyncMock,
             return_value=mock_watch,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             # 1. dispatch 호출 시 taskId 반환 확인
             res_disp = await self.client.post(
@@ -2739,9 +2740,9 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_memory_and_reset_endpoints(self):
         """GET/POST /api/orchestrator/memory 4계층 연쇄 이동 및 POST /api/orchestrator/reset 초기화 검증."""
-        import chat_db
-        import master_memory
-        import master_tasks
+        import bot.core.chat_db as chat_db
+        import bot.master.master_memory as master_memory
+        import bot.master.master_tasks as master_tasks
 
         # 1. 초기 상태 확인
         res_empty = await self.client.get("/api/orchestrator/memory")
@@ -2792,8 +2793,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
         # warm 한도를 넉넉히 늘린 뒤 cascade 초기화 -> K4 가 warm 으로 내려오고 K3 는 cold 로 이동해야 함
         master_memory.update_tier_limits({"warm": {"maxChars": 500, "maxItems": 5}, "cold": {"maxChars": 500, "maxItems": 5}})
-        with patch("web_server.clear_session") as mock_clear_sid, \
-             patch("web_server.broadcast_ws_json", new_callable=AsyncMock) as mock_bcast:
+        with patch("bot.web.server.clear_session") as mock_clear_sid, \
+             patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock) as mock_bcast:
             res_rst1 = await self.client.post("/api/orchestrator/reset", json={"memoryMode": "cascade"})
             self.assertEqual(res_rst1.status, 200)
             d_rst1 = await res_rst1.json()
@@ -2853,8 +2854,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
                 "interrupted": False,
             }
 
-        with patch("web_server.spawn_agent", side_effect=fake_spawn), \
-             patch("web_server.watch_agent", side_effect=fake_watch):
+        with patch("bot.web.server.spawn_agent", side_effect=fake_spawn), \
+             patch("bot.web.server.watch_agent", side_effect=fake_watch):
             async with self.client.ws_connect("/ws") as ws_conn:
                 _ = await asyncio.wait_for(ws_conn.receive_json(), timeout=3)
                 await ws_conn.send_json({"type": "chat", "text": "남은 일정 알려줘", "roomId": "__core__"})
@@ -2882,7 +2883,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             captured.append((prompt, session_id, kwargs))
             return {"result": "스킬 실행 완료", "model": kwargs.get("model"), "session_id": None}
 
-        with patch("agent_engine.run_agent", side_effect=fake_run_agent):
+        with patch("bot.engine.agent_engine.run_agent", side_effect=fake_run_agent):
             res_bad = await self.client.post("/api/orchestrator/skill", json={"skill": "../bad"})
             self.assertEqual(res_bad.status, 400)
 
@@ -2921,7 +2922,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_ws_raw_prompt_skill_chat_turn(self):
         """WS chat 턴에서 rawPrompt=True, slashCommands=True 시 프롬프트 삽입 없이 원문만 실행되는지 검증."""
-        import master_memory
+        import bot.master.master_memory as master_memory
         master_memory.add_memory("주입되면 안 되는 기억", title="노출금지")
         fake_proc = MagicMock(pid=54322, out_file=os.path.join(self._tmp_dir.name, "raw_skill.jsonl"))
         captured = []
@@ -2933,8 +2934,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         async def fake_watch(*args, **kwargs):
             return {"result": "리밸런싱 완료", "session_id": "sess-raw-1", "model": "gemini-3.8-flash", "interrupted": False}
 
-        with patch("web_server.spawn_agent", side_effect=fake_spawn), \
-             patch("web_server.watch_agent", side_effect=fake_watch):
+        with patch("bot.web.server.spawn_agent", side_effect=fake_spawn), \
+             patch("bot.web.server.watch_agent", side_effect=fake_watch):
             async with self.client.ws_connect("/ws") as ws_conn:
                 _ = await asyncio.wait_for(ws_conn.receive_json(), timeout=3)
                 await ws_conn.send_json({
@@ -2976,11 +2977,11 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
                 return {"result": "점검 완료", "session_id": "core-sess", "model": "g3-flash"}
             return {"result": "사용자 질문에 답변합니다.", "session_id": "core-sess", "model": "g3-flash"}
 
-        with patch("web_server.spawn_agent", side_effect=[mock_proc_patrol, mock_proc_user]), patch(
-            "web_server.watch_agent",
+        with patch("bot.web.server.spawn_agent", side_effect=[mock_proc_patrol, mock_proc_user]), patch(
+            'bot.web.server.watch_agent',
             side_effect=fake_watch,
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
         ):
             # 1. 배경 점검 턴 적재 (channel="master_patrol")
             patrol_fut = asyncio.get_running_loop().create_future()
@@ -3012,7 +3013,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_backup_does_not_duplicate_messages_in_db(self):
         """POST /api/chat/rooms/backup 호출 시 클라이언트 캐시가 DB SSOT를 오염시키거나 중복 INSERT 하지 않는지 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         chat_db.get_or_create_room("room-no-dup", session_id="sess-no-dup", title="[테스트] 중복 방지 테스트")
         chat_db.add_message("room-no-dup", "user", "[테스트] 첫 질문", session_id="sess-no-dup")
@@ -3209,7 +3210,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_spawn_ws_events_ids_and_preview_preservation(self):
         """spawn 시 room_created·orchestrator_dispatch·started·result 의 메시지 ID 일관성과 빈 플레이스홀더 preview 보존을 검증."""
-        import chat_db
+        import bot.core.chat_db as chat_db
 
         headers = {"Authorization": "Bearer super-secret-password-999"}
         long_prompt = (
@@ -3239,7 +3240,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             ), patch.object(
                 web_server, "vault_log"
             ), patch(
-                "web_execution._notify_master_agent", new_callable=AsyncMock
+                'bot.web.execution._notify_master_agent', new_callable=AsyncMock
             ):
                 res = await self.client.post(
                     "/api/orchestrator/dispatch",
@@ -3306,8 +3307,8 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
     async def test_orchestrator_queued_dispatch_client_id_and_same_text_turns(self):
         """실행 중 방에 orchestrator send 시 queued/started 간 clientMsgId가 일치하고 동일 문구 반복 발화도 DB에 모두 기록된다."""
         import time
-        import chat_db
-        import web_execution
+        import bot.core.chat_db as chat_db
+        import bot.web.execution as web_execution
 
         headers = {"Authorization": "Bearer super-secret-password-999"}
         room_id = "room-orch-queue-test"
@@ -3342,7 +3343,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
             ), patch.object(
                 web_server, "vault_log"
             ), patch(
-                "web_execution._notify_master_agent", new_callable=AsyncMock
+                'bot.web.execution._notify_master_agent', new_callable=AsyncMock
             ):
                 # 1. 첫 턴 시작
                 await ws.send_json({
@@ -3420,7 +3421,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
 
     async def test_orchestrator_dispatch_spawn_parent_and_slash_commands(self):
         """POST /api/orchestrator/dispatch 스폰 시 parentAgentId 귀속 및 rawPrompt/slashCommands 전달 검증."""
-        import web_execution
+        import bot.web.execution as web_execution
 
         enqueue_calls = []
 
@@ -3740,7 +3741,7 @@ class TestWebCrashRecovery(unittest.TestCase):
 
     def test_agy_xhigh_suffix_stripping_and_resolution(self):
         """-xhigh 접미사가 -high로 잘못 잘리지 않고 정확히 정규화되는지 검증."""
-        from engine_drivers import AGYEngine, strip_agy_effort_suffix
+        from bot.engine.engine_drivers import AGYEngine, strip_agy_effort_suffix
 
         self.assertEqual(strip_agy_effort_suffix("gemini-4-hydrogen-xhigh"), "gemini-4-hydrogen")
         self.assertEqual(strip_agy_effort_suffix("gemini-4-hydrogen-high"), "gemini-4-hydrogen")
@@ -3922,11 +3923,11 @@ class TestWebCrashRecovery(unittest.TestCase):
             "model": "claude-sonnet-5-5",
             "interrupted": False,
         }
-        with patch("web_server.spawn_agent", return_value=mock_proc), patch(
-            "web_server.watch_agent", new_callable=AsyncMock, return_value=mock_watch
-        ), patch("web_server.set_session"), patch("web_server.update_last_activity"), patch(
-            "web_server.vault_log"
-        ), patch("web_server.broadcast_ws_json", new_callable=AsyncMock):
+        with patch("bot.web.server.spawn_agent", return_value=mock_proc), patch(
+            'bot.web.server.watch_agent', new_callable=AsyncMock, return_value=mock_watch
+        ), patch("bot.web.server.set_session"), patch("bot.web.server.update_last_activity"), patch(
+            'bot.web.server.vault_log'
+        ), patch("bot.web.server.broadcast_ws_json", new_callable=AsyncMock):
             asyncio.run(
                 web_server.execute_chat_turn(
                     "[하위 작업 중단/오류 보고] [sub-x] 세션 작업 중단\n• 내용: 타임아웃",
@@ -4003,7 +4004,7 @@ class TestWebCrashRecovery(unittest.TestCase):
             self.assertIsNone(web_server.get_ssl_context())
 
         # 3. 유효한 인증서가 존재하는 경우 SSLContext 생성 확인
-        from paths import DEFAULT_SSL_CERT_FILE, DEFAULT_SSL_KEY_FILE
+        from bot.core.paths import DEFAULT_SSL_CERT_FILE, DEFAULT_SSL_KEY_FILE
         if os.path.exists(DEFAULT_SSL_CERT_FILE) and os.path.exists(DEFAULT_SSL_KEY_FILE):
             ctx = web_server.get_ssl_context()
             self.assertIsNotNone(ctx)

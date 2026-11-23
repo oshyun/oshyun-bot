@@ -12,22 +12,23 @@ from unittest.mock import AsyncMock, patch
 from aiohttp.test_utils import AioHTTPTestCase
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import burn_todo
-import schedules
-import web_server
+import bot.core.burn_todo as burn_todo
+import bot.core.schedules as schedules
+import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestWebAutomationEndpoints(AioHTTPTestCase):
     async def get_application(self):
         self.test_dir = tempfile.mkdtemp()
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", os.path.join(self.test_dir, "chat.db")),
-            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self.test_dir, "master_tasks.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self.test_dir, "chat.db")),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self.test_dir, "bot.master.master_tasks.json")),
             patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self.test_dir, "web_jobs.json")),
         ]
         for p in self._patchers:
@@ -35,12 +36,12 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.orig_sched_file = schedules.SCHEDULES_FILE
         self.orig_burn_file = burn_todo.BURN_TODO_FILE
         self.orig_sched_enabled = os.environ.get("WEB_SCHEDULER_ENABLED")
-        self.orig_auth_required = web_server.WEB_AUTH_REQUIRED
+        self.orig_auth_required = web_auth.WEB_AUTH_REQUIRED
 
         schedules.SCHEDULES_FILE = os.path.join(self.test_dir, "schedules.json")
         burn_todo.BURN_TODO_FILE = os.path.join(self.test_dir, "burn_todo.json")
         os.environ["WEB_SCHEDULER_ENABLED"] = "0"
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
 
         return web_server.create_web_app(static_dir=self.test_dir)
 
@@ -50,7 +51,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
             p.stop()
         schedules.SCHEDULES_FILE = self.orig_sched_file
         burn_todo.BURN_TODO_FILE = self.orig_burn_file
-        web_server.WEB_AUTH_REQUIRED = self.orig_auth_required
+        web_auth.WEB_AUTH_REQUIRED = self.orig_auth_required
         if self.orig_sched_enabled is None:
             os.environ.pop("WEB_SCHEDULER_ENABLED", None)
         else:
@@ -65,7 +66,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(data["items"], [])
 
         # 2. 자연어 등록
-        with patch("web_automation.run_agent", new_callable=AsyncMock) as mock_run:
+        with patch("bot.web.automation.run_agent", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = {
                 "result": json.dumps({
                     "cron": "0 8 * * *",
@@ -92,7 +93,7 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
         self.assertEqual(toggled["statusLabel"], "일시중지")
 
         # 4. 수동 즉시 실행 (POST /api/schedules/{id}/run) -> 마스터(__core__) 트리거
-        with patch("web_automation.scheduler._fire", new_callable=AsyncMock) as mock_fire:
+        with patch("bot.web.automation.scheduler._fire", new_callable=AsyncMock) as mock_fire:
             resp = await self.client.post(f"/api/schedules/{sched_id}/run")
             self.assertEqual(resp.status, 200)
             run_data = await resp.json()
@@ -191,11 +192,11 @@ class TestWebAutomationEndpoints(AioHTTPTestCase):
     async def test_burn_status_and_todo_crud(self):
         fake_usage = {"groups": [{"name": "Test Group", "buckets": []}]}
         with patch(
-            "web_automation.burn_runner.get_agy_usage_data",
+            'bot.web.automation.burn_runner.get_agy_usage_data',
             new_callable=AsyncMock,
             return_value=(fake_usage, ""),
         ), patch(
-            "web_automation.burn_runner.evaluate_burn_condition",
+            'bot.web.automation.burn_runner.evaluate_burn_condition',
             return_value=(
                 False,
                 "리셋까지 10.0시간 남아있습니다.",

@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import scheduler
-import schedules
+import bot.scheduler.scheduler as scheduler
+import bot.core.schedules as schedules
 
 
 class TestGmailScheduleIntegration(unittest.TestCase):
@@ -113,7 +113,7 @@ class TestGmailScheduleIntegration(unittest.TestCase):
             "vaultFile": "/tmp/메일.md",
         }
 
-        with patch("gmail_manager.default_gmail_manager", mock_gmail_mgr):
+        with patch("bot.google.gmail_manager.default_gmail_manager", mock_gmail_mgr):
             asyncio.run(
                 scheduler._fire(
                     bot=None,

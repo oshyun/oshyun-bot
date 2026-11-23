@@ -7,15 +7,15 @@ import sys
 import tempfile
 import unittest
 
-# src/bot 경로 추가
+# src(패키지 루트) 경로 추가
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 sys.path.insert(0, _SRC_DIR)
 
-import burn_todo
-import paths
-from burn_runner import evaluate_burn_condition
+import bot.core.burn_todo as burn_todo
+import bot.core.paths as paths
+from bot.scheduler.burn_runner import evaluate_burn_condition
 
 
 class TestBurnTodo(unittest.TestCase):
@@ -192,7 +192,7 @@ class TestBurnCondition(unittest.TestCase):
     def test_recover_stuck_tasks(self):
         import asyncio
         from unittest.mock import AsyncMock, patch
-        from burn_runner import recover_stuck_burn_tasks
+        from bot.scheduler.burn_runner import recover_stuck_burn_tasks
 
         # 가상 태스크 추가 후 running 상태로 설정
         added = burn_todo.add("중단된 작업", "프롬프트", priority=1)
@@ -202,7 +202,7 @@ class TestBurnCondition(unittest.TestCase):
         async def mock_send_to_chat(bot, chat_id, text):
             sent_messages.append((chat_id, text))
 
-        with patch("burn_runner.run_auto_burn_pipeline", new_callable=AsyncMock) as mock_pipeline:
+        with patch("bot.scheduler.burn_runner.run_auto_burn_pipeline", new_callable=AsyncMock) as mock_pipeline:
             loop = asyncio.new_event_loop()
             count = loop.run_until_complete(
                 recover_stuck_burn_tasks(
@@ -224,7 +224,7 @@ class TestBurnCondition(unittest.TestCase):
         self.assertIn("재트리거", sent_messages[0][1])
 
     def test_format_token_usage(self):
-        from agent_engine import format_token_usage
+        from bot.engine.agent_engine import format_token_usage
 
         self.assertEqual(format_token_usage(None), "토큰 정보 없음")
 

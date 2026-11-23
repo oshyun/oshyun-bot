@@ -10,9 +10,9 @@ import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import master_supervisor
-import master_tasks
-import web_execution
+import bot.master.master_supervisor as master_supervisor
+import bot.master.master_tasks as master_tasks
+import bot.web.execution as web_execution
 
 
 class TestMasterTasksCancellation(unittest.TestCase):

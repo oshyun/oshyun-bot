@@ -33,10 +33,10 @@ start_web() {
   local port="${WEB_PORT:-${VOICE_WEB_PORT:-8765}}"
 
   # 고아 인스턴스 사전 정리
-  pkill -f "${PROJECT_ROOT}/src/bot/web_server.py" 2>/dev/null || true
+  kill_web_processes
   sleep 0.3
 
-  nohup "$PY" "${PROJECT_ROOT}/src/bot/web_server.py" > "$WEB_ERRFILE" 2>&1 &
+  nohup "$PY" -m bot.web.server > "$WEB_ERRFILE" 2>&1 &
   echo $! > "$WEB_PIDFILE"
   sleep 1
   if pid="$(web_pid)"; then

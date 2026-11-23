@@ -5,12 +5,12 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-BOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
+BOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if BOT_DIR not in sys.path:
     sys.path.insert(0, BOT_DIR)
 
-import agent_engine
-import engine_drivers
+import bot.engine.agent_engine as agent_engine
+import bot.engine.engine_drivers as engine_drivers
 
 
 class TestQuotaAlertInjection(unittest.TestCase):

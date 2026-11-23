@@ -5,15 +5,15 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
-import master_memory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import bot.master.master_memory as master_memory
 
 
 class TestMasterMemoryExtensions(unittest.TestCase):
     def setUp(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._tmp_file = os.path.join(self._tmp_dir.name, "master_memory.json")
-        self._patcher = patch("master_memory.MASTER_MEMORY_FILE", self._tmp_file)
+        self._patcher = patch("bot.master.master_memory.MASTER_MEMORY_FILE", self._tmp_file)
         self._patcher.start()
         master_memory.clear_memory("all")
 
@@ -441,7 +441,7 @@ class TestMasterMemoryExtensions(unittest.TestCase):
                 stderr="",
             )
 
-        with patch("agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
+        with patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
             asyncio.run(
                 master_memory._refine_memory_item_bg(
                     item_id,
@@ -505,7 +505,7 @@ class TestMasterMemoryExtensions(unittest.TestCase):
             )
 
         with patch.object(master_memory, "LLM_SUMMARY_ENABLED", True), \
-             patch("agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
+             patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
             snap = asyncio.run(master_memory.rebalance_memory_with_llm())
 
         op = snap["lastOperation"]
@@ -648,7 +648,7 @@ class TestMasterMemoryExtensions(unittest.TestCase):
             )
 
         with patch.object(master_memory, "LLM_SUMMARY_ENABLED", True), \
-             patch("agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
+             patch("bot.engine.agy_wrapper.run_agy_cli", side_effect=fake_run_agy_cli):
             snap = asyncio.run(master_memory.rebalance_memory_with_llm())
 
         op = snap["lastOperation"]

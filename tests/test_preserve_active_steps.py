@@ -4,12 +4,12 @@ import unittest
 from unittest.mock import patch
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SRC_BOT = os.path.join(REPO_ROOT, "src", "bot")
+SRC_BOT = os.path.join(REPO_ROOT, "src")
 if SRC_BOT not in sys.path:
     sys.path.insert(0, SRC_BOT)
 
-import web_execution
-import web_rooms
+import bot.web.execution as web_execution
+import bot.web.rooms as web_rooms
 
 
 class TestPreserveActiveSteps(unittest.TestCase):
@@ -94,7 +94,7 @@ class TestPreserveActiveSteps(unittest.TestCase):
 
     def test_frontend_index_html_contains_merge_steps_and_preservation(self):
         """index.html 및 js 모듈에 도구 호출 단계 보존을 위한 mergeToolSteps 함수와 스냅샷 보호 로직이 존재하는지 검증."""
-        static_dir = os.path.join(SRC_BOT, "static")
+        static_dir = os.path.join(SRC_BOT, "bot", "web", "static")
         index_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.exists(index_path))
         parts = []

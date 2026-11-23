@@ -12,12 +12,13 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC_DIR = os.path.join(_REPO_ROOT, "src", "bot")
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-import usage_pricing
-import web_server
+import bot.engine.usage_pricing as usage_pricing
+import bot.web.server as web_server
+import bot.web.auth as web_auth
 
 
 class TestUsagePricingHelpers(unittest.TestCase):
@@ -129,18 +130,18 @@ class TestUsageEndpoints(AioHTTPTestCase):
     async def get_application(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._patchers = [
-            patch("chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
-            patch("master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "master_tasks.json")),
+            patch("bot.core.chat_db.CHAT_DB_FILE", os.path.join(self._tmp_dir.name, "chat.db")),
+            patch("bot.master.master_tasks.MASTER_TASKS_FILE", os.path.join(self._tmp_dir.name, "bot.master.master_tasks.json")),
             patch.object(web_server, "WEB_JOBS_FILE", os.path.join(self._tmp_dir.name, "web_jobs.json")),
         ]
         for p in self._patchers:
             p.start()
         self.orig_auth = getattr(web_server, "WEB_AUTH_REQUIRED", True)
-        web_server.WEB_AUTH_REQUIRED = False
+        web_auth.WEB_AUTH_REQUIRED = False
         return web_server.create_web_app()
 
     async def tearDownAsync(self):
-        web_server.WEB_AUTH_REQUIRED = getattr(self, "orig_auth", True)
+        web_auth.WEB_AUTH_REQUIRED = getattr(self, "orig_auth", True)
         if hasattr(self, "client") and self.client:
             await self.client.close()
         for p in reversed(getattr(self, "_patchers", [])):
@@ -159,7 +160,7 @@ class TestUsageEndpoints(AioHTTPTestCase):
             }
             usage_pricing._save_cached_quota(data, cache_file=cache_file)
 
-            with patch("usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
+            with patch("bot.engine.usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
                 resp = await self.client.request("GET", "/api/usage")
                 self.assertEqual(resp.status, 200)
                 body = await resp.json()
@@ -180,7 +181,7 @@ class TestUsageEndpoints(AioHTTPTestCase):
             }
             usage_pricing._save_cached_quota(data, cache_file=cache_file)
 
-            with patch("usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
+            with patch("bot.engine.usage_pricing.DEFAULT_AGY_QUOTA_CACHE_FILE", cache_file):
                 payload = web_server.build_status_payload()
                 self.assertIn("usage", payload)
                 self.assertIsNotNone(payload["usage"])
@@ -191,7 +192,7 @@ class TestUsageHtmlUi(unittest.TestCase):
     """index.html 내 배지 엘리먼트 및 클라이언트 스크립트 존재 검증."""
 
     def test_html_ui_markers(self):
-        static_dir = os.path.join(_SRC_DIR, "static")
+        static_dir = os.path.join(_SRC_DIR, "bot", "web", "static")
         html_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.isfile(html_path))
         parts = []
@@ -235,17 +236,17 @@ class TestUsageHtmlUi(unittest.TestCase):
 
     def test_mobile_topbar_badge_visible_outside_drawer(self):
         """회귀: 모바일에선 사이드바(드로어) 안 배지가 안 보이므로 상단바에도 배지가 있어야 한다."""
-        with open(os.path.join(_SRC_DIR, "static", "index.html"), encoding="utf-8") as f:
+        with open(os.path.join(_SRC_DIR, "bot", "web", "static", "index.html"), encoding="utf-8") as f:
             html = f.read()
         sidebar_end = html.index("</aside>") if "</aside>" in html else html.index('<header class="topbar"')
         topbar_pos = html.index('id="topbar-usage-badge"')
         self.assertGreater(topbar_pos, sidebar_end, "topbar 배지는 사이드바 밖에 있어야 함")
-        with open(os.path.join(_SRC_DIR, "static", "css", "responsive.css"), encoding="utf-8") as f:
+        with open(os.path.join(_SRC_DIR, "bot", "web", "static", "css", "responsive.css"), encoding="utf-8") as f:
             self.assertIn("topbar-usage-badge", f.read())
 
     def test_pwa_standalone_cache_busting_and_lifecycle(self):
         """안드로이드 PWA(standalone) 환경에서 구버전 캐시 고착을 막고 즉시 갱신되도록 보장하는지 검증."""
-        static_dir = os.path.join(_SRC_DIR, "static")
+        static_dir = os.path.join(_SRC_DIR, "bot", "web", "static")
         with open(os.path.join(static_dir, "index.html"), encoding="utf-8") as f:
             html = f.read()
         with open(os.path.join(static_dir, "sw.js"), encoding="utf-8") as f:

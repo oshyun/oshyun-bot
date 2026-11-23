@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, patch
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
-import chat_db
-import web_rooms
-import web_orchestrator
+import bot.core.chat_db as chat_db
+import bot.web.rooms as web_rooms
+import bot.web.orchestrator as web_orchestrator
 
 
 class TestExpertAgentsPersistence(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestExpertAgentsPersistence(unittest.TestCase):
         chat_db.HIDDEN_ROOMS_FILE = self.hidden_file
 
         import sys
-        mod = sys.modules.get("web_server")
+        mod = sys.modules.get("bot.web.server")
         self.orig_ws_hidden_file = getattr(mod, "HIDDEN_ROOMS_FILE", None) if mod else None
         if mod and hasattr(mod, "HIDDEN_ROOMS_FILE"):
             mod.HIDDEN_ROOMS_FILE = self.hidden_file
@@ -53,7 +53,7 @@ class TestExpertAgentsPersistence(unittest.TestCase):
         web_rooms.HIDDEN_ROOMS_FILE = self.orig_hidden_file
         chat_db.HIDDEN_ROOMS_FILE = self.orig_hidden_file
         import sys
-        mod = sys.modules.get("web_server")
+        mod = sys.modules.get("bot.web.server")
         if mod and self.orig_ws_hidden_file is not None:
             mod.HIDDEN_ROOMS_FILE = self.orig_ws_hidden_file
         shutil.rmtree(self.test_dir, ignore_errors=True)
@@ -154,7 +154,7 @@ class TestExpertAgentsPersistence(unittest.TestCase):
             "createdAt": time.time(),
         }
         with patch.object(chat_db, "CHAT_DB_FILE", self.db_path), \
-             patch("paths.CHAT_DB_FILE", self.db_path):
+             patch("bot.core.paths.CHAT_DB_FILE", self.db_path):
             web_rooms._append_room_message(rid, msg)
             loaded = web_rooms._load_room_messages(rid)
 
@@ -174,7 +174,7 @@ class TestExpertAgentsRestApi(AioHTTPTestCase):
         chat_db.HIDDEN_ROOMS_FILE = self.hidden_file
 
         import sys
-        mod = sys.modules.get("web_server")
+        mod = sys.modules.get("bot.web.server")
         self.orig_ws_hidden_file = getattr(mod, "HIDDEN_ROOMS_FILE", None) if mod else None
         if mod and hasattr(mod, "HIDDEN_ROOMS_FILE"):
             mod.HIDDEN_ROOMS_FILE = self.hidden_file
@@ -205,7 +205,7 @@ class TestExpertAgentsRestApi(AioHTTPTestCase):
         web_rooms.HIDDEN_ROOMS_FILE = self.orig_hidden_file
         chat_db.HIDDEN_ROOMS_FILE = self.orig_hidden_file
         import sys
-        mod = sys.modules.get("web_server")
+        mod = sys.modules.get("bot.web.server")
         if mod and self.orig_ws_hidden_file is not None:
             mod.HIDDEN_ROOMS_FILE = self.orig_ws_hidden_file
         shutil.rmtree(self.test_dir, ignore_errors=True)
@@ -214,13 +214,13 @@ class TestExpertAgentsRestApi(AioHTTPTestCase):
     async def test_handle_api_delete_session_does_not_hide_expert_rooms(self):
         """DELETE /api/session?sessionId=__expert_vault__ 호출 시 hidden_chat_rooms 에 들어가지 않고 세션만 리셋되는지 검증."""
         import sys
-        ws_mod = sys.modules.get("web_server")
+        ws_mod = sys.modules.get("bot.web.server")
         from unittest.mock import MagicMock
         mock_clear = MagicMock()
         patches = [
             patch.object(chat_db, "CHAT_DB_FILE", self.db_path),
-            patch("paths.CHAT_DB_FILE", self.db_path),
-            patch("web_rooms.clear_session", mock_clear),
+            patch("bot.core.paths.CHAT_DB_FILE", self.db_path),
+            patch("bot.web.rooms.clear_session", mock_clear),
         ]
         if ws_mod and hasattr(ws_mod, "clear_session"):
             patches.append(patch.object(ws_mod, "clear_session", mock_clear))
@@ -255,14 +255,14 @@ class TestExpertAgentsRestApi(AioHTTPTestCase):
         chat_db.add_message(rid, "assistant", "리팩토링 완료", db_path=self.db_path)
 
         import sys
-        ws_mod = sys.modules.get("web_server")
+        ws_mod = sys.modules.get("bot.web.server")
         from unittest.mock import MagicMock
         mock_clear = MagicMock()
         patches = [
             patch.object(chat_db, "CHAT_DB_FILE", self.db_path),
-            patch("paths.CHAT_DB_FILE", self.db_path),
-            patch("web_orchestrator.clear_session", mock_clear),
-            patch("web_execution.broadcast_ws_json", new_callable=AsyncMock),
+            patch("bot.core.paths.CHAT_DB_FILE", self.db_path),
+            patch("bot.web.orchestrator.clear_session", mock_clear),
+            patch("bot.web.execution.broadcast_ws_json", new_callable=AsyncMock),
         ]
         if ws_mod and hasattr(ws_mod, "clear_session"):
             patches.append(patch.object(ws_mod, "clear_session", mock_clear))

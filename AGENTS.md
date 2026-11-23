@@ -37,38 +37,47 @@
 
 ## 무엇인가
 
-oshyun-bot = "Personal Intelligent Bot". 텔레그램 메시지를 받아 로컬 PC 의 `claude -p` 로
-실행하고 결과를 회신하는 봇. 롱폴링 방식(공개 URL/웹훅 불필요). 목적은 사용자의 Obsidian
-볼트 마크다운 노트를 읽고 답하는 개인 비서.
+oshyun-bot = "Personal Intelligent Bot". 웹 UI(브라우저/모바일)에서 사용자 메시지를 받아 로컬 PC 의
+`claude -p`/agy 엔진으로 실행하고 결과를 회신하는 봇. 목적은 사용자의 Obsidian 볼트 마크다운
+노트를 읽고 답하는 개인 비서.
 
-코드(`src/`)와 운영 산출물(`data/`)을 분리한다. 코드는 서로 import 하지 않는 세 컴포넌트로
-나뉜다. `.env`·`.venv`·`scripts/`·`requirements.txt` 는 리포 루트에서 공유한다.
+코드(`src/`)와 운영 산출물(`data/`)을 분리한다. `.env`·`.venv`·`scripts/`·`requirements.txt` 는
+리포 루트에서 공유한다.
 
-**`src/bot/`** — 통합 봇 백엔드 & 웹/오케스트레이터 서버 (Telegram · Web API · AGY/Claude 엔진 · `instructions/` 지침 허브)
-- `telegram_bot.py` — 텔레그램 핸들러 + 롱폴링 루프 + 응답 전송 + 스케줄러 (독립 프로세스). 첨부 파일 다운로드.
-- `web_server.py` — 실시간 음성 비서(STT/TTS WebSocket) 및 옵시디언 볼트 파일 매니저 REST API / Web 정적 서빙 (독립 프로세스).
-- `chat_db.py` — **통합 SQLite 대화 데이터베이스**(`data/state/chat.db`). 텔레그램과 웹이 공통으로 바라보는 단일 진실 원천(SSOT) 대화 세션/메시지 저장소 (WAL 모드로 프로세스 간 안전한 동시성 보장).
-- `agent_engine.py` — `claude -p` 호출 래퍼. **sandbox-exec 래핑** + **시스템 프롬프트** 주입.
-  두 가지 실행 경로: `run_agent`(PIPE 기반, 호출 끝까지 봇이 보유 — 스케줄러·정기작업 해석용),
-  그리고 **`spawn_agent`/`watch_agent`**(분리 세션 실행 + 출력 파일 tail — 사용자 메시지용,
-  재부착 가능). `detached_pid_alive`/`kill_job`(killpg)로 분리 프로세스를 다룬다.
-- `jobs.py` — 진행 중 claude 작업(job) 레코드 영속화(`data/state/jobs.json`, chat 별). 봇 재시작 후
-  **재부착(reattach)** 의 근거(`pid·out_file·전달 컨텍스트`). 원자적 저장 패턴.
-- `tg_format.py` — claude 마크다운 → 텔레그램 HTML 변환 + 4096자 분할 + 표→카드. **출력 안전망**.
-- `paths.py` — 운영 산출물 경로 해석. `DATA_DIR`(기본 `<루트>/data`) 및 하위 폴더(`logs/`·`state/`)를 한 곳에서 정의.
-- `sandbox.sb` — claude 격리용 macOS Seatbelt 샌드박스 프로파일(코드의 일부).
-- `scheduler.py` — **정기 작업(다이제스트) 실행 루프 & 토큰 버닝 감시**. 봇 프로세스 내 백그라운드 asyncio 태스크로
-  매분 cron 을 매칭하고, 매시 정각 주간 쿼터 리셋 직전 잔여 토큰을 감시해 프로젝트 개선을 트리거한다.
-- `schedules.py` — 정기 작업 정의 영속화(`data/state/schedules.json`). 원자적 저장. 매분 다시 읽음.
-- `burn_runner.py` — **토큰 버닝 프로젝트 개선 실행기**. 주간 리셋 6시간 미만 & 쿼터 30% 이상 시 격리 워크트리에서 개선 작업 자동 수행.
-- `burn_todo.py` — **토큰 버닝 개선 TODO 목록 영속화**(`data/state/burn_todo.json`). 테스트·리팩토링·감사·드리밍 등 백로그 관리.
-- `cron.py` — 외부 의존성 없는 최소 cron 매칭기("분 시 일 월 요일"). cal-sync 의 순수 파이썬 관례.
+**`src/bot/`** — `bot` 패키지(패키지 루트 = `src/`, PYTHONPATH=src). 6개 서브패키지로 구성된다:
 
-**`src/cal-sync/`** — 캘린더 동기화 사이드카
-- `calendar_sync.py` — 구글 캘린더(비공개 iCal) → 볼트 노트 동기화. LLM 미사용 순수 파이썬.
-
-**`src/bot/static/`** — 순수 HTML/CSS/JS 모던 클린 라이트(화이트/에메랄드) 테마 음성 비서 & 세컨브레인 볼트 매니저 프론트엔드
-- 별도 빌드 단계 없이 `web_server.py`가 `src/bot/static/index.html`을 직접 서빙한다.
+- **`bot.core/`** — 공통 기반(다른 어떤 패키지도 역의존 금지):
+  - `core/paths.py` — 운영 산출물 경로 해석. `DATA_DIR`(기본 `<루트>/data`) 및 하위 폴더(`logs/`·`state/`)를 한 곳에서 정의.
+  - `core/env_compat.py` — 레거시 env 키 ↔ 도메인__키 하위호환 동기화.
+  - `core/json_store.py` — JSON 상태 파일 원자적 저장/로드 유틸.
+  - `core/bot_logger.py` — 공통 로깅 설정(data/logs).
+  - `core/chat_db.py` — **통합 SQLite 대화 데이터베이스**(`data/state/chat.db`). 웹이 바라보는 단일 진실 원천(SSOT) 대화 세션/메시지 저장소 (WAL 모드로 프로세스 간 안전한 동시성 보장).
+  - `core/agent_configs.py` — 에이전트(마스터·전문가·커스텀) 설정 중앙 레지스트리.
+  - `core/child_error_report.py` · `core/cron.py` · `core/schedules.py`(정기작업 영속화) · `core/burn_todo.py`(버닝 TODO 영속화).
+- **`bot.engine/`** — claude/agy 실행 계열(core 만 의존):
+  - `engine/agent_engine.py` — `claude -p` 호출 래퍼. **sandbox-exec 래핑** + **시스템 프롬프트** 주입.
+    두 가지 실행 경로: `run_agent`(PIPE 기반, 호출 끝까지 봇이 보유 — 스케줄러·정기작업 해석용),
+    그리고 **`spawn_agent`/`watch_agent`**(분리 세션 실행 + 출력 파일 tail — 사용자 메시지용,
+    재부착 가능). `detached_pid_alive`/`kill_job`(killpg)로 분리 프로세스를 다룬다.
+  - `engine/agy_wrapper.py` — agy(Flash) 엔진 호출 래퍼. `engine/engine_drivers.py`(엔진별 커맨드 빌드·실행),
+    `engine/engine_sandbox.py` + `engine/sandbox.sb`(Seatbelt 프로파일, 동행 필수), `engine/engine_settings.py`,
+    `engine/stream_parser.py`(stream-json 파싱), `engine/usage_pricing.py`(토큰 비용 계산).
+- **`bot.master/`** — 마스터 세션(engine 단방향 import): `master/master_supervisor.py`, `master/master_memory.py`,
+  `master/master_tasks.py`(작업 원장 영속화).
+- **`bot.scheduler/`** — 정기작업/버닝: `scheduler/scheduler.py`(**정기 작업(다이제스트) 실행 루프 & 토큰 버닝 감시** —
+  매분 cron 매칭, 주간 쿼터 리셋 직전 잔여 토큰 감시해 개선 트리거), `scheduler/burn_runner.py`(격리 워크트리 자동 개선 실행기).
+- **`bot.google/`** — 구글 연동(core 만 의존): `google/google_auth.py`, `google/gmail_manager.py`, `google/gcal_manager.py`.
+- **`bot.web/`** — 웹 서버(진입점 `bot.web.server`, `python -m bot.web.server` 로 기동):
+  - `web/server.py` — 실시간 음성 비서(STT/TTS WebSocket) 및 옵시디언 볼트 파일 매니저 REST API / Web 정적 서빙 (독립 프로세스).
+  - `web/runtime_state.py`(런타임 상태 SSOT), `web/orchestrator.py`(턴 지휘 — 2,500줄 이상으로
+    **다음 쪼개기 후보**: 마스터 그래프/방 오케스트레이션/완료 처리 하위 도메인 분리), `web/execution.py`(테스트 mock.patch 전달 전용 임시 facade — 프로덕션 importer 0건, 잔존 테스트 이관 후 삭제),
+    `web/rooms.py`·`web/ws.py`·`web/speech.py`·`web/automation.py`·`web/google.py`·`web/vault.py`,
+    `web/jobs.py`(job 레코드 영속화 — 봇 재시작 후 **재부착(reattach)** 근거),
+    `web/job_recovery.py`·`web/stream_watch.py`·`web/turn_execution.py`·`web/room_queue.py`·`web/agent_reporting.py`·`web/auth.py`.
+  - `web/static/` — 순수 HTML/CSS/JS 모던 클린 라이트(화이트/에메랄드) 테마 프론트엔드. 별도 빌드 없이 `server.py`가
+    `src/bot/web/static/index.html`을 직접 서빙한다.
+- **`bot/instructions/`** — 역할별 시스템 프롬프트 허브(엔진·웹·스케줄러 공유 자산). `bot/telegram` 은 향후 재도입용
+  예약 네임스페이스(현재 코드 없음 — 텔레그램 봇은 커밋 daf4c4f 에서 제거됨).
 
 ---
 
@@ -96,7 +105,7 @@ pip install -r requirements.txt
 ### 3. 테스트 실행 (작업 전후 무결점 검증)
 ```bash
 # 단위 테스트
-PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests
+PYTHONPATH=src .venv/bin/python3 -m unittest discover -s tests
 ```
 
 ### 4. 서비스 기동 및 접속
@@ -110,7 +119,7 @@ PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests
 
 ## 🎙️ 실시간 음성 비서 & 세컨브레인 웹 앱 아키텍처
 
-텔레그램 봇과 함께 로컬 브라우저/모바일 환경에서 직접 옵시디언 볼트를 음성과 UI로 탐색하고 조작하는 통합 프론트엔드·백엔드 시스템이다.
+로컬 브라우저/모바일 환경에서 직접 옵시디언 볼트를 음성과 UI로 탐색하고 조작하는 프론트엔드·백엔드 시스템이다.
 
 ### 1. 대화방(Chat Room) 목록 & 신규 세션 격리 (`src/web-app/`)
 - **ChatGPT/Claude 스타일 사이드바**:
@@ -123,7 +132,7 @@ PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests
   - 방마다 대화 메시지, 실시간 thinking/도구 실행 단계(`activeSteps`), 백엔드 세션 ID가 메모리에 보존되며, 목록에서 방을 전환하면 과거 질의응답 및 추론 과정이 온전히 복원됨.
   - 첫 질문 발화 시 질문 첫 문장으로 대화방 제목 자동 요약.
 
-### 2. 실시간 Thinking & 도구 실행 스트리밍 (`web_server.py` ↔ WebSocket `/ws`)
+### 2. 실시간 Thinking & 도구 실행 스트리밍 (`bot.web.server` ↔ WebSocket `/ws`)
 - 에이전트(`claude` / `agy`)의 내부 추론(Thinking) 및 도구 호출(`read_file`, `grep_search`, `write_file` 등)을 실시간 스트리밍:
   - `started`: 작업 시작 알림 (`roomId`, `voiceMode`)
   - `agent_step`: 각 도구 실행 단계, 파라미터 미리보기, 경과 시간(초) 실시간 전달
@@ -162,10 +171,10 @@ PYTHONPATH=src/bot .venv/bin/python3 -m unittest discover -s tests
 
 **`data/`** — 운영 중 생기는 파일만 모은다(전부 gitignore). **`DATA_DIR` 환경변수로 리포 밖 임의 위치로 통째 분리(relocate) 가능** — 파이썬(`paths.py`)과 셸(`scripts/common.sh`)이 같은 규칙을 따른다.
 
-- `logs/` — 관찰용 산출물(봇 동작에 무관). `telegram-bot.log`/`.pid`/`.err.log`, `cal-sync.log`/`.pid`/`.err.log`, `session_log.jsonl`.
+- `logs/` — 관찰용 산출물(봇 동작에 무관). `web-server.log`/`.pid`/`.err.log`, `cal-sync.log`/`.pid`/`.err.log`, `session_log.jsonl`.
 - `state/` — 영속 상태(재시작 후 봇이 읽어야 정상 동작). `chat.db`(통합 SQLite 대화 세션/메시지 DB), `bot_settings.json`(session_id·설정), `schedules.json`(정기작업), `restart_notice.json`(재시작 말풍선 추적), `jobs.json`(job 레코드, chat 별 pid·out_file·컨텍스트), `burn_todo.json`(토큰버닝 TODO), `burn_state.json`(버닝 실행상태).
 - `jobs/` — 분리 실행 claude 출력 파일. `<id>.jsonl`(stream-json 출력).
-- `attached_files/` — 텔레그램에서 받은 첨부 파일.
+- `attached_files/` — 웹에서 받은 첨부 파일.
 - `claude-home/` — claude CLI 전용 디렉토리. 설정·세션·캐시(`AGENT_CONFIG_DIR`)와 스크래치(`tmp/`, `AGENT_CODE_TMPDIR`)를 한 곳에.
 
 ## 분리 실행과 재부착 (claude 가 봇 재시작에서 살아남는다)
@@ -193,22 +202,21 @@ claude 의 임시/설정도 `DATA_DIR` 하위로 분리한다(`agent_engine._bui
 ## 격리 (중요)
 
 claude 는 `--dangerously-skip-permissions` 로 돌지만(headless 라 대화형 승인 불가),
-파일시스템 경계는 `src/bot/sandbox.sb`(sandbox-exec) 가 강제한다. claude 와 그 Bash 하위
+파일시스템 경계는 `src/bot/engine/sandbox.sb`(sandbox-exec) 가 강제한다. claude 와 그 Bash 하위
 프로세스는 **볼트 + `~/.claude` + 첨부폴더(`data/attached_files/`) + 인증(Keychain) + 시스템 경로**
 만 접근 가능하고 그 외 사용자 홈은 읽기·쓰기 모두 차단된다. macOS 전용. `OSHYUN_BOT_SANDBOX=0` 로 끔.
 claude 는 단일 Mach-O 바이너리라 심링크 우회 위해 `realpath` 로 실제 경로를 실행한다.
 
 ## 출력 정책
 
-텔레그램은 claude 의 마크다운/HTML 을 그대로 렌더링하지 못한다(특히 색상 `<span>`, 넓은 표).
-- 1차: `agent_engine.SYSTEM_PROMPT` 가 claude 에게 평문 출력을 지시(`--append-system-prompt`).
-- 2차(안전망): `tg_format.to_telegram_html` 이 stray HTML 제거 + `&<>` 이스케이프(전송 실패 방지).
+웹 UI 프론트엔드와 에이전트 원문 출력의 괴리를 줄인다.
+- 1차: `engine/agent_engine.py` 의 SYSTEM_PROMPT 가 claude 에게 출력 형식을 지시(`--append-system-prompt`).
+- 2차(안전망): 웹 응답 직전 마크다운/HTML 정제로 전송 실패를 방지한다.
 
 ## 정기 작업 (다이제스트)
 
 사용자가 묻지 않아도 정해진 시각에 claude 를 돌려 정리 결과를 **먼저** 보내주는 기능.
-- **등록은 자연어**: `/schedule 매일 아침 8시에 오늘 일정 정리해줘`.
-  관리: `/schedule 목록`, `/schedule 삭제 <id>`.
+- **등록/관리는 웹 UI(자동화 탭) 또는 자연어 등록 API**(`POST /api/schedules`)로 한다.
 - **claude 는 텍스트만 다룬다(역할 분리)**: 등록 시 claude 는 자연어를 `{cron, prompt, description}`
   JSON 으로 *해석만* 하고(볼트·`data/` 접근 안 함), 그 JSON 을 `data/state/schedules.json` 에 저장하는 것은
   샌드박스 밖 **봇 프로세스**다(claude 는 샌드박스로 `data/` 차단). cal-sync 트리거와 같은 원리.
@@ -220,25 +228,24 @@ claude 는 단일 Mach-O 바이너리라 심링크 우회 위해 `realpath` 로 
 
 ## 운영 (서비스 독립 제어 및 격리)
 
-모든 서비스(`bot`, `web`, `cal`)는 **완전 독립된 프로세스**로 실행되며, 다른 서비스에 전혀 영향을 주지 않고 단독으로 기동·종료·재시작할 수 있다.
+모든 서비스(`web`, `cal`)는 **완전 독립된 프로세스**로 실행되며, 다른 서비스에 전혀 영향을 주지 않고 단독으로 기동·종료·재시작할 수 있다.
 
 ```bash
 # 전체 서비스 일괄 관리
-./scripts/start.sh              # 전체 서비스 백그라운드 기동 (bot, web, cal)
+./scripts/start.sh              # 전체 서비스 백그라운드 기동 (web, cal)
 ./scripts/status.sh             # 전체 서비스 상태 및 PID, 포트, 로그 확인
 ./scripts/restart.sh            # 전체 서비스 재시작
 ./scripts/stop.sh               # 전체 서비스 종료
 
 # 개별 서비스 독립 관리 (상호 영향 없음)
-./scripts/restart.sh web        # ⚡ 웹 서버만 재시작 (텔레그램 봇 무영향! 챗 세션 유지)
-./scripts/restart.sh bot        # 🤖 텔레그램 봇만 재시작 (웹 서버 무영향!)
+./scripts/restart.sh web        # ⚡ 웹 서버만 재시작 (챗 세션 유지)
 ./scripts/restart.sh cal        # 🗓️ 캘린더 사이드카만 재시작
 
-./scripts/start.sh [bot|web|cal] # 특정 서비스만 단독 기동
-./scripts/stop.sh [bot|web|cal]  # 특정 서비스만 단독 종료
+./scripts/start.sh [web|cal]    # 특정 서비스만 단독 기동
+./scripts/stop.sh [web|cal]     # 특정 서비스만 단독 종료
 
 # 로그 실시간 확인
-./scripts/logs.sh               # 텔레그램 봇 로그 (data/logs/telegram-bot.log)
+./scripts/logs.sh               # 웹 서버 로그 (data/logs/web-server.log)
 ./scripts/logs.sh web           # 웹 서버 로그 (data/logs/web-server.log)
 ./scripts/logs.sh cal           # 캘린더 사이드카 로그 (data/logs/cal-sync.log)
 ./scripts/logs.sh err           # stderr 에러 로그
@@ -252,25 +259,12 @@ claude 는 단일 Mach-O 바이너리라 심링크 우회 위해 `realpath` 로 
 
 환경변수의 소속과 역할을 한눈에 구분할 수 있도록 `도메인__키=값` 형식을 사용하며, 기존 레거시 키(단일 언더스코어)도 100% 하위 호환된다.
 
-- **텔레그램 (`TELEGRAM__`)**: `TELEGRAM__BOT_TOKEN`(봇 토큰) · `TELEGRAM__ALLOWED_CHAT_IDS`(접근 허용 chat_id)
 - **에이전트 (`AGENT__`)**: `AGENT__WORKDIR`(볼트 경로) · `AGENT__CODEDIR`(코드 리포지토리) · `AGENT__MODEL`(기본 모델) · `AGENT__TIMEOUT`(에이전트 타임아웃) · `AGENT__EXTRA_ARGS`
 - **LLM/프록시 (`ANTHROPIC__`)**: `ANTHROPIC__MODEL` · `ANTHROPIC__AUTH_TOKEN` · `ANTHROPIC__BASE_URL` · `ANTHROPIC__API_TIMEOUT_MS` · `ANTHROPIC__DEFAULT_{HAIKU,SONNET,OPUS}_MODEL`
 - **캘린더 (`CALENDAR__`)**: `CALENDAR__ICAL_URL`(구글 캘린더 iCal 주소) · `CALENDAR__NOTE_PATH`
 - **웹 서버 (`WEB__`)**: `WEB__ENABLED` · `WEB__HOST` · `WEB__PORT` · `WEB__AUTH_REQUIRED` · `WEB__TOKEN`
 - **도메인 (`DUCKDNS__`)**: `DUCKDNS__DOMAIN` · `DUCKDNS__TOKEN`
 - **시스템 (`SYSTEM__` / `DATA_DIR`)**: `SYSTEM__DATA_DIR` 또는 `DATA_DIR`(운영 산출물 위치, 기본 `<루트>/data`) · `AGENT__SANDBOX`(0=격리 끔) · `AGENT__SYSTEM_PROMPT`(시스템 프롬프트 덮어쓰기).
-
-## 텔레그램 명령어 추가 절차
-
-텔레그램 봇 명령어(`/xxx`)를 새로 추가할 때는 반드시 세 곳을 함께 수정한다.
-
-1. **핸들러 함수** — `telegram_bot.py` 에 `async def xxx_command(...)` 구현
-2. **`BOT_COMMANDS` 리스트** — `telegram_bot.py` 의 `BOT_COMMANDS` 에 `BotCommand("xxx", "설명")` 추가
-3. **`app.add_handler`** — `main()` 안에 `CommandHandler("xxx", xxx_command)` 등록
-4. **`HELP` 문자열** — 도움말 텍스트에 설명 추가
-
-> `BOT_COMMANDS` 는 `_post_init` 에서 `bot.set_my_commands()` 로 텔레그램 서버에 등록한다.
-> 재시작(`./scripts/restart.sh`) 후 자동으로 서버에 반영된다 — 수동 API 호출 불필요.
 
 ## 관례
 

@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import chat_db
-import master_memory
+import bot.core.chat_db as chat_db
+import bot.master.master_memory as master_memory
 
 
 class TestExpertAgentsHierarchy(unittest.TestCase):
@@ -84,7 +84,7 @@ class TestExpertAgentsHierarchy(unittest.TestCase):
     def test_bubble_sender_labels_in_frontend(self):
         """웹 프론트엔드(index.html 및 static 번들)에서 각 전문가 및 하위 에이전트의 실제 역할/이름 라벨 매핑 검증."""
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        static_dir = os.path.join(repo_root, "src", "bot", "static")
+        static_dir = os.path.join(repo_root, "src", "bot", "web", "static")
         html_path = os.path.join(static_dir, "index.html")
         self.assertTrue(os.path.isfile(html_path))
 

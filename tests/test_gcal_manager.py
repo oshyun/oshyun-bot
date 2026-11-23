@@ -7,12 +7,12 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 _SRC_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "bot"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"
 )
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from gcal_manager import GoogleCalendarManager, format_event_range
+from bot.google.gcal_manager import GoogleCalendarManager, format_event_range
 
 
 class TestGoogleCalendarManager(unittest.TestCase):

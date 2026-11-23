@@ -5,10 +5,10 @@ import os
 import unittest
 from unittest.mock import MagicMock
 
-# src/bot 경로 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "bot"))
+# src(패키지 루트) 경로 추가
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from web_orchestrator import extract_delegated_subagents
+from bot.web.orchestrator import extract_delegated_subagents
 
 
 class TestDelegatedSubagentChips(unittest.TestCase):
@@ -219,7 +219,7 @@ class TestDelegatedSubagentChips(unittest.TestCase):
 
     def test_load_room_messages_injects_delegated_rooms(self):
         """web_rooms._load_room_messages 에서 __core__ 메시지에 delegatedRooms 필드가 주입되는지 검증."""
-        from web_rooms import _load_room_messages
+        from bot.web.rooms import _load_room_messages
 
         mock_db = MagicMock()
         mock_db.get_messages.return_value = [
@@ -247,9 +247,9 @@ class TestDelegatedSubagentChips(unittest.TestCase):
             },
         ]
 
-        import web_rooms
+        import bot.web.rooms as web_rooms
         orig_chat_db = web_rooms.chat_db
-        web_server = sys.modules.get("web_server")
+        web_server = sys.modules.get("bot.web.server")
         orig_ws_chat_db = getattr(web_server, "chat_db", None) if web_server else None
         try:
             web_rooms.chat_db = mock_db
