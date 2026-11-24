@@ -387,21 +387,28 @@ def _score_room_similarity(
     return min(1.0, max(base_score, query_history_sim * 0.95))
 
 
-def _collect_orchestrator_candidate_rooms() -> list[dict]:
-    """마스터 에이전트를 제외한 모든 후보 채팅방 목록을 중복 없이 모은다."""
+def _collect_orchestrator_candidate_rooms(exclude_orchestrators: bool = False) -> list[dict]:
+    """후보 채팅방 목록을 중복 없이 모은다. exclude_orchestrators=True 시 상설/관리형 에이전트 룸을 제외한다."""
     from bot.web.rooms import _load_chat_rooms_index
     load_index_fn = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
     current_chat_db = _get_mod_attr("chat_db", chat_db)
 
+    def _should_include(rid: str) -> bool:
+        if not rid or rid == CORE_ORCHESTRATOR_ROOM_ID:
+            return False
+        if exclude_orchestrators and _is_orchestrator_room_id(rid):
+            return False
+        return True
+
     rooms = [
         r for r in load_index_fn()
-        if str(r.get("id") or r.get("roomId") or "") != CORE_ORCHESTRATOR_ROOM_ID
+        if _should_include(str(r.get("id") or r.get("roomId") or ""))
     ]
     seen_ids = {str(r.get("id") or r.get("roomId") or "") for r in rooms}
     try:
         for db_r in current_chat_db.get_rooms(limit=200):
             rid = str(db_r.get("id") or db_r.get("roomId") or "")
-            if rid and rid != CORE_ORCHESTRATOR_ROOM_ID and rid not in seen_ids:
+            if _should_include(rid) and rid not in seen_ids:
                 rooms.append(db_r)
                 seen_ids.add(rid)
     except Exception:
@@ -424,10 +431,21 @@ def _find_similar_orchestrator_room(
     threshold: float = _SIMILAR_ROOM_THRESHOLD,
     include_running: bool = False,
     rooms: list[dict] | None = None,
+    parent_agent_id: str | None = None,
+    exclude_orchestrator_rooms: bool = True,
 ) -> tuple[dict | None, float]:
-    """기존 활성 채팅방 중 질문/주제가 가장 유사한 방과 유사도 점수를 반환한다."""
+    """기존 활성 채팅방 중 질문/주제가 가장 유사한 방과 유사도 점수를 반환한다.
+
+    하위 워커 세션 스폰 시에는 상설/관리형 에이전트(마스터, 세컨브레인, 봇개발, 커스텀 에이전트)는
+    절대로 하위 작업의 재사용 후보가 되어서는 안 되므로 exclude_orchestrator_rooms=True(기본값)로 배제한다.
+    또한 parent_agent_id가 지정된 경우 동일한 부모 에이전트가 소유한 방만 재사용 후보로 제한한다.
+    """
     from bot.web.rooms import _normalize_room_ts
-    candidate_rooms = rooms if rooms is not None else _collect_orchestrator_candidate_rooms()
+    candidate_rooms = (
+        rooms
+        if rooms is not None
+        else _collect_orchestrator_candidate_rooms(exclude_orchestrators=exclude_orchestrator_rooms)
+    )
     if not candidate_rooms:
         return None, 0.0
 
@@ -450,7 +468,20 @@ def _find_similar_orchestrator_room(
         rid = str(r.get("id") or r.get("roomId") or "").strip()
         if not rid or rid == CORE_ORCHESTRATOR_ROOM_ID:
             continue
+        if exclude_orchestrator_rooms and _is_orchestrator_room_id(rid):
+            continue
         if r.get("isArchived"):
+            continue
+
+        # parent_agent_id 격리:
+        # 1. 특정 부모 에이전트(예: __expert_coding__, __expert_vault__)가 명시된 경우
+        #    동일한 부모 산하의 하위 방만 매칭 (다른 부모 산하 방과의 혼선 방지)
+        room_parent = str(r.get("parentAgentId") or r.get("parent_agent_id") or "").strip()
+        if parent_agent_id and parent_agent_id != CORE_ORCHESTRATOR_ROOM_ID:
+            if room_parent != parent_agent_id:
+                continue
+        elif room_parent and room_parent != CORE_ORCHESTRATOR_ROOM_ID:
+            # 부모가 명시되지 않았거나 __core__인 경우, 특정 전문가(__expert_coding__ 등)에 전속된 방은 배제
             continue
 
         sid = str(r.get("sessionId") or "").strip() or None
@@ -512,7 +543,7 @@ def _resolve_orchestrator_target_room(target: str) -> dict | None:
         return db_room
     # 5. 유사 주제 채팅방 탐색 폴백
     similar_room, _ = _find_similar_orchestrator_room(
-        clean, "", include_running=True, rooms=rooms
+        clean, "", include_running=True, rooms=rooms, exclude_orchestrator_rooms=False
     )
     return similar_room
 
@@ -832,7 +863,9 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             find_similar_fn = _get_mod_attr(
                 "_find_similar_orchestrator_room", _find_similar_orchestrator_room
             )
-            matched_room, sim_score = find_similar_fn(room_title, message)
+            matched_room, sim_score = find_similar_fn(
+                room_title, message, parent_agent_id=parent_agent_id
+            )
 
         if matched_room is not None:
             room_id, session_id, existing_room_title = _bind_existing_room_for_dispatch(
