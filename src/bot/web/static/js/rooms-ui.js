@@ -1332,8 +1332,10 @@ function renderThreadPanelBody() {
 
     bodyEl.innerHTML = html.join('');
 
-    if (isNearBottom || isRunning) {
+    if (isNearBottom) {
       bodyEl.scrollTop = bodyEl.scrollHeight;
+    } else {
+      bodyEl.scrollTop = prevScrollTop;
     }
   } catch (err) {
     console.error('스레드 패널 렌더링 실패:', err);

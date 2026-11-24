@@ -249,6 +249,9 @@ window.addEventListener('DOMContentLoaded', () => {
     initPullToRefresh();
     initPinchZoomFontSize();
     initVisualViewportHandler();
+    if (typeof initMessagesScrollListeners === 'function') {
+      initMessagesScrollListeners();
+    }
 
     document.addEventListener('pointerdown', (e) => {
       const cfgMenu = document.getElementById('room-config-popover');

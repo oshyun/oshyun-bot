@@ -1,4 +1,4 @@
-.messages-scroll { flex: 1; overflow-y: auto; overscroll-behavior-y: none; scroll-behavior: auto; -webkit-overflow-scrolling: touch; }
+.messages-scroll { flex: 1; overflow-y: auto; overscroll-behavior-y: none; scroll-behavior: auto; -webkit-overflow-scrolling: touch; overflow-anchor: none; }
 .thread { max-width: var(--thread-w); margin: 0 auto; padding: 24px 24px 36px; display: flex; flex-direction: column; gap: 26px; }
 .msg { display: flex; flex-direction: column; min-width: 0; animation: msgFadeIn .18s ease-out; }
 @keyframes msgFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

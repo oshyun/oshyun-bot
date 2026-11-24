@@ -1,42 +1,132 @@
-function onMessagesScroll() {
-  updateScrollBottomButton();
-}
+// ─── 스마트 스크롤 락 (Smart Scroll Lock) 상태 관리 ───
+let isAutoScrollPinned = true;       // 바닥 고정(스트리밍 중 자동 스크롤) 활성 여부
+let isProgrammaticScroll = false;     // 코드에 의한 스크롤 이벤트 플래그
+let _lastScrollTop = 0;              // 스크롤 방향(위/아래) 감지용 직전 위치
+let _scrollRetryTimeout = null;       // 폰트/이미지 렌더링 지연 보정용 타이머
+
+// 스크롤 임계값 상수
+const SCROLL_DETACH_THRESHOLD = 80;   // 바닥에서 80px 이상 벗어나면 auto-scroll 해제 (자유 탐색 모드)
+const SCROLL_REATTACH_THRESHOLD = 35; // 바닥 35px 이내로 스크롤하면 auto-scroll 재활성화
+const SCROLL_BUTTON_THRESHOLD = 120;  // 맨 아래로 버튼 표시 거리
 
 function updateScrollBottomButton() {
   const container = document.getElementById('messages-container');
   const btn = document.getElementById('btn-scroll-bottom');
   if (!container || !btn) return;
-  const dist = container.scrollHeight - container.scrollTop - container.clientHeight;
-  btn.classList.toggle('show', dist > 180);
+  const dist = Math.max(0, container.scrollHeight - container.scrollTop - container.clientHeight);
+  // 바닥에서 일정 거리 이상 떨어졌거나 자동 스크롤이 풀린 상태면 플로팅 버튼 표시
+  btn.classList.toggle('show', dist > SCROLL_BUTTON_THRESHOLD || (!isAutoScrollPinned && dist > 50));
 }
 
-function scrollToBottom(smooth = false) {
+function onMessagesScroll() {
   const container = document.getElementById('messages-container');
   if (!container) return;
-  const doScroll = () => {
-    if (!container) return;
-    if (smooth && typeof container.scrollTo === 'function') {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    } else {
-      container.scrollTop = container.scrollHeight;
-    }
+
+  if (isProgrammaticScroll) {
+    isProgrammaticScroll = false;
+    _lastScrollTop = container.scrollTop;
     updateScrollBottomButton();
-  };
-  doScroll();
-  requestAnimationFrame(doScroll);
-  setTimeout(doScroll, 60);
-  setTimeout(doScroll, 180);
+    return;
+  }
+
+  const dist = Math.max(0, container.scrollHeight - container.scrollTop - container.clientHeight);
+  const currentScrollTop = container.scrollTop;
+  const isScrollingUp = currentScrollTop < _lastScrollTop - 2;
+  _lastScrollTop = currentScrollTop;
+
+  // 사용자가 위로 스크롤하거나 바닥에서 임계값 이상 떨어지면 자동 스크롤 락 해제
+  if (isScrollingUp || dist > SCROLL_DETACH_THRESHOLD) {
+    if (dist > 15) { // 서브픽셀 렌더링 오차 방어
+      isAutoScrollPinned = false;
+    }
+  } else if (dist <= SCROLL_REATTACH_THRESHOLD) {
+    // 사용자가 다시 바닥 근처로 돌아오면 자동 스크롤 재개
+    isAutoScrollPinned = true;
+  }
+
+  updateScrollBottomButton();
 }
 
-function scrollToBottomIfNear(force = false) {
+function scrollToBottom(smooth = false, retry = false) {
   const container = document.getElementById('messages-container');
   if (!container) return;
-  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 160;
-  if (force || nearBottom) {
-    scrollToBottom(false);
+
+  if (_scrollRetryTimeout) {
+    clearTimeout(_scrollRetryTimeout);
+    _scrollRetryTimeout = null;
+  }
+
+  isProgrammaticScroll = true;
+  if (smooth && typeof container.scrollTo === 'function') {
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  } else {
+    container.scrollTop = container.scrollHeight;
+  }
+  _lastScrollTop = container.scrollTop;
+  updateScrollBottomButton();
+
+  // 방 전환/초기 렌더링 시 레이아웃 시프트 지연 보정
+  if (retry) {
+    _scrollRetryTimeout = setTimeout(() => {
+      _scrollRetryTimeout = null;
+      if (isAutoScrollPinned && container) {
+        isProgrammaticScroll = true;
+        container.scrollTop = container.scrollHeight;
+        _lastScrollTop = container.scrollTop;
+        updateScrollBottomButton();
+      }
+    }, 100);
+  }
+}
+
+function scrollToBottomIfNear(force = false, smooth = false) {
+  const container = document.getElementById('messages-container');
+  if (!container) return;
+
+  if (force) {
+    isAutoScrollPinned = true;
+    scrollToBottom(smooth, true);
+    return;
+  }
+
+  // 사용자가 위로 스크롤한 상태(isAutoScrollPinned === false)에서는 절대 강제 스크롤하지 않음
+  if (isAutoScrollPinned) {
+    scrollToBottom(false, false);
   } else {
     updateScrollBottomButton();
   }
+}
+
+function initMessagesScrollListeners() {
+  const container = document.getElementById('messages-container');
+  if (!container || container._hasScrollListeners) return;
+  container._hasScrollListeners = true;
+
+  // 1. 마우스/트랙패드 휠: 위로 올리는 휠 입력 시 즉시 auto-scroll 해제
+  container.addEventListener('wheel', (e) => {
+    if (e.deltaY < -1) {
+      isAutoScrollPinned = false;
+      updateScrollBottomButton();
+    }
+  }, { passive: true });
+
+  // 2. 터치 제스처: 터치로 아래로 당기는(위쪽 내용 확인) 동작 시 즉시 auto-scroll 해제
+  let touchStartY = 0;
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      const currentY = e.touches[0].clientY;
+      if (currentY - touchStartY > 4) {
+        isAutoScrollPinned = false;
+        updateScrollBottomButton();
+      }
+    }
+  }, { passive: true });
 }
 
 function isSubAgentReportMessage(m) {
@@ -1298,9 +1388,21 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     });
   }
 
+  initMessagesScrollListeners();
+  const prevScrollTop = container.scrollTop;
+  const wasPinned = isAutoScrollPinned;
+
   container.innerHTML = '';
   container.appendChild(thread);
-  scrollToBottomIfNear(forceScroll);
+
+  if (forceScroll || wasPinned) {
+    scrollToBottomIfNear(forceScroll);
+  } else {
+    isProgrammaticScroll = true;
+    container.scrollTop = prevScrollTop;
+    _lastScrollTop = container.scrollTop;
+    updateScrollBottomButton();
+  }
 }
 
 function cancelQueuedMessageByIndex(idx) {
