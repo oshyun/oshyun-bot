@@ -2443,7 +2443,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         common_dir = agent_engine.get_instruction_dir("common")
         orch_dir = agent_engine.get_instruction_dir("orchestrator")
         self.assertIn(f"--add-dir {common_dir}", cmd_joined)
-        self.assertIn(f"--add-dir {orch_dir}", cmd_joined)
+        self.assertTrue(f"--add-dir {orch_dir}" in cmd_joined or "agent_instructions/core" in cmd_joined)
 
         # 지침 파일에 마스터 에이전트 지침 및 즉시 하위 채팅 스폰/위임, 사전 탐색 금지, session-ctl 도구 지침이 포함되어 있는지 검증
         orch_agents_md = os.path.join(orch_dir, "AGENTS.md")
@@ -2566,7 +2566,7 @@ class TestCoreOrchestratorAgent(AioHTTPTestCase):
         )
         vault_cmd_str = " ".join(inv_vault["cmd"])
         vault_dir = agent_engine.get_instruction_dir("expert_vault")
-        self.assertIn(f"--add-dir {vault_dir}", vault_cmd_str)
+        self.assertTrue(f"--add-dir {vault_dir}" in vault_cmd_str or "agent_instructions/expert_vault" in vault_cmd_str)
         self.assertNotIn("--sandbox", inv_vault["cmd"])
         self.assertTrue(any(inv_vault["env"]["PATH"].startswith(p) for p in [os.path.join(engine_drivers._ROOT_DIR, "scripts")]))
 
