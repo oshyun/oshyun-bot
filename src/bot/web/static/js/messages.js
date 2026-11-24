@@ -307,12 +307,17 @@ function resolveDelegatedRoomInfo(raw) {
   // 실시간 실행 상태(running/done/error) 판정
   if (roomId) {
     const live = roomLiveStates[roomId];
-    if (live && live.isRunning) {
+    const isLiveRunning = Boolean(live && live.isRunning);
+    const isActiveInServer = Boolean(typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r && r.roomId === roomId));
+    if (isLiveRunning || isActiveInServer) {
       status = 'running';
-      if (!reason || reason === '정상 완료') reason = live.feed || '백그라운드 실행 중...';
-    } else if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r && r.roomId === roomId)) {
-      status = 'running';
-      if (!reason || reason === '정상 완료') reason = '백그라운드 실행 중...';
+      if (!reason || reason === '정상 완료') reason = (live && live.feed) || '백그라운드 실행 중...';
+    } else if (status === 'running') {
+      // 런타임/서버에서 실행 중이 아니면 완료(done)로 정상 복원
+      status = 'done';
+      if (!reason || reason === '백그라운드 실행 중' || reason === '백그라운드 실행 중...') {
+        reason = '정상 완료';
+      }
     }
   }
 
@@ -513,6 +518,100 @@ function extractDelegatedRoomsFromMessage(m) {
   return extractDelegatedRoomsFromSteps(m.steps);
 }
 
+function renderSubAgentChipBadgeHtml(status, reasonText = '') {
+  if (status === 'running') {
+    return `<span class="chip-badge status-running" title="${escapeHtml(reasonText || '백그라운드 실행 중...')}"><span class="chip-dot"></span>실행 중</span>`;
+  } else if (status === 'error' || status === 'cancelled') {
+    const defaultReason = status === 'cancelled' ? '취소됨' : '오류';
+    const reason = reasonText || defaultReason;
+    const shortReason = reason.length > 18 ? reason.slice(0, 18) + '…' : reason;
+    const reasonSuffix = reason && reason !== '오류' && reason !== '오류 발생'
+      ? ` · <span class="chip-badge-reason">${escapeHtml(shortReason)}</span>`
+      : '';
+    return `<span class="chip-badge status-error" title="오류 사유: ${escapeHtml(reason)}">${status === 'cancelled' ? '취소됨' : '오류'}${reasonSuffix}</span>`;
+  } else {
+    return `<span class="chip-badge status-done" title="${escapeHtml(reasonText || '정상 완료')}">완료</span>`;
+  }
+}
+
+function updateSubAgentChipsStatus(roomId, newStatus, reasonText = '', roomTitle = '', taskId = '') {
+  if (!roomId && !roomTitle && !taskId) return;
+  const normStatus = (newStatus === 'running' || newStatus === 'error' || newStatus === 'cancelled')
+    ? (newStatus === 'cancelled' ? 'error' : newStatus)
+    : 'done';
+  const statusLabel = normStatus === 'running' ? '실행 중' : (normStatus === 'error' ? '오류' : '완료');
+  const finalReason = reasonText || (normStatus === 'running' ? '백그라운드 실행 중...' : (normStatus === 'error' ? '오류 발생' : '정상 완료'));
+
+  // 1. DOM Fast-Path: 화면에 마운트되어 있는 모든 매칭 서브에이전트 칩 실시간 업데이트
+  const matchedChips = new Set();
+  if (roomId) {
+    document.querySelectorAll(`.sub-agent-chip[data-room-id="${roomId}"]`).forEach(c => matchedChips.add(c));
+  }
+  if (taskId) {
+    document.querySelectorAll(`.sub-agent-chip[data-task-id="${taskId}"]`).forEach(c => matchedChips.add(c));
+  }
+  if (roomTitle) {
+    document.querySelectorAll(`.sub-agent-chip[data-title="${roomTitle}"]`).forEach(c => matchedChips.add(c));
+  }
+
+  matchedChips.forEach(chipBtn => {
+    chipBtn.classList.remove('is-running', 'is-done', 'is-error');
+    chipBtn.classList.add(`is-${normStatus}`);
+    chipBtn.setAttribute('data-status', normStatus);
+    if (roomId && !chipBtn.getAttribute('data-room-id')) {
+      chipBtn.setAttribute('data-room-id', roomId);
+    }
+    if (taskId && !chipBtn.getAttribute('data-task-id')) {
+      chipBtn.setAttribute('data-task-id', taskId);
+    }
+
+    const displayTitle = chipBtn.getAttribute('data-title') || roomTitle || roomId || '하위 에이전트';
+    chipBtn.title = `[${displayTitle}] · 상태: ${statusLabel} (${finalReason})\n클릭 시 해당 채팅방으로 이동`;
+
+    const badgeEl = chipBtn.querySelector('.chip-badge');
+    const newBadgeHtml = renderSubAgentChipBadgeHtml(normStatus, finalReason);
+    if (badgeEl) {
+      badgeEl.outerHTML = newBadgeHtml;
+    } else {
+      const arrowEl = chipBtn.querySelector('.chip-arrow');
+      if (arrowEl) {
+        arrowEl.insertAdjacentHTML('beforebegin', newBadgeHtml);
+      } else {
+        chipBtn.insertAdjacentHTML('beforeend', newBadgeHtml);
+      }
+    }
+  });
+
+  // 2. State SSOT: 현재 열려 있는 방 및 chatRooms 내 메시지들의 delegated_rooms / delegatedRooms 상태 동기화
+  let stateUpdated = false;
+  const curRoom = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
+  if (curRoom && Array.isArray(curRoom.messages)) {
+    curRoom.messages.forEach(m => {
+      if (!m || typeof m !== 'object') return;
+      const dRooms = m.delegatedRooms || m.delegated_rooms;
+      if (Array.isArray(dRooms)) {
+        dRooms.forEach(item => {
+          if (!item) return;
+          const match = (roomId && item.roomId === roomId) ||
+                        (taskId && item.taskId === taskId) ||
+                        (roomTitle && item.title === roomTitle);
+          if (match) {
+            item.status = normStatus;
+            item.reason = finalReason;
+            if (roomId && !item.roomId) item.roomId = roomId;
+            if (taskId && !item.taskId) item.taskId = taskId;
+            stateUpdated = true;
+          }
+        });
+      }
+    });
+  }
+
+  if (stateUpdated && typeof saveChatRoomsToStorage === 'function') {
+    saveChatRoomsToStorage();
+  }
+}
+
 function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
   if (!Array.isArray(delegatedRooms) || delegatedRooms.length === 0) return null;
 
@@ -550,22 +649,18 @@ function buildDelegatedSubAgentChipsDom(delegatedRooms, parentRoomId = null) {
     const reasonText = item.reason || statusLabel;
     const displayTitle = item.title || item.roomId;
     chipBtn.title = `[${displayTitle}] · 상태: ${statusLabel} (${reasonText})\n클릭 시 해당 채팅방으로 이동`;
+    chipBtn.setAttribute('data-status', item.status || 'done');
     if (item.roomId) {
       chipBtn.setAttribute('data-room-id', item.roomId);
     }
-
-    let badgeHtml = '';
-    if (item.status === 'running') {
-      badgeHtml = `<span class="chip-badge status-running" title="${escapeHtml(reasonText)}"><span class="chip-dot"></span>실행 중</span>`;
-    } else if (item.status === 'error') {
-      const shortReason = reasonText.length > 18 ? reasonText.slice(0, 18) + '…' : reasonText;
-      const reasonSuffix = reasonText && reasonText !== '오류' && reasonText !== '오류 발생'
-        ? ` · <span class="chip-badge-reason">${escapeHtml(shortReason)}</span>`
-        : '';
-      badgeHtml = `<span class="chip-badge status-error" title="오류 사유: ${escapeHtml(reasonText)}">오류${reasonSuffix}</span>`;
-    } else {
-      badgeHtml = `<span class="chip-badge status-done" title="정상 완료">완료</span>`;
+    if (item.title) {
+      chipBtn.setAttribute('data-title', item.title);
     }
+    if (item.taskId) {
+      chipBtn.setAttribute('data-task-id', item.taskId);
+    }
+
+    const badgeHtml = renderSubAgentChipBadgeHtml(item.status || 'done', reasonText);
 
     chipBtn.innerHTML = `
       <span class="chip-icon">${chipIcon}</span>

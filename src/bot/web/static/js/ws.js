@@ -690,9 +690,22 @@ function applyActiveRunsSnapshot(activeRuns, isFullSnapshot = true) {
       if (finishedRoom) {
         loadChatHistoryFromServer(finishedRoom.id, finishedRoom.sessionId);
       }
+      if (typeof updateSubAgentChipsStatus === 'function') {
+        updateSubAgentChipsStatus(rId, 'done', '정상 완료', finishedRoom ? finishedRoom.title : '');
+      }
       if (rId === currentRoomId) {
         currentRoomAffected = true;
       }
+    }
+
+    // 활성 실행 목록(activeRuns)에 없는 화면 내 모든 실행 중 칩을 완료 상태로 리컨사일
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      document.querySelectorAll('.sub-agent-chip.is-running').forEach(chip => {
+        const rid = chip.getAttribute('data-room-id');
+        if (rid && !activeRoomIds.has(rid) && (!roomLiveStates[rid] || !roomLiveStates[rid].isRunning)) {
+          updateSubAgentChipsStatus(rid, 'done', '정상 완료');
+        }
+      });
     }
   }
 
@@ -1060,11 +1073,17 @@ function handleWsEvent(data) {
     } else if (targetRoom.isOrchestratorChild || data.channel === 'orchestrator' || data.channel === 'task_report' || targetRoom.byOrchestrator) {
       showToast(`[${targetRoom.title}] 작업이 시작되었습니다.`, { roomId: targetRoom.id });
     }
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed || '생각하는 중…', targetRoom.title);
+    }
   } else if (data.type === 'queued') {
     const qPos = data.position || data.queueSize || 1;
     liveState.isRunning = true;
     if (!liveState.startedAt) liveState.startedAt = Date.now();
     syncLiveElapsedTimer();
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', '대기열 등록됨', targetRoom.title);
+    }
     if (Array.isArray(targetRoom.messages)) {
       const qRole = data.channel === 'task_report' ? 'sub-agent' : 'user';
       if (data.text || data.clientMsgId || data.userMsgId) {
@@ -1195,10 +1214,35 @@ function handleWsEvent(data) {
       renderMessagesForCurrentRoom();
       updateSendButtonState();
     }
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'error', '작업 취소됨', targetRoom.title);
+    }
   } else if (data.type === 'result') {
     const replyText = data.text || data.result || '';
     const finalSteps = filterToolSteps((Array.isArray(data.steps) && data.steps.length > 0) ? data.steps : [...liveState.steps]);
     const remainingQueued = getQueuedMessagesCount(targetRoom);
+
+    // 하위 에이전트 칩 실시간 상태 갱신 (화면 내 스피너 -> 완료/오류 아이콘)
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      const isErr = Boolean(data.error || (replyText && (replyText.startsWith('⚠️ 오류') || replyText.includes('도구 실행 실패'))));
+      const resStatus = isErr ? 'error' : (remainingQueued > 0 ? 'running' : 'done');
+      const resReason = isErr ? (data.error || '오류 발생') : (remainingQueued > 0 ? '다음 질문 실행 중...' : '정상 완료');
+      updateSubAgentChipsStatus(targetRoom.id, resStatus, resReason, targetRoom.title);
+
+      if (data.bypassedFromRoomId) {
+        const subStatus = data.isSuccess === false ? 'error' : 'done';
+        const subReason = data.isSuccess === false ? (data.error || '오류 발생') : '정상 완료';
+        updateSubAgentChipsStatus(data.bypassedFromRoomId, subStatus, subReason, data.subagentTitle || '');
+      }
+
+      if (Array.isArray(data.delegatedRooms)) {
+        data.delegatedRooms.forEach(item => {
+          if (item) {
+            updateSubAgentChipsStatus(item.roomId, item.status || 'done', item.reason || '정상 완료', item.title, item.taskId);
+          }
+        });
+      }
+    }
 
     liveState.isRunning = remainingQueued > 0;
     liveState.feed = remainingQueued > 0 ? '다음 대기열 질문 실행 준비 중…' : '';
