@@ -219,10 +219,13 @@ function updateCoreAgentSlotUi() {
               <svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
           </div>
-          <!-- 직속 하위 채팅 트리 -->
-          <div class="sb-core-tree sb-subtask-tree" id="${treeId}"></div>
-          <!-- 산하 하위 에이전트 브랜치 (중첩 트리) -->
-          <div class="sb-subagents-container" id="subagents-${safeId}">${subAgentsHtml}</div>
+          <!-- 📂 하위 브랜치 (직속 채팅 + 산하 에이전트 통합) -->
+          <div class="sb-agent-branch" id="branch-${safeId}">
+            <!-- 직속 하위 채팅 트리 -->
+            <div class="sb-core-tree sb-subtask-tree" id="${treeId}"></div>
+            <!-- 산하 하위 에이전트 브랜치 (중첩 트리) -->
+            <div class="sb-subagents-container" id="subagents-${safeId}">${subAgentsHtml}</div>
+          </div>
         </div>
       `;
     }).join('');
