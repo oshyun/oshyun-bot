@@ -324,10 +324,57 @@ function renderInline(str) {
     .replace(/`\[([^\]]+)\]\(((?:https?|file|obsidian):\/\/[^`\n]+)\)`/g, '[$1]($2)')
     .replace(/`(https?:\/\/obsid\.net\/[^\s`]+)`/g, '$1');
 
-  // 2. 마크다운 링크 ([label](url)) 우선 추출 및 프리티 링크 칩 변환
-  s = s.replace(/\[([^\]]+)\]\(((?:https?|file|obsidian|room|chat):\/\/(?:[^\s()]|\([^\s()]*\))+|(?:https?|file|obsidian|room|chat):[^)\s\n]+)\)/gi, (_, label, url) => {
-    return stashToken(buildPrettyLinkHtml(url, label));
-  });
+  // 2. 마크다운 링크 ([label](url)) 우선 추출 및 프리티 링크 칩 변환 (괄호 균형 파싱 지원)
+  {
+    let out = '';
+    let i = 0;
+    while (i < s.length) {
+      if (s[i] === '[') {
+        const labelStart = i + 1;
+        let labelEnd = -1;
+        let bracketDepth = 1;
+        for (let j = labelStart; j < s.length; j++) {
+          if (s[j] === '\\') { j++; continue; }
+          if (s[j] === '[') bracketDepth++;
+          else if (s[j] === ']') {
+            bracketDepth--;
+            if (bracketDepth === 0) {
+              labelEnd = j;
+              break;
+            }
+          }
+        }
+        if (labelEnd !== -1 && s[labelEnd + 1] === '(') {
+          const urlStart = labelEnd + 2;
+          let urlEnd = -1;
+          let parenDepth = 1;
+          for (let k = urlStart; k < s.length; k++) {
+            if (s[k] === '\\') { k++; continue; }
+            if (s[k] === '(') parenDepth++;
+            else if (s[k] === ')') {
+              parenDepth--;
+              if (parenDepth === 0) {
+                urlEnd = k;
+                break;
+              }
+            }
+          }
+          if (urlEnd !== -1) {
+            const label = s.slice(labelStart, labelEnd);
+            const url = s.slice(urlStart, urlEnd).trim();
+            if (/^(?:(?:https?|file|obsidian|room|chat):\/\/|(?:https?|file|obsidian|room|chat):)/i.test(url)) {
+              out += stashToken(buildPrettyLinkHtml(url, label));
+              i = urlEnd + 1;
+              continue;
+            }
+          }
+        }
+      }
+      out += s[i];
+      i++;
+    }
+    s = out;
+  }
 
   // 3. 남은 인라인 코드 보호
   s = s.replace(/`([^`\n]+)`/g, (_, c) => stashToken(`<code>${escapeHtml(c)}</code>`));

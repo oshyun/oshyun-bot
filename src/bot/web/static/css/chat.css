@@ -521,9 +521,9 @@
 }
 .md .wikilink:hover { background: var(--accent-glow); text-decoration: underline; }
 .md .md-link-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  max-width: min(100%, 420px); padding: 2px 9px 2px 7px; margin: 1px 2px;
-  border-radius: 999px; font-size: calc(13px * var(--ui-scale, 1)); font-weight: 550; line-height: 1.45; vertical-align: -2px;
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: min(100%, 360px); padding: 1px 7px 1px 6px; margin: 1px 2px;
+  border-radius: 6px; font-size: calc(12px * var(--ui-scale, 1)); font-weight: 550; line-height: 1.35; vertical-align: -1px;
   background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text);
   text-decoration: none !important; cursor: pointer;
   transition: background .14s, border-color .14s, color .14s, transform .12s;
@@ -543,17 +543,17 @@
   font-family: inherit;
 }
 .md .md-link-chip svg.i {
-  width: 13px; height: 13px; flex-shrink: 0; color: var(--accent-text);
+  width: 12px; height: 12px; flex-shrink: 0; color: var(--accent-text);
 }
 .md .md-link-chip svg.i.ext-arrow {
-  width: 11px; height: 11px; opacity: 0.65; margin-left: 1px;
+  width: 10px; height: 10px; opacity: 0.65; margin-left: 1px;
 }
 .md .md-link-chip .md-link-label {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .md .md-link-chip .md-link-meta {
-  font-size: calc(11.5px * var(--ui-scale, 1)); font-weight: 450; color: var(--text-3);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; flex-shrink: 1;
+  font-size: calc(11px * var(--ui-scale, 1)); font-weight: 450; color: var(--text-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; flex-shrink: 1;
 }
 .md .md-link-chip.is-vault .md-link-meta {
   color: var(--accent-text); opacity: 0.75;

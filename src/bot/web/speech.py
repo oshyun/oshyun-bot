@@ -69,11 +69,47 @@ def clean_text_for_speech(markdown_text: str) -> str:
         cleaned,
     )
     cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
-    cleaned = re.sub(
-        r"\[(?:link:)?([^\]]+)\]\([^)]+\)",
-        r"\1",
-        cleaned,
-    )
+    # 마크다운 링크 파싱 (라벨 및 URL 내부 괄호 균형 보존)
+    cleaned_chars: list[str] = []
+    i = 0
+    while i < len(cleaned):
+        if cleaned[i] == "[":
+            label_start = i + 1
+            bracket_depth = 1
+            label_end = -1
+            for j in range(label_start, len(cleaned)):
+                if cleaned[j] == "\\":
+                    continue
+                if cleaned[j] == "[":
+                    bracket_depth += 1
+                elif cleaned[j] == "]":
+                    bracket_depth -= 1
+                    if bracket_depth == 0:
+                        label_end = j
+                        break
+            if label_end != -1 and label_end + 1 < len(cleaned) and cleaned[label_end + 1] == "(":
+                url_start = label_end + 2
+                paren_depth = 1
+                url_end = -1
+                for k in range(url_start, len(cleaned)):
+                    if cleaned[k] == "\\":
+                        continue
+                    if cleaned[k] == "(":
+                        paren_depth += 1
+                    elif cleaned[k] == ")":
+                        paren_depth -= 1
+                        if paren_depth == 0:
+                            url_end = k
+                            break
+                if url_end != -1:
+                    label = cleaned[label_start:label_end]
+                    label = re.sub(r"^link:\s*", "", label, flags=re.I)
+                    cleaned_chars.append(label)
+                    i = url_end + 1
+                    continue
+        cleaned_chars.append(cleaned[i])
+        i += 1
+    cleaned = "".join(cleaned_chars)
     cleaned = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", cleaned)
     cleaned = re.sub(r"\[\[([^\]]+)\]\]", r"\1", cleaned)
     cleaned = re.sub(r"https?://\S+", "", cleaned)

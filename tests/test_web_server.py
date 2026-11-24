@@ -161,12 +161,15 @@ class TestSpeechTextCleaning(unittest.TestCase):
             "✅ **오늘 일정** 안내입니다.\n"
             "- [[캘린더|일정 허브]] 및 [[개인 할일]] 확인\n"
             "- 공유 링크: [link:캘린더.md](https://obsid.net/?vault=oshyun&file=cal)\n"
+            "- 괄호 문서: ( [link:스킨케어 루틴(아침).md](https://obsid.net/?vault=oshyun&file=skincare(am).md) )의 브리핑\n"
             "```python\nprint('hello')\n```"
         )
         speech_text = web_server.clean_text_for_speech(raw_markdown)
         self.assertIn("오늘 일정 안내입니다.", speech_text)
         self.assertIn("일정 허브 및 개인 할일 확인", speech_text)
         self.assertIn("캘린더.md", speech_text)
+        self.assertIn("스킨케어 루틴(아침).md )의 브리핑", speech_text)
+        self.assertNotIn("skincare(am).md", speech_text)
         self.assertNotIn("https://obsid.net", speech_text)
         self.assertNotIn("print", speech_text)
         self.assertIn("코드 블록은 화면을 참고해 주세요.", speech_text)
@@ -4070,6 +4073,11 @@ if (!out6.includes('<span style="color:#e03131">경고</span>') || out6.includes
 const out7 = formatMarkdown('`<span style="color:#2e9b3f">코드</span>` <script>alert(1)</script>');
 if (!out7.includes('<code>&lt;span style=&quot;color:#2e9b3f&quot;&gt;코드&lt;/span&gt;</code>') || !out7.includes('&lt;script&gt;alert(1)&lt;/script&gt;')) {
   throw new Error("Inline code span or script escaping failed: " + out7);
+}
+
+const out8 = formatMarkdown("스킨케어 루틴 ( [link:스킨케어 루틴(아침).md](https://obsid.net/?vault=oshyun&file=%EA%B0%9C%EC%9D%B8%2F%EC%8A%A4%ED%82%A8%EC%BC%80%EC%96%B4%20%EB%A3%A8%ED%8B%B4(%EC%95%84%EC%B9%A8).md) )의 브리핑");
+if (!out8.includes('>스킨케어 루틴(아침).md<') || !out8.includes('>· 개인<') || out8.includes('스킨케어 루틴)의') || !out8.includes(')의 브리핑')) {
+  throw new Error("Bracket in link failed: " + out8);
 }
 """
             res = subprocess.run(

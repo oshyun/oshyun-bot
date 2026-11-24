@@ -154,8 +154,55 @@ function cleanNotificationText(raw) {
   let text = String(raw);
   text = text.replace(/```[\s\S]*?```/g, ' [코드] ');
   text = text.replace(/`([^`]+)`/g, '$1');
-  text = text.replace(/\[link:([^\]]+)\]\([^)]+\)/g, '$1');
-  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // 마크다운 링크 [label](url) 제거 (괄호 균형 지원)
+  {
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === '[') {
+        const labelStart = i + 1;
+        let labelEnd = -1;
+        let bracketDepth = 1;
+        for (let j = labelStart; j < text.length; j++) {
+          if (text[j] === '\\') { j++; continue; }
+          if (text[j] === '[') bracketDepth++;
+          else if (text[j] === ']') {
+            bracketDepth--;
+            if (bracketDepth === 0) {
+              labelEnd = j;
+              break;
+            }
+          }
+        }
+        if (labelEnd !== -1 && text[labelEnd + 1] === '(') {
+          const urlStart = labelEnd + 2;
+          let urlEnd = -1;
+          let parenDepth = 1;
+          for (let k = urlStart; k < text.length; k++) {
+            if (text[k] === '\\') { k++; continue; }
+            if (text[k] === '(') parenDepth++;
+            else if (text[k] === ')') {
+              parenDepth--;
+              if (parenDepth === 0) {
+                urlEnd = k;
+                break;
+              }
+            }
+          }
+          if (urlEnd !== -1) {
+            let label = text.slice(labelStart, labelEnd);
+            label = label.replace(/^link:\s*/i, '');
+            out += label;
+            i = urlEnd + 1;
+            continue;
+          }
+        }
+      }
+      out += text[i];
+      i++;
+    }
+    text = out;
+  }
   text = text.replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1');
   text = text.replace(/^[#>\-*+]\s+/gm, '');
   text = text.replace(/[*_~]{1,3}([^*_~]+)[*_~]{1,3}/g, '$1');
