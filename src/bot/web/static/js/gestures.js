@@ -97,6 +97,45 @@ function initMobileSwipeGestures() {
 }
 
 // ─── 모바일 당겨서 새로고침 (Pull to Refresh - 상단 당김 & 하단 당김 지원) ───
+const PTR_CAPTURE_THRESHOLD_PX = 8;   // 경계 바깥 당김 시 네이티브 바운스/스크롤 조기 차단 임계값
+const PTR_DEADZONE_PX = 70;           // 인디케이터가 나타나기 시작하는 최소 당김 거리 (의도치 않은 당김 방지)
+const PTR_TRIGGER_THRESHOLD_PX = 165; // 새로고침이 실제로 트리거되는 당김 임계값 (충분히 당겼을 때만 작동)
+const PTR_MAX_VISUAL_PX = 68;         // 인디케이터 최대 시각적 이동 한계
+const PTR_DAMPING_K = 105;            // 지수 감쇠(Asymptotic Rubber-band) 저항 계수
+
+let _ptrResetTimer = null;
+
+function resetPullToRefreshIndicator(immediate = false) {
+  const ptrIndicator = document.getElementById('ptr-indicator');
+  if (!ptrIndicator) return;
+  if (_ptrResetTimer) {
+    clearTimeout(_ptrResetTimer);
+    _ptrResetTimer = null;
+  }
+  ptrIndicator.classList.remove('pulling', 'ready', 'refreshing');
+  if (immediate) {
+    ptrIndicator.classList.remove('returning', 'from-bottom');
+    ptrIndicator.style.transition = 'none';
+    ptrIndicator.style.transform = '';
+    ptrIndicator.style.opacity = '';
+    ptrIndicator.style.top = '';
+    ptrIndicator.style.bottom = '';
+    // 강제 리플로우 후 인라인 transition 제거하여 CSS 기본 트랜지션 복원
+    void ptrIndicator.offsetHeight;
+    ptrIndicator.style.transition = '';
+    return;
+  }
+  ptrIndicator.classList.add('returning');
+  ptrIndicator.style.transform = '';
+  ptrIndicator.style.opacity = '';
+  _ptrResetTimer = setTimeout(() => {
+    _ptrResetTimer = null;
+    ptrIndicator.classList.remove('returning', 'from-bottom');
+    ptrIndicator.style.top = '';
+    ptrIndicator.style.bottom = '';
+  }, 240);
+}
+
 function initPullToRefresh() {
   const ptrIndicator = document.getElementById('ptr-indicator');
   const ptrText = document.getElementById('ptr-text');
@@ -111,6 +150,7 @@ function initPullToRefresh() {
   let isEligible = false;
   let isPulling = false;
   let pullDirection = null; // 'top' | 'bottom' | null
+  let activeScroller = null;
 
   function getActiveScrollable(touchTarget) {
     // 1) 터치 대상에서 가장 가까운 실제 스크롤 가능 조상 우선 탐색 (모든 페이지·탭 공통 지원)
@@ -164,11 +204,33 @@ function initPullToRefresh() {
     return 16;
   }
 
+  function calcDampedPullDist(effectiveDy) {
+    if (effectiveDy <= 0) return 0;
+    return PTR_MAX_VISUAL_PX * (1 - Math.exp(-effectiveDy / PTR_DAMPING_K));
+  }
+
+  function restoreScrollerAnchor() {
+    if (!activeScroller || !pullDirection) return;
+    if (pullDirection === 'top' && activeScroller.scrollTop !== undefined && activeScroller.scrollTop < 2) {
+      activeScroller.scrollTop = 0;
+    } else if (pullDirection === 'bottom' && activeScroller.scrollTop !== undefined) {
+      const maxTop = Math.max(0, activeScroller.scrollHeight - activeScroller.clientHeight);
+      if (maxTop - activeScroller.scrollTop < 2) {
+        activeScroller.scrollTop = maxTop;
+      }
+    }
+  }
+
   window.addEventListener('touchstart', (e) => {
     // 단일 터치 제스처일 때 데스크톱/태블릿/모바일 크기와 무관하게 당겨서 새로고침(PTR) 상시 유지
     if (!e.touches || e.touches.length !== 1) {
       isEligible = false;
       return;
+    }
+
+    // 이전 복귀 애니메이션이 진행 중이었다면 즉시 정지 및 클린업하여 타이머/트랜스폼 경합 원천 방지
+    if (_ptrResetTimer || ptrIndicator.classList.contains('returning')) {
+      resetPullToRefreshIndicator(true);
     }
 
     // 모바일 사이드바 드로어가 열려 있거나 다중 선택 모드이면 무시
@@ -211,6 +273,7 @@ function initPullToRefresh() {
       return;
     }
 
+    activeScroller = scroller;
     startY = e.touches[0].clientY;
     startX = e.touches[0].clientX;
     isEligible = true;
@@ -220,13 +283,12 @@ function initPullToRefresh() {
 
   function cancelPull() {
     isEligible = false;
-    if (isPulling) {
+    if (isPulling || pullDirection) {
       isPulling = false;
-      ptrIndicator.classList.remove('pulling', 'ready');
-      ptrIndicator.style.transform = '';
-      ptrIndicator.style.opacity = '';
+      resetPullToRefreshIndicator(false);
     }
     pullDirection = null;
+    activeScroller = null;
   }
 
   window.addEventListener('touchmove', (e) => {
@@ -244,22 +306,22 @@ function initPullToRefresh() {
     // 실제로 스크롤할 내용이 남아있는 방향으로 일반 스크롤을 시도할 때만 PTR 취소 (방향 확정 전에만!)
     // - 아래로 스크롤할 내용이 남아있는데 손가락을 위로 밀 때 (dy < 0)
     // - 위로 스크롤할 내용이 남아있는데 손가락을 아래로 내릴 때 (dy > 0)
-    // ※ 중요: 스크롤할 게 없는 짧은 방이나 빈 화면에서는 canScrollDown, canScrollUp이 모두 false이므로
-    //   이 취소 조건에 걸리지 않고 화면 상단을 아래로 당겼을 때 상단 새로고침이 항상 정상 트리거됨!
     if (!pullDirection && ((canScrollDown && dy < 0) || (canScrollUp && dy > 0))) {
       cancelPull();
       return;
     }
 
-    // 방향이 확정되지 않은 경우: 40px 이상 확실히 당겼을 때만 PTR 모드 진입 (미세 이동 시 스크롤 절대 차단 금지)
+    // 방향 조기 선점: 경계(최상단/최하단)에서 바깥 방향으로 PTR_CAPTURE_THRESHOLD_PX(8px) 이상 수직 이동 시
+    // 네이티브 브라우저 오버스크롤/러버밴드가 시작되기 전에 방향을 확정하고 e.preventDefault()로 스크롤 튐을 원천 차단
     if (!pullDirection) {
-      if (isAtTop && dy > 40 && dy > dx * 1.5) {
+      if (isAtTop && dy > PTR_CAPTURE_THRESHOLD_PX && dy > dx * 1.5) {
         pullDirection = 'top';
-        ptrIndicator.classList.remove('from-bottom');
+        ptrIndicator.classList.remove('from-bottom', 'returning');
         ptrIndicator.style.top = '';
         ptrIndicator.style.bottom = '';
-      } else if (isAtBottom && dy < -40 && -dy > dx * 1.5) {
+      } else if (isAtBottom && dy < -PTR_CAPTURE_THRESHOLD_PX && -dy > dx * 1.5) {
         pullDirection = 'bottom';
+        ptrIndicator.classList.remove('returning');
         ptrIndicator.classList.add('from-bottom');
         ptrIndicator.style.bottom = `${getBottomOffset()}px`;
         ptrIndicator.style.top = 'auto';
@@ -268,56 +330,37 @@ function initPullToRefresh() {
       }
     }
 
-    // PTR 방향이 확정된 이후에만 브라우저 기본 바운스를 차단하여 스크롤 튐 원천 방지
+    // PTR 방향이 확정된 즉시 브라우저 기본 스크롤/바운스를 차단하고 스크롤 앵커를 고정
     if (e.cancelable) e.preventDefault();
+    restoreScrollerAnchor();
 
-    // 상단 당김 중 처리
-    if (pullDirection === 'top') {
-      if (dy <= 40) {
+    // 상단/하단 당김 중 처리 (시각적 노출은 PTR_DEADZONE_PX 이상 당겼을 때부터만 시작)
+    const isBottom = pullDirection === 'bottom';
+    const signedDy = isBottom ? -dy : dy;
+    if (signedDy <= PTR_DEADZONE_PX) {
+      if (isPulling) {
         isPulling = false;
         ptrIndicator.classList.remove('pulling', 'ready');
         ptrIndicator.style.transform = '';
         ptrIndicator.style.opacity = '';
-        return;
       }
+      return;
+    }
 
-      isPulling = true;
-      ptrIndicator.classList.add('pulling');
-      const effectiveDy = dy - 40;
-      const pullDist = Math.min(Math.pow(effectiveDy, 0.72) * 1.5, 62);
-      ptrIndicator.style.transform = `translateY(${pullDist - 50}px)`;
-      ptrIndicator.style.opacity = String(Math.min(effectiveDy / 35, 1));
+    isPulling = true;
+    ptrIndicator.classList.add('pulling');
+    const effectiveDy = signedDy - PTR_DEADZONE_PX;
+    const pullDist = calcDampedPullDist(effectiveDy);
+    const offsetY = isBottom ? (50 - pullDist) : (pullDist - 50);
+    ptrIndicator.style.transform = `translate3d(0, ${offsetY}px, 0)`;
+    ptrIndicator.style.opacity = String(Math.min(effectiveDy / 45, 1));
 
-      if (dy >= 95) {
-        ptrIndicator.classList.add('ready');
-        ptrText.innerText = '놓아서 새로고침';
-      } else {
-        ptrIndicator.classList.remove('ready');
-        ptrText.innerText = '당겨서 새로고침';
-      }
-    } else if (pullDirection === 'bottom') {
-      if (-dy <= 40) {
-        isPulling = false;
-        ptrIndicator.classList.remove('pulling', 'ready');
-        ptrIndicator.style.transform = '';
-        ptrIndicator.style.opacity = '';
-        return;
-      }
-
-      isPulling = true;
-      ptrIndicator.classList.add('pulling');
-      const effectiveDy = -dy - 40;
-      const pullDist = Math.min(Math.pow(effectiveDy, 0.72) * 1.5, 62);
-      ptrIndicator.style.transform = `translateY(${50 - pullDist}px)`;
-      ptrIndicator.style.opacity = String(Math.min(effectiveDy / 35, 1));
-
-      if (-dy >= 95) {
-        ptrIndicator.classList.add('ready');
-        ptrText.innerText = '놓아서 새로고침';
-      } else {
-        ptrIndicator.classList.remove('ready');
-        ptrText.innerText = '올려서 새로고침';
-      }
+    if (signedDy >= PTR_TRIGGER_THRESHOLD_PX) {
+      ptrIndicator.classList.add('ready');
+      ptrText.innerText = '놓아서 새로고침';
+    } else {
+      ptrIndicator.classList.remove('ready');
+      ptrText.innerText = isBottom ? '올려서 새로고침' : '당겨서 새로고침';
     }
   }, { passive: false });
 
@@ -326,19 +369,20 @@ function initPullToRefresh() {
     isEligible = false;
 
     if (pullDirection) {
-      const wasReady = ptrIndicator.classList.contains('ready');
+      const wasReady = isPulling && ptrIndicator.classList.contains('ready');
       isPulling = false;
       ptrIndicator.classList.remove('pulling');
+      restoreScrollerAnchor();
 
       if (wasReady) {
-        ptrIndicator.classList.remove('ready');
+        ptrIndicator.classList.remove('ready', 'returning');
         ptrIndicator.classList.add('refreshing');
         ptrText.innerText = '새로고치는 중…';
 
         if (pullDirection === 'bottom') {
-          ptrIndicator.style.transform = 'translateY(-12px)';
+          ptrIndicator.style.transform = 'translate3d(0, -12px, 0)';
         } else {
-          ptrIndicator.style.transform = 'translateY(12px)';
+          ptrIndicator.style.transform = 'translate3d(0, 12px, 0)';
         }
         ptrIndicator.style.opacity = '1';
 
@@ -350,19 +394,12 @@ function initPullToRefresh() {
           window.location.reload();
         }, 260);
       } else {
-        // 취소 또는 되돌림 복귀 시: 인디케이터를 CSS 트랜지션을 통해 부드럽게 원래 위치로 슬라이드 복귀
-        ptrIndicator.style.transform = '';
-        ptrIndicator.style.opacity = '';
-        setTimeout(() => {
-          ptrIndicator.classList.remove('from-bottom');
-          ptrIndicator.style.top = '';
-          ptrIndicator.style.bottom = '';
-          pullDirection = null;
-        }, 200);
+        // 취소 또는 임계값 미달 복귀 시: returning 트랜지션을 활성화하여 잔존 없이 부드럽게 원복
+        resetPullToRefreshIndicator(false);
       }
-    } else {
-      pullDirection = null;
     }
+    pullDirection = null;
+    activeScroller = null;
   }
 
   window.addEventListener('touchend', finishPull, { passive: true });

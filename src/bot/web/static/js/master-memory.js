@@ -986,11 +986,17 @@ function switchView(viewName) {
   if (editHint) editHint.style.display = viewName === 'chat' ? '' : 'none';
   updateTopbarTitle();
   closeRoomDrawer();
-  const ptr = document.getElementById('ptr-indicator');
-  if (ptr) {
-    ptr.classList.remove('pulling', 'ready', 'refreshing');
-    ptr.style.transform = '';
-    ptr.style.opacity = '';
+  if (typeof resetPullToRefreshIndicator === 'function') {
+    resetPullToRefreshIndicator(true);
+  } else {
+    const ptr = document.getElementById('ptr-indicator');
+    if (ptr) {
+      ptr.classList.remove('pulling', 'ready', 'refreshing', 'returning', 'from-bottom');
+      ptr.style.transform = '';
+      ptr.style.opacity = '';
+      ptr.style.top = '';
+      ptr.style.bottom = '';
+    }
   }
   const pinchHud = document.getElementById('pinch-font-hud');
   if (pinchHud) pinchHud.classList.remove('visible');
