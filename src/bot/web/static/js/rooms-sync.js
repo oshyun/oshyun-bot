@@ -2050,7 +2050,7 @@ function populateAgentConfigForm(targetAgentId = null) {
     childEffort: 'medium',
     injectChildTemplate: true,
     childPromptTemplate: `[하위 워커 동작 규칙]\n1. 지정된 작업 디렉토리 내에서 요청된 과업을 정확하고 신속하게 수행하라.\n2. 결론과 핵심 수치를 첫 줄에 두괄식으로 요약하여 보고하라.`,
-    systemPrompt: `# 전문 에이전트 전용 지침\n\n너는 oshyun-bot의 전문 에이전트다.\n- 작업 디렉토리 내에서 전문 작업을 직접 수행하거나, 필요 시 하위 워커를 스폰하여 비동기 위임할 수 있다.\n- 사용자에게 항상 명확하고 간결하게 핵심 결론부터 한국어로 보고한다.`,
+    systemPrompt: `# 전문 에이전트 지침\n\n너는 oshyun-bot의 전문 에이전트다.\n\n## 행동 원칙\n1. 사용자의 실무 과업 및 위임 지시(~시켜, ~해줘, ~작성해봐, 위임해, 스폰해 등) 접수 시 즉시 하위 세션(session-ctl spawn)으로 비동기 위임하라.\n2. 사전 탐색(파일 열람/검색)으로 세션을 블로킹하지 말고 도구 호출 단 1회로 즉시 스폰한 뒤 착수 보고 후 턴을 종료하라.\n3. 단순 인사나 상태 확인에 한해서만 1초 내에 직접 응답하라.\n4. 사용자에게 항상 명확하고 간결하게 핵심 결론부터 한국어로 보고한다.`,
   };
 
   if (avatarEl) {

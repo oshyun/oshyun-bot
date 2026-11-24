@@ -347,8 +347,87 @@ _BUILTIN_REPO_MODE_MAP: dict[str, str] = {
 }
 
 
+def build_custom_agent_instruction(agent: dict[str, Any]) -> str:
+    """커스텀 전문가 에이전트에게 주입되는 시스템 지침(AGENTS.md)을 조립한다.
+    사용자의 위임/스폰 지시('~시켜', '~해줘' 등) 및 복합 실무 과업 시
+    '사전 탐색 제로 & 1스텝 즉시 하위 세션 스폰(session-ctl spawn)' 원칙을 강제한다.
+    """
+    agent_id = str(agent.get("id") or "").strip()
+    name = str(agent.get("name") or agent_id).strip()
+    role_desc = str(agent.get("roleDescription") or "전문 에이전트").strip()
+    workdir = str(agent.get("workdir") or WORKDIR).strip()
+    child_model = str(agent.get("childModel") or agent.get("model") or "gemini-3.8-flash").strip()
+    child_effort = str(agent.get("childEffort") or agent.get("effort") or "medium").strip()
+    child_tpl = str(agent.get("childPromptTemplate") or "").strip()
+    user_sys_prompt = str(agent.get("systemPrompt") or "").strip()
+
+    spawn_cmd = (
+        f'session-ctl spawn "<작업제목>" "<핵심 과업 목표 및 요구사항>" '
+        f'--parent {agent_id} --model {child_model} --effort {child_effort}'
+    )
+
+    protocol_lines = [
+        f"# {name} 전문가 지침 ({agent_id})",
+        "",
+        f"너는 oshyun-bot의 **{name} (`{agent_id}`)** 전문가 에이전트다.",
+        f"역할: {role_desc}",
+        f"작업 디렉토리: `{workdir}`",
+        "",
+        "## ★ 절대 원칙: 사전 탐색 제로 & 1스텝 즉시 하위 워커 스폰",
+        "1. **스폰 전 사전 탐색·직접 수행 절대 금지**:",
+        "   - 요청을 받으면 작업 디렉토리의 파일이나 노트를 `read_file`, `grep`, `find` 등으로 미리 뒤지며 세션을 블로킹하지 마라.",
+        "   - 모든 분석·추천·조회·작성·정리 등 전문 실무 작업은 지체 없이 하위 워커에게 위임하라.",
+        "2. **즉시 하위 세션 스폰 (`session-ctl spawn`) 필수 규칙**:",
+        "   - 사용자가 명시적으로 위임/지시를 요구한 경우: (`~시켜`, `~해줘`, `~작성해봐`, `위임해`, `스폰해` 등)",
+        "   - 결과물이 복합적이고 단계별 분석/추천/생성이 필요한 실무 과업인 경우 (예: 루틴 추천, 성분 분석, 문서 작성/수정, 스케줄링 등)",
+        f"   - **스폰 명령어**: `{spawn_cmd}`",
+        "   - **비동기 위임 필수 (`--wait` 절대 금지)**: 도구 호출 단 1회로 즉시 하위 워커를 띄우고, 1~2줄 착수 보고 후 즉시 턴을 종료하라. 하위 세션 결과를 직접 지어내거나 본 세션에서 실무 답변을 직접 출력하지 마라.",
+        "3. **직접 응답 허용 (도구 0~1회, 1초 즉답만)**:",
+        "   - 단순 인사, 확인, 잡담.",
+        "   - 이미 주입된 메모리나 직전 맥락만으로 즉답 가능한 질문.",
+        "   - `session-ctl list`, `summaries`, `tasks`, `read` 등 상태 조회 1회.",
+        "4. **프롬프트 전달 원칙 (정적 규칙 복사 금지)**:",
+        "   - 하위 세션은 작업 디렉토리의 `AGENTS.md` 및 `rules/`를 자동 로드하므로 정적 규칙을 프롬프트 본문에 중복 기재하지 마라.",
+        "   - 지시 시에는 **과업 목표, 핵심 요구사항, 대상 노트/파라미터** 등 필수 동적 컨텍스트만 간결히 전달한다.",
+        "5. **착수 및 완료 보고**:",
+        f"   - 스폰 직후: *\"{name} 하위 워커([작업제목])를 스폰해 작업을 시작했습니다.\"* 1~2줄 응답 후 턴 종료.",
+        "   - 완료 보고 수신 시: `[하위 작업 완료 보고]` 본문의 핵심 결과를 취합해 사용자에게 간결히 보고.",
+    ]
+
+    if user_sys_prompt:
+        if "session-ctl spawn" in user_sys_prompt:
+            final_md = user_sys_prompt
+        else:
+            final_md = f"{chr(10).join(protocol_lines)}\n\n## 도메인 전문 지침\n{user_sys_prompt}"
+    else:
+        final_md = "\n".join(protocol_lines)
+
+    if child_tpl:
+        final_md += f"\n\n## 하위 세션 기본 전달 규칙\n{child_tpl}"
+
+    return final_md
+
+
+def get_effective_agent_system_prompt(agent_id: str) -> str:
+    """특정 에이전트의 실효 시스템 지침 텍스트를 반환한다.
+    내장 에이전트는 리포지토리/저장된 지침을, 커스텀 에이전트는 하위 스폰 프로토콜이 결합된 지침을 반환한다.
+    """
+    cfg = get_agent_config(agent_id)
+    if not cfg:
+        return ""
+    clean_id = str(cfg.get("id") or "").strip()
+    repo_mode = _BUILTIN_REPO_MODE_MAP.get(clean_id)
+    if repo_mode:
+        repo_default_md = _read_repo_instruction(repo_mode)
+        cur_sys_md = str(cfg.get("systemPrompt") or "").strip()
+        if not cur_sys_md or cur_sys_md == repo_default_md:
+            return repo_default_md
+        return cur_sys_md
+    return build_custom_agent_instruction(cfg)
+
+
 def _sync_runtime_instruction_file(agent: dict[str, Any]) -> str | None:
-    """에이전트의 systemPrompt를 런타임 지침 디렉토리(`data/state/agent_instructions/<id>/AGENTS.md`)에 동기화한다."""
+    """에이전트의 실효 지침을 런타임 지침 디렉토리(`data/state/agent_instructions/<id>/AGENTS.md`)에 동기화한다."""
     agent_id = str(agent.get("id") or "").strip()
     if not agent_id:
         return None
@@ -357,36 +436,7 @@ def _sync_runtime_instruction_file(agent: dict[str, Any]) -> str | None:
     os.makedirs(target_dir, exist_ok=True)
     target_file = os.path.join(target_dir, "AGENTS.md")
 
-    sys_prompt = str(agent.get("systemPrompt") or "").strip()
-    if not sys_prompt:
-        name = agent.get("name") or agent_id
-        role_desc = agent.get("roleDescription") or "전문 에이전트"
-        child_tpl = str(agent.get("childPromptTemplate") or "").strip()
-        child_model = str(agent.get("childModel") or "gemini-3.8-flash").strip()
-        child_effort = str(agent.get("childEffort") or "medium").strip()
-        lines = [
-            f"# {name} 전문가 지침 ({agent_id})",
-            "",
-            f"너는 oshyun-bot의 **{name} 전문가 에이전트(`{agent_id}`)**다.",
-            f"역할: {role_desc}",
-            "",
-            "## 1. ★ 절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰",
-            "- **1스텝 하위 워커 세션 스폰이 기본 동작**:",
-            f"  - 요청을 받으면 `read_file`, `grep`, `find`, `write_file`, `run_command`, `gemini-consult` 등으로 직접 탐색·분석·수정하며 세션을 블로킹하지 마라.",
-            f"  - 단순 인사, 이미 주입된 메모리로 즉답 가능한 질문, 상태 조회를 제외한 모든 실무 작업은 지체 없이 `session-ctl spawn \"<작업제목>\" \"<핵심 과업 목표 및 요구사항>\" --parent {agent_id} --model {child_model} --effort {child_effort}` 단 1회 호출로 하위 워커에게 비동기 위임하라.",
-            "- **직접 응답 허용 (도구 0~1회, 1초 즉답)**: 단순 인사, 이미 주입된 메모리만으로 즉답 가능한 질문, `session-ctl list/summaries` 상태 조회.",
-            "- **프롬프트 전달 원칙 (정적 규칙 복사 금지)**:",
-            "  - 하위 워커는 작업 디렉토리의 `AGENTS.md` 및 `rules/`를 자동 로드한다.",
-            "  - 정적 규칙을 프롬프트 본문에 중복 기재하지 말고, **과업 목표, 핵심 요구사항, 대상 파일/파라미터** 등 필수 동적 컨텍스트만 간결히 전달한다.",
-            "",
-            "## 2. 착수 및 완료 보고",
-            f"- **스폰 직후**: *\"하위 워커([작업제목])를 스폰해 작업을 시작했습니다.\"* 1~2줄 응답 후 즉시 턴 종료 (`--wait` 절대 금지).",
-            "- **완료 보고 수신 시**: `[하위 작업 완료 보고]` 본문의 핵심 결과를 정리해 사용자에게 보고한다.",
-        ]
-        if child_tpl:
-            lines += ["", "## 하위 세션 기본 전달 규칙", child_tpl]
-        sys_prompt = "\n".join(lines)
-
+    sys_prompt = build_custom_agent_instruction(agent)
     try:
         with open(target_file, "w", encoding="utf-8") as f:
             f.write(sys_prompt + "\n")
@@ -397,22 +447,8 @@ def _sync_runtime_instruction_file(agent: dict[str, Any]) -> str | None:
 
 def get_agent_instruction_content(agent_id: str) -> str | None:
     """특정 에이전트의 최종 지침 본문(커스텀 systemPrompt 또는 자동 생성된 런타임 AGENTS.md 텍스트)을 반환한다."""
-    cfg = get_agent_config(agent_id)
-    if not cfg:
-        return None
-    sys_prompt = str(cfg.get("systemPrompt") or "").strip()
-    if sys_prompt:
-        return sys_prompt
-    target_dir = get_runtime_instruction_dir(agent_id)
-    if target_dir:
-        target_file = os.path.join(target_dir, "AGENTS.md")
-        if os.path.isfile(target_file):
-            try:
-                with open(target_file, "r", encoding="utf-8") as f:
-                    return f.read().strip()
-            except OSError:
-                pass
-    return None
+    res = get_effective_agent_system_prompt(agent_id)
+    return res if res else None
 
 
 def get_runtime_instruction_dir(agent_id: str) -> str | None:
@@ -658,7 +694,15 @@ def build_agent_prompt_preview(
 
     common_md = _read_repo_instruction("common")
     web_md = _read_repo_instruction("web")
-    agent_sys_md = str(cfg.get("systemPrompt") or "").strip()
+    clean_id = str(cfg.get("id") or "").strip()
+    is_builtin_agent = clean_id in _BUILTIN_REPO_MODE_MAP
+    if is_builtin_agent:
+        repo_default_md = _read_repo_instruction(_BUILTIN_REPO_MODE_MAP[clean_id])
+        cur_sys_md = str(cfg.get("systemPrompt") or "").strip()
+        agent_sys_md = cur_sys_md or repo_default_md
+    else:
+        agent_sys_md = build_custom_agent_instruction(cfg)
+
     child_tpl = str(cfg.get("childPromptTemplate") or "").strip()
     inject_enabled = bool(cfg.get("injectChildTemplate", True))
     workdir = str(cfg.get("workdir") or WORKDIR).strip()

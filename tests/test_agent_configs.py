@@ -295,33 +295,63 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self_parent["parentAgentId"], "__core__")
 
-    def test_custom_agent_instruction_generation_and_system_prompt_resolution(self):
-        """커스텀 에이전트 생성 시 전문가 하위 스폰 지침 생성 및 시스템 프롬프트 주입 검증."""
+    def test_custom_agent_subchat_spawn_instruction_enforcement(self):
+        """커스텀 전문가 에이전트가 systemPrompt 유무와 무관하게 하위 채팅 스폰(session-ctl spawn) 프로토콜을 탑재하는지 검증."""
         import bot.engine.engine_drivers as engine_drivers
+        from bot.engine.engine_drivers import get_system_prompt
 
-        # 1. systemPrompt가 비어있는 커스텀 에이전트 생성
-        custom_agent = agent_configs.upsert_agent_config(
+        # 1. systemPrompt가 비어 있는 화장품 전문가 에이전트 생성
+        cosmetics = agent_configs.upsert_agent_config(
             {
                 "name": "화장품",
+                "emoji": "💄",
                 "parentAgentId": "__expert_vault__",
-                "roleDescription": "화장품 성분 분석 및 루틴 관리",
+                "roleDescription": "화장품 성분 분석 및 루틴 추천",
+                "systemPrompt": "",
                 "childModel": "gemini-3.8-flash",
                 "childEffort": "medium",
             }
         )
-        custom_id = custom_agent["id"]
+        cosmetics_id = cosmetics["id"]
 
-        # 2. get_agent_instruction_content 검증 (자동 생성 런타임 지침 포함 확인)
-        content = agent_configs.get_agent_instruction_content(custom_id)
+        eff_prompt = agent_configs.get_effective_agent_system_prompt(cosmetics_id)
+        self.assertIn("session-ctl spawn", eff_prompt)
+        self.assertIn(f"--parent {cosmetics_id}", eff_prompt)
+        self.assertIn("~시켜", eff_prompt)
+        self.assertIn("사전 탐색 제로", eff_prompt)
+        self.assertIn("--wait", eff_prompt)
+
+        # get_agent_instruction_content 호환성 검증
+        content = agent_configs.get_agent_instruction_content(cosmetics_id)
         self.assertIsNotNone(content)
-        self.assertIn("절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰", content)
-        self.assertIn(f"session-ctl spawn \"<작업제목>\" \"<핵심 과업 목표 및 요구사항>\" --parent {custom_id}", content)
+        self.assertIn("session-ctl spawn", content)
 
-        # 3. _resolve_system_prompt 검증
-        resolved_prompt = engine_drivers._resolve_system_prompt(agent_id=custom_id)
-        self.assertIn("절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰", resolved_prompt)
-        self.assertIn("session-ctl spawn", resolved_prompt)
-        self.assertIn(custom_id, resolved_prompt)
+        # 런타임 AGENTS.md 파일 동기화 내용 검증
+        rt_dir = agent_configs.get_runtime_instruction_dir(cosmetics_id)
+        self.assertIsNotNone(rt_dir)
+        agents_md_text = (Path(rt_dir) / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertEqual(agents_md_text.strip(), eff_prompt.strip())
+
+        # engine_drivers._resolve_system_prompt 및 get_system_prompt 호출 시 실효 프롬프트 반영 검증
+        engine_sys = get_system_prompt(agent_id=cosmetics_id)
+        self.assertIn("session-ctl spawn", engine_sys)
+        self.assertIn(f"--parent {cosmetics_id}", engine_sys)
+        resolved_sys = engine_drivers._resolve_system_prompt(agent_id=cosmetics_id)
+        self.assertEqual(engine_sys, resolved_sys)
+
+        # 2. 사용자가 도메인 특화 systemPrompt를 입력한 경우 (프로토콜 + 도메인 지침 결합)
+        updated = agent_configs.upsert_agent_config(
+            {
+                "id": cosmetics_id,
+                "systemPrompt": "# 화장품 전문가 도메인 수칙\n- 레티날과 비타민C는 동시 사용을 금지한다.",
+            }
+        )
+        eff_prompt_domain = agent_configs.get_effective_agent_system_prompt(cosmetics_id)
+        self.assertIn("화장품 전문가 도메인 수칙", eff_prompt_domain)
+        self.assertIn("레티날과 비타민C", eff_prompt_domain)
+        self.assertIn("session-ctl spawn", eff_prompt_domain)
+        self.assertIn("~시켜", eff_prompt_domain)
+        self.assertIn(f"--parent {cosmetics_id}", eff_prompt_domain)
 
 
 if __name__ == "__main__":
