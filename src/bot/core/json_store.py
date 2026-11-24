@@ -16,9 +16,9 @@ def read_json(path: str, default, *, expect_type: type | None = None):
     expect_type 을 주면 파싱 결과가 그 타입이 아닐 때도 default 를 반환한다(타입 불일치 방어).
     """
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError, OSError):
         return default
     return data if expect_type is None or isinstance(data, expect_type) else default
 
