@@ -295,6 +295,34 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self_parent["parentAgentId"], "__core__")
 
+    def test_custom_agent_instruction_generation_and_system_prompt_resolution(self):
+        """커스텀 에이전트 생성 시 전문가 하위 스폰 지침 생성 및 시스템 프롬프트 주입 검증."""
+        import bot.engine.engine_drivers as engine_drivers
+
+        # 1. systemPrompt가 비어있는 커스텀 에이전트 생성
+        custom_agent = agent_configs.upsert_agent_config(
+            {
+                "name": "화장품",
+                "parentAgentId": "__expert_vault__",
+                "roleDescription": "화장품 성분 분석 및 루틴 관리",
+                "childModel": "gemini-3.8-flash",
+                "childEffort": "medium",
+            }
+        )
+        custom_id = custom_agent["id"]
+
+        # 2. get_agent_instruction_content 검증 (자동 생성 런타임 지침 포함 확인)
+        content = agent_configs.get_agent_instruction_content(custom_id)
+        self.assertIsNotNone(content)
+        self.assertIn("절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰", content)
+        self.assertIn(f"session-ctl spawn \"<작업제목>\" \"<핵심 과업 목표 및 요구사항>\" --parent {custom_id}", content)
+
+        # 3. _resolve_system_prompt 검증
+        resolved_prompt = engine_drivers._resolve_system_prompt(agent_id=custom_id)
+        self.assertIn("절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰", resolved_prompt)
+        self.assertIn("session-ctl spawn", resolved_prompt)
+        self.assertIn(custom_id, resolved_prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

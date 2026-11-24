@@ -144,10 +144,9 @@ def _resolve_system_prompt(
     if target_agent_id:
         try:
             import bot.core.agent_configs as agent_configs
-            cfg = agent_configs.get_agent_config(target_agent_id)
-            if cfg and cfg.get("systemPrompt"):
+            agent_sys = agent_configs.get_agent_instruction_content(target_agent_id)
+            if agent_sys:
                 common_content = _load_instruction_file("common")
-                agent_sys = str(cfg["systemPrompt"]).strip()
                 return f"{common_content}\n\n{agent_sys}".strip() if common_content else agent_sys
         except Exception:
             pass

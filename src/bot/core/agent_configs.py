@@ -362,15 +362,26 @@ def _sync_runtime_instruction_file(agent: dict[str, Any]) -> str | None:
         name = agent.get("name") or agent_id
         role_desc = agent.get("roleDescription") or "전문 에이전트"
         child_tpl = str(agent.get("childPromptTemplate") or "").strip()
+        child_model = str(agent.get("childModel") or "gemini-3.8-flash").strip()
+        child_effort = str(agent.get("childEffort") or "medium").strip()
         lines = [
-            f"# {name} 지침 ({agent_id})",
+            f"# {name} 전문가 지침 ({agent_id})",
             "",
-            f"너는 oshyun-bot의 **{name} (`{agent_id}`)** 다.",
+            f"너는 oshyun-bot의 **{name} 전문가 에이전트(`{agent_id}`)**다.",
             f"역할: {role_desc}",
             "",
-            "## 행동 원칙",
-            f"1. 하위 작업 스폰 시 `session-ctl spawn \"<작업제목>\" \"<지시>\" --parent {agent_id} --model {agent.get('childModel') or 'gemini-3.8-flash'} --effort {agent.get('childEffort') or 'medium'}` 명령으로 비동기 위임하거나, 작업 디렉토리(`{agent.get('workdir') or WORKDIR}`) 내에서 직접 전문 작업을 수행할 수 있다.",
-            "2. 사용자에게 항상 명확하고 간결하게 핵심 결론부터 한국어로 보고한다.",
+            "## 1. ★ 절대 원칙: 사전 탐색 제로 & 하위 워커 세션 스폰",
+            "- **1스텝 하위 워커 세션 스폰이 기본 동작**:",
+            f"  - 요청을 받으면 `read_file`, `grep`, `find`, `write_file`, `run_command`, `gemini-consult` 등으로 직접 탐색·분석·수정하며 세션을 블로킹하지 마라.",
+            f"  - 단순 인사, 이미 주입된 메모리로 즉답 가능한 질문, 상태 조회를 제외한 모든 실무 작업은 지체 없이 `session-ctl spawn \"<작업제목>\" \"<핵심 과업 목표 및 요구사항>\" --parent {agent_id} --model {child_model} --effort {child_effort}` 단 1회 호출로 하위 워커에게 비동기 위임하라.",
+            "- **직접 응답 허용 (도구 0~1회, 1초 즉답)**: 단순 인사, 이미 주입된 메모리만으로 즉답 가능한 질문, `session-ctl list/summaries` 상태 조회.",
+            "- **프롬프트 전달 원칙 (정적 규칙 복사 금지)**:",
+            "  - 하위 워커는 작업 디렉토리의 `AGENTS.md` 및 `rules/`를 자동 로드한다.",
+            "  - 정적 규칙을 프롬프트 본문에 중복 기재하지 말고, **과업 목표, 핵심 요구사항, 대상 파일/파라미터** 등 필수 동적 컨텍스트만 간결히 전달한다.",
+            "",
+            "## 2. 착수 및 완료 보고",
+            f"- **스폰 직후**: *\"하위 워커([작업제목])를 스폰해 작업을 시작했습니다.\"* 1~2줄 응답 후 즉시 턴 종료 (`--wait` 절대 금지).",
+            "- **완료 보고 수신 시**: `[하위 작업 완료 보고]` 본문의 핵심 결과를 정리해 사용자에게 보고한다.",
         ]
         if child_tpl:
             lines += ["", "## 하위 세션 기본 전달 규칙", child_tpl]
@@ -382,6 +393,26 @@ def _sync_runtime_instruction_file(agent: dict[str, Any]) -> str | None:
     except OSError:
         return None
     return target_dir
+
+
+def get_agent_instruction_content(agent_id: str) -> str | None:
+    """특정 에이전트의 최종 지침 본문(커스텀 systemPrompt 또는 자동 생성된 런타임 AGENTS.md 텍스트)을 반환한다."""
+    cfg = get_agent_config(agent_id)
+    if not cfg:
+        return None
+    sys_prompt = str(cfg.get("systemPrompt") or "").strip()
+    if sys_prompt:
+        return sys_prompt
+    target_dir = get_runtime_instruction_dir(agent_id)
+    if target_dir:
+        target_file = os.path.join(target_dir, "AGENTS.md")
+        if os.path.isfile(target_file):
+            try:
+                with open(target_file, "r", encoding="utf-8") as f:
+                    return f.read().strip()
+            except OSError:
+                pass
+    return None
 
 
 def get_runtime_instruction_dir(agent_id: str) -> str | None:
