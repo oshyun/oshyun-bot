@@ -2382,6 +2382,9 @@ async function resetCurrentBuiltinAgentConfig() {
         if (data && data.ok && data.agent) {
           syncAgentConfigsState(data.agents, data.orchestratorRoomIds);
           populateAgentConfigForm(data.agent.id);
+          if (typeof updateRoomConfigBar === 'function') {
+            updateRoomConfigBar();
+          }
           showToast(`'${data.agent.name}' 설정을 초기 기본값으로 복원했습니다.`);
         } else {
           showToast('복원 실패: ' + ((data && data.error) || '오류'));

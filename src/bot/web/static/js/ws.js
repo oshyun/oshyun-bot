@@ -863,6 +863,8 @@ function handleWsEvent(data) {
       if (data.model !== undefined) room.model = data.model || null;
       if (data.effort !== undefined) room.effort = data.effort || null;
       if (data.workdir !== undefined) room.workdir = data.workdir || null;
+      if (data.defaultModel !== undefined) room.defaultModel = data.defaultModel;
+      if (data.defaultEffort !== undefined) room.defaultEffort = data.defaultEffort;
       saveChatRoomsToStorage();
       if (targetId === currentRoomId) {
         updateRoomConfigBar();
