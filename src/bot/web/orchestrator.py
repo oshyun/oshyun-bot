@@ -2590,6 +2590,114 @@ async def handle_orchestrator_agent_preview(request: web.Request) -> web.Respons
     return web.json_response({"ok": True, "preview": preview, **preview})
 
 
+async def handle_prompts_list(request: web.Request) -> web.Response:
+    """GET /api/prompts — 시스템 전체 프롬프트/인스트럭션 레이어 목록 반환."""
+    try:
+        layers = agent_configs.list_all_prompt_layers()
+        return web.json_response({
+            "ok": True,
+            "prompts": layers,
+            "total": len(layers),
+        })
+    except Exception as exc:
+        logger.exception("[orchestrator] 프롬프트 목록 조회 오류: %s", exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+
+async def handle_prompt_detail(request: web.Request) -> web.Response:
+    """GET /api/prompts/detail — 특정 프롬프트 레이어의 상세 내용 및 조립 결과 반환."""
+    target_id = (request.query.get("id") or request.query.get("target_id") or "common").strip()
+    sample_task = (request.query.get("sampleTask") or request.query.get("sample_task") or "").strip()
+    try:
+        detail = agent_configs.get_prompt_layer_detail(target_id, sample_task=sample_task)
+        return web.json_response({"ok": True, "detail": detail})
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=404)
+    except Exception as exc:
+        logger.exception("[orchestrator] 프롬프트 상세 조회 오류: %s", exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+
+async def handle_prompt_save(request: web.Request) -> web.Response:
+    """POST /api/prompts/save — 프롬프트 레이어 저장 및 런타임 즉시 반영."""
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "유효하지 않은 JSON 요청입니다."}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "JSON 객체가 필요합니다."}, status=400)
+
+    target_id = str(payload.get("id") or payload.get("target_id") or "").strip()
+    if not target_id:
+        return web.json_response({"ok": False, "error": "저장할 프롬프트 대상 식별자(id)가 필요합니다."}, status=400)
+
+    content = payload.get("content")
+    if content is None:
+        content = payload.get("systemPrompt") or ""
+
+    child_prompt = payload.get("childPromptTemplate")
+    inject_child = payload.get("injectChildTemplate")
+
+    try:
+        detail = agent_configs.save_prompt_layer(
+            target_id,
+            str(content),
+            child_prompt=child_prompt,
+            inject_child=inject_child,
+        )
+    except Exception as exc:
+        logger.exception("[orchestrator] 프롬프트 저장 실패 (%s): %s", target_id, exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+    from bot.web.runtime_state import broadcast_ws_json
+    broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+    if broadcast_fn:
+        try:
+            await broadcast_fn({
+                "type": "prompt_layers_updated",
+                "targetId": target_id,
+                "detail": detail,
+            })
+        except Exception:
+            pass
+
+    return web.json_response({"ok": True, "detail": detail})
+
+
+async def handle_prompt_reset(request: web.Request) -> web.Response:
+    """POST /api/prompts/reset — 프롬프트 레이어를 리포지토리 초기 기본값으로 복원."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    target_id = str(payload.get("id") or payload.get("target_id") or request.query.get("id") or "").strip()
+    if not target_id:
+        return web.json_response({"ok": False, "error": "복원할 프롬프트 대상 식별자(id)가 필요합니다."}, status=400)
+
+    try:
+        detail = agent_configs.reset_prompt_layer(target_id)
+    except Exception as exc:
+        logger.exception("[orchestrator] 프롬프트 복원 실패 (%s): %s", target_id, exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+    from bot.web.runtime_state import broadcast_ws_json
+    broadcast_fn = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
+    if broadcast_fn:
+        try:
+            await broadcast_fn({
+                "type": "prompt_layers_updated",
+                "targetId": target_id,
+                "detail": detail,
+            })
+        except Exception:
+            pass
+
+    return web.json_response({"ok": True, "detail": detail})
+
+
 
 
 

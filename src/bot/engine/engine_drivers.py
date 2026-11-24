@@ -19,7 +19,13 @@ ProgressCb = Callable[[str], Awaitable[None]]
 
 
 def get_instruction_dir(mode: str) -> str:
-    """모드별 AGY 시스템 지침 디렉토리 경로 반환 (common, web, coding, orchestrator)."""
+    """모드별 AGY 시스템 지침 디렉토리 경로 반환 (common, web, coding, orchestrator).
+    사용자 커스텀 오버라이드 파일이 존재하면 해당 디렉토리를 우선 사용한다.
+    """
+    from bot.core.paths import CUSTOM_INSTRUCTIONS_DIR
+    custom_dir = os.path.join(CUSTOM_INSTRUCTIONS_DIR, mode)
+    if os.path.isfile(os.path.join(custom_dir, "AGENTS.md")):
+        return custom_dir
     return os.path.join(_INSTRUCTIONS_DIR, mode)
 
 

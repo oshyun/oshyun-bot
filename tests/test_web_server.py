@@ -3799,7 +3799,7 @@ class TestWebCrashRecovery(unittest.TestCase):
         # 3. 좌측 사이드바 보관된 대화 (아카이브) 섹션 및 2개 단일 행 탭바(대화·볼트) 마크업
         self.assertIn('id="tab-chat"', content)
         self.assertIn('id="tab-vault"', content)
-        self.assertIn('grid-template-columns: repeat(2, 1fr)', content)
+        self.assertIn('grid-template-columns: repeat(3, 1fr)', content)
         self.assertIn('id="sb-archived-section"', content)
         self.assertIn('id="sb-archived-list"', content)
         self.assertIn('function toggleArchivedSection()', content)

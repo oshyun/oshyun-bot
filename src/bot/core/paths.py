@@ -41,6 +41,8 @@ WEB_LOG_FILE = os.path.join(LOGS_DIR, "web-server.log")
 BOT_SETTINGS_FILE = os.path.join(STATE_DIR, "bot_settings.json")
 # 에이전트 시스템 지침 디렉토리 (common 및 모드별 AGENTS.md).
 INSTRUCTIONS_DIR = os.path.join(_ROOT_DIR, "src", "bot", "instructions")
+# 사용자 커스텀 시스템 지침 (common, web 등 오버라이드) 디렉토리.
+CUSTOM_INSTRUCTIONS_DIR = os.path.join(STATE_DIR, "custom_instructions")
 
 # Let's Encrypt / SSL 기본 경로
 LETSENCRYPT_DIR = os.path.join(DATA_DIR, "letsencrypt")
@@ -151,7 +153,7 @@ def child_default_workdir(parent_agent_id: str | None) -> str | None:
         try:
             import bot.core.agent_configs as agent_configs
             w = agent_configs.get_agent_workdir(str(parent_agent_id).strip())
-            if w and os.path.isdir(w):
+            if w:
                 return w
         except Exception:
             pass
