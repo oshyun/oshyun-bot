@@ -629,6 +629,79 @@
 .md .md-link-chip.is-room.is-expert-coding .md-link-meta {
   color: #93c5fd;
 }
+
+/* ─── 본문 인라인 채팅 링크 칩 상태 인디케이터 ─── */
+.md .md-link-chip.is-room .chip-status-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.md .md-link-chip.is-room .chip-status-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.md .md-link-chip.is-room[data-status="running"] .chip-status-icon.is-running {
+  display: inline-flex;
+}
+.md .md-link-chip.is-room[data-status="done"] .chip-status-icon.is-done {
+  display: inline-flex;
+}
+.md .md-link-chip.is-room[data-status="failed"] .chip-status-icon.is-failed,
+.md .md-link-chip.is-room[data-status="error"] .chip-status-icon.is-failed {
+  display: inline-flex;
+}
+
+/* 1. 실행 중: 텍스트 없이 심플한 스핀휠 */
+.md .md-link-chip.is-room .chip-spin-wheel {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(16, 185, 129, 0.25);
+  border-top-color: var(--accent, #10b981);
+  animation: chip-spin 0.75s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+.md .md-link-chip.is-room[data-status="running"] {
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+/* 2. 정상 완료: 깔끔한 완료 표시 (체크) */
+.md .md-link-chip.is-room .chip-status-icon.is-done {
+  color: var(--accent, #10b981);
+}
+.md .md-link-chip.is-room .chip-status-icon.is-done svg.chip-status-svg {
+  width: 12px;
+  height: 12px;
+  stroke: var(--accent, #10b981);
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 3. 실패: 심플한 실패 표시 (!) */
+.md .md-link-chip.is-room .chip-status-icon.is-failed {
+  color: #ef4444;
+}
+.md .md-link-chip.is-room .chip-status-icon.is-failed svg.chip-status-svg {
+  width: 12px;
+  height: 12px;
+  stroke: #ef4444;
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes chip-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .md strong { font-weight: 650; }
 
 /* ─── 사이드패널 / 인스펙터 / 카드 공용 컴팩트 마크다운 스타일 ─── */

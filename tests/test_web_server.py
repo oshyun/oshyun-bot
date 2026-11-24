@@ -4200,6 +4200,8 @@ function loadChatHistoryFromServer() {}
 function scheduleRoomsRefreshFromEvent() { roomsRefreshCount++; }
 function ensureCoreRoom() { return null; }
 function handleAgentResponseNotification() {}
+function updateInlineChatChipsStatus() {}
+function updateAllInlineChatChips() {}
 
 ${extractFn("mergeToolSteps")}
 ${extractFn("deduplicateMessagesList")}
@@ -4484,6 +4486,37 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
         self.assertIn("/api/chat/rooms/search?q=", content)
         self.assertIn("roomServerSearchResults", content)
         self.assertIn("room-search-snippet", content)
+
+    def test_chat_chip_status_integration_and_no_bottom_chips(self):
+        """메시지 하단 하위 채팅 영역 제거 및 본문 인라인 링크 칩 상태 표시 통합 검증."""
+        content = _read_static_bundle(web_server.INTERNAL_STATIC_DIR)
+
+        # 1. 메시지 하단에 별도로 appendChild 되던 하위 채팅 영역 제거 검증
+        self.assertNotIn("row.appendChild(chipsDom)", content)
+        self.assertNotIn("liveRow.appendChild(liveChipsDom)", content)
+
+        # 2. 본문 인라인 채팅 칩 상태 해석 및 실시간 갱신 함수 존재 검증
+        self.assertIn("function resolveChatRoomStatus(", content)
+        self.assertIn("function updateInlineChatChipsStatus(", content)
+        self.assertIn("function updateAllInlineChatChips()", content)
+
+        # 3. buildChatRoomChipHtml 에서 상태 인디케이터 및 data-room-id / data-status 속성 렌더링 검증
+        self.assertIn('class="chip-status-wrap"', content)
+        self.assertIn('class="chip-spin-wheel"', content)
+        self.assertIn('class="chip-status-icon is-running"', content)
+        self.assertIn('class="chip-status-icon is-done"', content)
+        self.assertIn('class="chip-status-icon is-failed"', content)
+
+        # 4. CSS 상태 스타일링 검증 (스핀휠 애니메이션, 완료 체크, 실패 아이콘)
+        css_path = os.path.join(web_server.INTERNAL_STATIC_DIR, "css", "chat.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        self.assertIn('.md .md-link-chip.is-room .chip-status-wrap', css_content)
+        self.assertIn('.md .md-link-chip.is-room .chip-spin-wheel', css_content)
+        self.assertIn('.md .md-link-chip.is-room[data-status="running"]', css_content)
+        self.assertIn('.md .md-link-chip.is-room[data-status="done"]', css_content)
+        self.assertIn('.md .md-link-chip.is-room[data-status="failed"]', css_content)
+        self.assertIn('@keyframes chip-spin', css_content)
 
     def test_api_chat_rooms_search_endpoint(self):
         """GET /api/chat/rooms/search 엔드포인트가 chat_db.search_rooms 결과를 반환하는지 검증."""

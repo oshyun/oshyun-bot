@@ -1099,13 +1099,7 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       row.appendChild(emptyCard);
     }
 
-    if (ORCHESTRATOR_ROOM_IDS.includes(currentRoomId)) {
-      const delegatedRooms = extractDelegatedRoomsFromMessage(m);
-      if (delegatedRooms && delegatedRooms.length > 0) {
-        const chipsDom = buildDelegatedSubAgentChipsDom(delegatedRooms, currentRoomId);
-        if (chipsDom) row.appendChild(chipsDom);
-      }
-    }
+    // 메시지 하단에 별도로 표시되던 하위 채팅 영역 제거 (본문 내 채팅 링크 칩으로 상태 통합)
 
     const actions = document.createElement('div');
     actions.className = 'msg-actions';
@@ -1276,13 +1270,7 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
         </div>
       ` : ''}
     `;
-    if (room && ORCHESTRATOR_ROOM_IDS.includes(room.id)) {
-      const liveDelegated = extractDelegatedRoomsFromSteps(liveState.steps);
-      if (liveDelegated && liveDelegated.length > 0) {
-        const liveChipsDom = buildDelegatedSubAgentChipsDom(liveDelegated, room.id);
-        if (liveChipsDom) liveRow.appendChild(liveChipsDom);
-      }
-    }
+    // 실행 중인 메시지 하단에 별도로 표시되던 하위 채팅 영역 제거 (본문 내 채팅 링크 칩으로 상태 통합)
     thread.appendChild(liveRow);
   }
 
