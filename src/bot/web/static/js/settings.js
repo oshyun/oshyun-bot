@@ -256,8 +256,9 @@ function handleAgentResponseNotification(targetRoom, replyText, opts = {}) {
   if (mode === 'off') return;
   if (opts && opts.silent) return;
 
-  // 하위 에이전트 방이거나 바이패스된 응답은 마스터 방과 중복 알림을 방지하기 위해 침묵
-  if (targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId)) {
+  // 하위 에이전트 방 자체는 알림 침묵 (단, 부모 방으로 바이패스된 delegation_result는 부모 방 알림으로 정상 발송)
+  const isBypass = Boolean(opts && opts.isBypass);
+  if (!isBypass && targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId)) {
     return;
   }
 
@@ -272,7 +273,12 @@ function handleAgentResponseNotification(targetRoom, replyText, opts = {}) {
   const roomTitle = (targetRoom && targetRoom.title) ? targetRoom.title : '대화방';
   const cleanBody = cleanNotificationText(replyText);
   const isError = Boolean(opts && opts.isError);
-  const title = isError ? `[${roomTitle}] 실행 오류` : `[${roomTitle}] 답변 완료`;
+
+  let title = isError ? `[${roomTitle}] 실행 오류` : `[${roomTitle}] 답변 완료`;
+  if (opts && opts.turnType === 'delegation_result') {
+    const subTitle = opts.subagentTitle || '하위 작업';
+    title = isError ? `[${roomTitle}] 하위 작업 오류 (${subTitle})` : `[${roomTitle}] 하위 작업 완료 (${subTitle})`;
+  }
 
   // 브라우저/기기 알림 발송
   triggerSystemNotification({

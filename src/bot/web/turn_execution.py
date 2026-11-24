@@ -886,6 +886,48 @@ async def execute_chat_turn(
             pass
     poke_master_supervisor()
 
+    # 턴 알림 레벨 및 유형 결정:
+    # 1. 내부 보고/정기 점검 턴 -> internal_report (silent)
+    # 2. 상위 에이전트가 하위 작업을 스폰/위임하고 남긴 중간 안내 -> delegation_ack (silent, 알림 억제)
+    # 3. 일반 직접 응답 -> direct_answer (alert, 정상 알림)
+    turn_type = "direct_answer"
+    notify_level = "alert"
+    is_silent_notification = False
+    delegated_subagents: list[dict] = []
+
+    if channel in ("task_report", "master_patrol", "schedule_trigger"):
+        turn_type = "internal_report"
+        notify_level = "silent"
+        is_silent_notification = True
+    else:
+        try:
+            from bot.web.orchestrator import extract_delegated_subagents
+            delegated_subagents = extract_delegated_subagents(
+                collected_steps,
+                reply_text or "",
+                chat_db_module=current_chat_db,
+            )
+        except Exception as extract_err:
+            logger.debug("[web_turn_execution] 위임 하위 에이전트 추출 예외: %s", extract_err)
+            delegated_subagents = []
+
+        active_delegations = [
+            d for d in delegated_subagents
+            if isinstance(d, dict) and d.get("status") in ("running", "queued", "done") and not d.get("failed")
+        ]
+        if active_delegations:
+            turn_type = "delegation_ack"
+            notify_level = "silent"
+            is_silent_notification = True
+
+    logger.info(
+        "[web_turn_execution] 턴 알림 분류: room=%s, turn_type=%s, notify_level=%s (delegated=%d)",
+        room_key,
+        turn_type,
+        notify_level,
+        len(delegated_subagents),
+    )
+
     result_payload = {
         "type": "result",
         "jobId": job_id,
@@ -907,7 +949,12 @@ async def execute_chat_turn(
         "voiceMode": is_voice_mode,
         "channel": channel,
         "interrupted": bool(agent_output.get("interrupted")),
+        "turnType": turn_type,
+        "notifyLevel": notify_level,
+        "silentNotification": is_silent_notification,
     }
+    if delegated_subagents:
+        result_payload["delegatedRooms"] = delegated_subagents
     _room_live_snapshots.pop(room_key, None)
     await current_broadcast(result_payload)
     build_status_fn = _get_mod_attr("build_status_payload", None)
