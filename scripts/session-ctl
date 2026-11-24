@@ -238,6 +238,9 @@ def cmd_send(args: argparse.Namespace) -> int:
         payload["effort"] = args.effort.strip()
     if getattr(args, "model", None):
         payload["model"] = args.model.strip()
+    caller_origin = (getattr(args, "origin", None) or os.getenv("OSHYUN_AGENT_ROOM_ID", "")).strip()
+    if caller_origin:
+        payload["originRoomId"] = caller_origin
 
     timeout = 30 if args.async_mode else 620
     res = _api_request("POST", "/api/orchestrator/dispatch", payload=payload, timeout=timeout)
@@ -283,6 +286,9 @@ def cmd_spawn(args: argparse.Namespace) -> int:
         payload["forceNew"] = True
     if parent_val:
         payload["parentAgentId"] = parent_val.strip()
+    caller_origin = (getattr(args, "origin", None) or os.getenv("OSHYUN_AGENT_ROOM_ID", "")).strip()
+    if caller_origin:
+        payload["originRoomId"] = caller_origin
 
     timeout = 30 if args.async_mode else 620
     res = _api_request("POST", "/api/orchestrator/dispatch", payload=payload, timeout=timeout)
@@ -1352,6 +1358,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_send.add_argument("--async", dest="async_mode", action="store_true", help="응답 완료를 기다리지 않고 백그라운드로 즉시 위임 (기본값)")
     p_send.add_argument("--wait", dest="async_mode", action="store_false", help="대상 세션이 답변을 완료할 때까지 대기 후 결과 반환 (명시적 동기 대기)")
     p_send.add_argument("--notify", "-n", action="store_true", help="작업 완료 시 마스터 에이전트에게 자동으로 결과 보고를 전송하여 후속 작업 트리거")
+    p_send.add_argument("--origin", help="지시를 발주한 상위 채팅방 ID (지정하지 않으면 OSHYUN_AGENT_ROOM_ID 사용)")
     p_send.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
     p_send.set_defaults(func=cmd_send, async_mode=True)
 
@@ -1366,6 +1373,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_spawn.add_argument("--async", dest="async_mode", action="store_true", help="응답 완료를 기다리지 않고 백그라운드로 즉시 위임 (기본값)")
     p_spawn.add_argument("--wait", dest="async_mode", action="store_false", help="새 세션이 첫 답변을 완료할 때까지 대기 후 결과 반환 (명시적 동기 대기)")
     p_spawn.add_argument("--notify", "-n", action="store_true", help="작업 완료 시 마스터 에이전트에게 자동으로 결과 보고를 전송하여 후속 작업 트리거")
+    p_spawn.add_argument("--origin", help="지시를 발주한 상위 채팅방 ID (지정하지 않으면 OSHYUN_AGENT_ROOM_ID 사용)")
     p_spawn.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
     p_spawn.set_defaults(func=cmd_spawn, async_mode=True)
 

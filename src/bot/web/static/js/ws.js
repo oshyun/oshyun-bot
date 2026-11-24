@@ -1126,7 +1126,19 @@ function handleWsEvent(data) {
     if (data.roomId && (data.type === 'started' || data.type === 'queued' || data.type === 'result')) {
       scheduleRoomsRefreshFromEvent();
       if (typeof updateInlineChatChipsStatus === 'function') {
-        updateInlineChatChipsStatus(data.roomId);
+        const fallbackStatus = data.type === 'result' ? (data.interrupted ? 'failed' : 'done') : (data.type === 'started' ? 'running' : null);
+        updateInlineChatChipsStatus(data.roomId, fallbackStatus);
+        if (data.bypassedFromRoomId) {
+          updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done');
+        }
+        if (Array.isArray(data.delegatedRooms)) {
+          data.delegatedRooms.forEach(item => {
+            if (item && item.roomId) {
+              const st = (item.status === 'error' || item.status === 'failed') ? 'failed' : (item.status || 'done');
+              updateInlineChatChipsStatus(item.roomId, st);
+            }
+          });
+        }
       }
     }
     return;
@@ -1369,6 +1381,17 @@ function handleWsEvent(data) {
     liveState.isRunning = remainingQueued > 0;
     if (typeof updateInlineChatChipsStatus === 'function') {
       updateInlineChatChipsStatus(targetRoom.id, remainingQueued > 0 ? 'running' : 'done');
+      if (data.bypassedFromRoomId) {
+        updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done');
+      }
+      if (Array.isArray(data.delegatedRooms)) {
+        data.delegatedRooms.forEach(item => {
+          if (item && item.roomId) {
+            const st = (item.status === 'error' || item.status === 'failed') ? 'failed' : (item.status || 'done');
+            updateInlineChatChipsStatus(item.roomId, st);
+          }
+        });
+      }
     }
     liveState.feed = remainingQueued > 0 ? '다음 대기열 질문 실행 준비 중…' : '';
     liveState.steps = [];

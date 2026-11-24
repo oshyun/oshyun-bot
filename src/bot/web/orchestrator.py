@@ -820,6 +820,11 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     if not _is_orchestrator_room_id(parent_agent_id):
         parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
 
+    req_origin = payload.get("originRoomId") or payload.get("origin_room_id") or payload.get("origin")
+    origin_room_id = str(req_origin).strip() if (isinstance(req_origin, str) and req_origin.strip()) else None
+    if not origin_room_id and parent_agent_id != CORE_ORCHESTRATOR_ROOM_ID:
+        origin_room_id = CORE_ORCHESTRATOR_ROOM_ID
+
     parent_cfg = agent_configs.get_agent_config(parent_agent_id)
     if clean_model is None and parent_cfg and parent_cfg.get("childModel"):
         clean_model = str(parent_cfg["childModel"]).strip() or None
@@ -1008,6 +1013,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         "queued": will_be_queued,
         "isOrchestratorChild": True,
         "parentAgentId": parent_agent_id,
+        "originRoomId": origin_room_id,
         "model": clean_model,
         "effort": clean_effort,
         "wait": wait_for_result,
@@ -1024,6 +1030,8 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         title=room_title,
         origin="dispatch",
         wait=wait_for_result,
+        origin_room_id=origin_room_id,
+        parent_agent_id=parent_agent_id,
     )
     task_id = task_rec["id"]
 
@@ -1382,6 +1390,11 @@ async def handle_orchestrator_notify(request: web.Request) -> web.Response:
     parent_agent_id = str(req_parent).strip() if (isinstance(req_parent, str) and req_parent.strip()) else CORE_ORCHESTRATOR_ROOM_ID
     if not _is_orchestrator_room_id(parent_agent_id):
         parent_agent_id = CORE_ORCHESTRATOR_ROOM_ID
+
+    req_origin = payload.get("originRoomId") or payload.get("origin_room_id") or payload.get("origin")
+    origin_room_id = str(req_origin).strip() if (isinstance(req_origin, str) and req_origin.strip()) else None
+    if not origin_room_id and parent_agent_id != CORE_ORCHESTRATOR_ROOM_ID:
+        origin_room_id = CORE_ORCHESTRATOR_ROOM_ID
 
     if not message:
         return web.json_response({"ok": False, "error": "전송할 message가 비어 있습니다."}, status=400)

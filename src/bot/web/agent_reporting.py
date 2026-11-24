@@ -213,6 +213,22 @@ async def _notify_master_agent(
     if not _is_orchestrator_room_id(target_parent_id):
         target_parent_id = CORE_ORCHESTRATOR_ROOM_ID
 
+    # 발주처(origin_room_id) 해석: 태스크 레코드 우선 -> 방 레코드
+    origin_room_id: str | None = None
+    if task_id:
+        task_rec = master_tasks.get_task(task_id) or {}
+        raw_orig = task_rec.get("originRoomId")
+        if isinstance(raw_orig, str) and raw_orig.strip():
+            origin_room_id = raw_orig.strip()
+    if not origin_room_id and room_record:
+        raw_orig = room_record.get("originRoomId")
+        if isinstance(raw_orig, str) and raw_orig.strip():
+            origin_room_id = raw_orig.strip()
+
+    target_ui_room_id = (
+        origin_room_id if (origin_room_id and _is_orchestrator_room_id(origin_room_id)) else target_parent_id
+    )
+
     room_title = room_id
     raw_title = room_record.get("title") if room_record else None
     if isinstance(raw_title, str) and raw_title.strip():
@@ -277,7 +293,7 @@ async def _notify_master_agent(
         "taskId": task_id,
     }]
 
-    # 1. 마스터 메모리에 하위 작업 결과 요약 등록 (다음 질문 시 맥락 인지용)
+    # 1. 마스터/발주처 메모리에 하위 작업 결과 요약 등록 (다음 질문 시 맥락 인지용)
     try:
         status_label = "성공" if is_success else "실패"
         notify_summary = master_memory.format_notify_memory(
@@ -293,17 +309,27 @@ async def _notify_master_agent(
             room_id=room_id,
             task_id=task_id or "",
             summarize=True,
-            agent_id=master_memory.normalize_agent_id(target_parent_id),
+            agent_id=master_memory.normalize_agent_id(target_ui_room_id),
         )
+        if target_parent_id != target_ui_room_id:
+            master_memory.add_memory(
+                notify_summary,
+                title=room_title or f"보고: {task_id or room_id}",
+                kind="notify",
+                room_id=room_id,
+                task_id=task_id or "",
+                summarize=True,
+                agent_id=master_memory.normalize_agent_id(target_parent_id),
+            )
     except Exception:
         pass
 
-    # 2. 마스터(또는 부모) 방에 어시스턴트 메시지로 직접 삽입 (Bypass)
+    # 2. 발주처(또는 부모) 방에 어시스턴트 메시지로 직접 삽입 (Bypass)
     msg_id = None
     if current_chat_db:
         try:
             msg_id = current_chat_db.add_message(
-                room_id=target_parent_id,
+                room_id=target_ui_room_id,
                 role="assistant",
                 text=msg_text,
                 channel="thread_bypass",
@@ -313,7 +339,7 @@ async def _notify_master_agent(
                 created_at=time.time(),
             )
         except Exception as exc:
-            logger.error("[web_jobs] 부모 방(%s) 바이패스 메시지 저장 실패: %s", target_parent_id, exc)
+            logger.error("[web_jobs] 대상 방(%s) 바이패스 메시지 저장 실패: %s", target_ui_room_id, exc)
 
     # 3. 실시간 웹소켓 브로드캐스트 (사용자 화면에 0초 딜레이 즉시 표출)
     try:
@@ -321,7 +347,7 @@ async def _notify_master_agent(
         if current_broadcast:
             await current_broadcast({
                 "type": "result",
-                "roomId": target_parent_id,
+                "roomId": target_ui_room_id,
                 "msgId": msg_id,
                 "text": msg_text,
                 "steps": steps,
@@ -338,7 +364,7 @@ async def _notify_master_agent(
                 "createdAt": time.time(),
             })
     except Exception as exc:
-        logger.error("[web_jobs] 부모 방(%s) 바이패스 웹소켓 브로드캐스트 실패: %s", target_parent_id, exc)
+        logger.error("[web_jobs] 대상 방(%s) 바이패스 웹소켓 브로드캐스트 실패: %s", target_ui_room_id, exc)
 
     # 4. 완료 보고 vs 오류 보고 분기:
     # 정상 완료(is_success=True) 시: 마스터가 다시 정리해서 보고하지 않고 사용자에게 100% 바이패스 (2차 턴 차단)
@@ -384,7 +410,7 @@ async def _notify_master_agent(
     logger.info(
         "[web_jobs] %s 에이전트(%s) 방에 하위 작업(%s) 결과 바이패스 전달 완료 (task_id=%s, msg_id=%s)",
         parent_label,
-        target_parent_id,
+        target_ui_room_id,
         room_id,
         task_id,
         msg_id,

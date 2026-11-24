@@ -37,6 +37,8 @@ class TestSuppressSpawnNotifications(unittest.IsolatedAsyncioTestCase):
         with patch("bot.web.runtime_state.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.chat_db", mock_db), \
+             patch("bot.web.rooms.chat_db", mock_db), \
+             patch("bot.web.rooms._append_room_message", return_value=101), \
              patch("bot.web.turn_execution.spawn_agent") as mock_spawn, \
              patch("bot.web.turn_execution.watch_agent") as mock_watch, \
              patch("bot.web.turn_execution._run_stream_tail_loop", new_callable=AsyncMock), \
@@ -92,6 +94,8 @@ class TestSuppressSpawnNotifications(unittest.IsolatedAsyncioTestCase):
         with patch("bot.web.runtime_state.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.chat_db", mock_db), \
+             patch("bot.web.rooms.chat_db", mock_db), \
+             patch("bot.web.rooms._append_room_message", return_value=102), \
              patch("bot.web.turn_execution.spawn_agent") as mock_spawn, \
              patch("bot.web.turn_execution.watch_agent") as mock_watch, \
              patch("bot.web.turn_execution._run_stream_tail_loop", new_callable=AsyncMock), \
@@ -138,6 +142,8 @@ class TestSuppressSpawnNotifications(unittest.IsolatedAsyncioTestCase):
         with patch("bot.web.runtime_state.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.broadcast_ws_json", broadcast_mock), \
              patch("bot.web.turn_execution.chat_db", mock_db), \
+             patch("bot.web.rooms.chat_db", mock_db), \
+             patch("bot.web.rooms._append_room_message", return_value=102), \
              patch("bot.web.turn_execution.spawn_agent") as mock_spawn, \
              patch("bot.web.turn_execution.watch_agent") as mock_watch, \
              patch("bot.web.turn_execution._run_stream_tail_loop", new_callable=AsyncMock), \
@@ -206,6 +212,48 @@ class TestSuppressSpawnNotifications(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(bypass_res.get("silentNotification"))
             self.assertEqual(bypass_res.get("subagentTitle"), "화장품 버그 분석")
             self.assertTrue(bypass_res.get("isSuccess"))
+
+    async def test_notify_master_agent_routes_to_origin_room_id(self):
+        """parentAgentId가 __expert_coding__이더라도 originRoomId가 __core__이면 완료 보고가 __core__로 전달된다."""
+        broadcast_mock = AsyncMock()
+
+        mock_db = MagicMock()
+        mock_db.get_room.return_value = {
+            "id": "room-coding-sub-1",
+            "title": "스크롤 락 구현",
+            "parentAgentId": "__expert_coding__",
+            "isOrchestratorChild": True,
+        }
+        mock_db.add_message.return_value = 202
+
+        mock_task = {
+            "id": "task-coding-1",
+            "originRoomId": "__core__",
+            "parentAgentId": "__expert_coding__",
+            "status": "queued",
+        }
+
+        with patch("bot.web.runtime_state.broadcast_ws_json", broadcast_mock), \
+             patch("bot.web.agent_reporting.broadcast_ws_json", broadcast_mock), \
+             patch("bot.web.agent_reporting.chat_db", mock_db), \
+             patch("bot.master.master_tasks.get_task", return_value=mock_task), \
+             patch("bot.master.master_tasks.claim_report", return_value=True):
+
+            await _notify_master_agent(
+                room_id="room-coding-sub-1",
+                task_id="task-coding-1",
+                result_text="스크롤 락 구현 완료",
+                is_success=True,
+            )
+
+            broadcast_calls = [call.args[0] for call in broadcast_mock.call_args_list if call.args]
+            result_evts = [e for e in broadcast_calls if isinstance(e, dict) and e.get("type") == "result"]
+            self.assertEqual(len(result_evts), 1)
+            bypass_res = result_evts[0]
+
+            self.assertEqual(bypass_res.get("roomId"), "__core__")
+            self.assertEqual(bypass_res.get("bypassedFromRoomId"), "room-coding-sub-1")
+            self.assertEqual(bypass_res.get("turnType"), "delegation_result")
 
 
 if __name__ == "__main__":
