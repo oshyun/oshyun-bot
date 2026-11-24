@@ -330,16 +330,44 @@ function findChatRoom(query) {
   return null;
 }
 
+function isSubtaskOrChildRoom(room, queryOrTitle = '') {
+  const orchIds = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && Array.isArray(ORCHESTRATOR_ROOM_IDS))
+    ? ORCHESTRATOR_ROOM_IDS
+    : [CORE_ROOM_ID, '__expert_vault__', '__expert_coding__'];
+
+  // 1. room 객체가 명시적으로 존재할 때
+  if (room && room.id) {
+    if (orchIds.includes(room.id)) return false;
+    return true; // 최상위 3대 오케스트레이터가 아닌 모든 방은 서브세션/작업 세션
+  }
+
+  // 2. room 객체가 없더라도 문자열 식별자/제목으로 판별
+  const q = String(queryOrTitle || '').trim();
+  if (!q) return false;
+  if (orchIds.includes(q)) return false;
+  if (/^room-[a-zA-Z0-9_\-]+$/.test(q)) return true;
+  if (/^(마스터|세컨브레인|봇개발|master|second_brain|bot_dev)$/i.test(q)) return false;
+
+  // 대화 본문이나 칩에서 참조된 일반 제목/식별자는 기본적으로 서브세션으로 간주
+  return true;
+}
+
 function navigateToChatRoom(roomIdOrTitle, preferThreadPanel = true) {
   const query = String(roomIdOrTitle || '').trim();
   if (!query) return;
 
   const room = findChatRoom(query);
+  const targetId = (room && room.id) || (/^room-[a-zA-Z0-9_\-]+$/.test(query) ? query : null);
+  const targetTitle = (room && room.title) || query;
+  const isChild = isSubtaskOrChildRoom(room, targetId || query);
+
+  // 하위 작업/서브세션 룸인 경우 화면 이동 대신 우측 스레드 패널에서 열람하도록 기본 동작 통일
+  if (preferThreadPanel && isChild && typeof openThreadPanel === 'function') {
+    openThreadPanel(null, targetId, targetTitle);
+    return;
+  }
+
   if (room && room.id) {
-    if (preferThreadPanel && room.parentId && typeof openThreadPanel === 'function') {
-      openThreadPanel(null, room.id, room.title);
-      return;
-    }
     selectRoom(room.id);
     showToast(`'${room.title || query}' 채팅방으로 이동했습니다.`);
     return;
@@ -347,9 +375,8 @@ function navigateToChatRoom(roomIdOrTitle, preferThreadPanel = true) {
 
   // 만약 query 자체가 room-xxx 형식인 경우
   if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
-    const targetRoom = typeof getRoomById === 'function' ? getRoomById(query) : null;
-    if (preferThreadPanel && targetRoom && targetRoom.parentId && typeof openThreadPanel === 'function') {
-      openThreadPanel(null, query, targetRoom.title);
+    if (preferThreadPanel && typeof openThreadPanel === 'function') {
+      openThreadPanel(null, query, targetTitle);
       return;
     }
     selectRoom(query);
@@ -361,25 +388,28 @@ function navigateToChatRoom(roomIdOrTitle, preferThreadPanel = true) {
   if (typeof syncRoomsWithServer === 'function') {
     syncRoomsWithServer().then(() => {
       const reRoom = findChatRoom(query);
+      const reTargetId = (reRoom && reRoom.id) || (/^room-[a-zA-Z0-9_\-]+$/.test(query) ? query : null);
+      const reTargetTitle = (reRoom && reRoom.title) || query;
+      const reIsChild = isSubtaskOrChildRoom(reRoom, reTargetId || query);
+
+      if (preferThreadPanel && reIsChild && typeof openThreadPanel === 'function') {
+        openThreadPanel(null, reTargetId, reTargetTitle);
+        return;
+      }
       if (reRoom && reRoom.id) {
-        if (preferThreadPanel && reRoom.parentId && typeof openThreadPanel === 'function') {
-          openThreadPanel(null, reRoom.id, reRoom.title);
-          return;
-        }
         selectRoom(reRoom.id);
         showToast(`'${reRoom.title || query}' 채팅방으로 이동했습니다.`);
       } else if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
-        const reTarget = typeof getRoomById === 'function' ? getRoomById(query) : null;
-        if (preferThreadPanel && reTarget && reTarget.parentId && typeof openThreadPanel === 'function') {
-          openThreadPanel(null, query, reTarget.title);
-          return;
-        }
         selectRoom(query);
         showToast(`대화방(${query})으로 이동했습니다.`);
       } else {
         showToast(`'${query}' 대화방을 찾을 수 없습니다.`);
       }
     }).catch(() => {
+      if (preferThreadPanel && isSubtaskOrChildRoom(null, query) && typeof openThreadPanel === 'function') {
+        openThreadPanel(null, /^room-[a-zA-Z0-9_\-]+$/.test(query) ? query : null, query);
+        return;
+      }
       if (/^room-[a-zA-Z0-9_\-]+$/.test(query)) {
         selectRoom(query);
       } else {
@@ -393,11 +423,19 @@ function navigateToChatRoom(roomIdOrTitle, preferThreadPanel = true) {
   }
 }
 
+function expandThreadToMainRoom() {
+  if (typeof currentThreadRoomId !== 'undefined' && currentThreadRoomId) {
+    const rid = currentThreadRoomId;
+    if (typeof closeThreadPanel === 'function') closeThreadPanel();
+    selectRoom(rid);
+  }
+}
+
 function buildChatRoomChipHtml(room, explicitLabel = '') {
   const roomId = room ? (room.id || '') : '';
   const roomTitle = room ? (room.title || '') : '';
   const display = String(explicitLabel || roomTitle || roomId || '채팅방').trim();
-  const isChild = Boolean(room && room.parentId);
+  const isChild = isSubtaskOrChildRoom(room, roomId || display);
   const titleAttr = roomTitle
     ? `${roomTitle} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`
     : `${display} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`;
@@ -422,14 +460,15 @@ function buildChatRoomChipHtml(room, explicitLabel = '') {
     metaText = '채팅';
   }
 
-  const jsEscaped = String(roomId || display).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const jsTarget = String(roomId || display).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const jsTitle = String(roomTitle || display).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const metaHtml = metaText
     ? `<span class="md-link-meta">· ${escapeHtml(metaText)}</span>`
     : '';
 
   const clickHandler = isChild
-    ? `openThreadPanel(null, '${escapeHtml(jsEscaped)}', '${escapeHtml(roomTitle || display)}')`
-    : `navigateToChatRoom('${escapeHtml(jsEscaped)}')`;
+    ? `if(typeof openThreadPanel==='function'){openThreadPanel(null, '${escapeHtml(roomId)}', '${escapeHtml(jsTitle)}');}else{navigateToChatRoom('${escapeHtml(jsTarget)}');}`
+    : `navigateToChatRoom('${escapeHtml(jsTarget)}')`;
 
   return `<button type="button" class="md-link-chip ${roleClass}" onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
 }
