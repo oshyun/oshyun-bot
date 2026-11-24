@@ -130,28 +130,27 @@
   position: relative;
 }
 /* 📂 마스터 직속 브랜치 (직속 하위 채팅 + 전문가 에이전트 통합 브랜치) */
-.sb-master-branch {
+.sb-master-branch,
+.sb-agent-branch {
   position: relative;
-  margin: 0 0 6px 10px;
-  padding-left: 10px;
+  margin: 2px 0 3px 12px;
+  padding-left: 12px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
+}
+.sb-agent-branch:empty,
+.sb-agent-branch:not(:has(.sb-tree-item)):not(:has(.expert-agent-node)) {
+  display: none !important;
 }
 /* 에이전트 계층 트리 컨테이너 */
-.sb-agent-tree-container {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-/* 산하 하위 에이전트 브랜치 (중첩 트리 인덴트) */
+.sb-agent-tree-container,
 .sb-subagents-container {
-  position: relative;
-  margin: 3px 0 2px 10px;
-  padding-left: 10px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
 }
 .sb-subagents-container:empty {
   display: none;
@@ -162,33 +161,33 @@
   display: flex;
   flex-direction: column;
 }
-/* 세컨브레인 (마지막이 아닌 전문가 노드): 가로 가지선 + 세로 관통선 */
+/* 마지막이 아닌 에이전트 노드: 가로 가지선 + 세로 관통선 (├─) */
 .expert-agent-node:not(:last-child)::before {
   content: '';
   position: absolute;
-  left: -10px;
+  left: -12px;
   top: 15px;
-  width: 9px;
+  width: 10px;
   height: 1.5px;
   background: rgba(59, 130, 246, 0.4);
 }
 .expert-agent-node:not(:last-child)::after {
   content: '';
   position: absolute;
-  left: -10px;
-  top: -5px;
-  bottom: -5px;
+  left: -12px;
+  top: -6px;
+  bottom: -6px;
   width: 1.5px;
   background: rgba(59, 130, 246, 0.4);
 }
-/* 봇개발 (마지막 전문가 노드): 위에서 내려와 카드 중앙(15px)에서 깔끔한 L자(└─)로 종료 */
+/* 마지막 에이전트 노드: 위에서 내려와 카드 중앙(15px)에서 깔끔한 L자(└─)로 종료 */
 .expert-agent-node:last-child::before {
   content: '';
   position: absolute;
-  left: -10px;
-  top: -5px;
-  height: 20px;
-  width: 9px;
+  left: -12px;
+  top: -6px;
+  height: 21px;
+  width: 10px;
   border-left: 1.5px solid rgba(59, 130, 246, 0.4);
   border-bottom: 1.5px solid rgba(59, 130, 246, 0.4);
   border-bottom-left-radius: 4px;
@@ -291,90 +290,99 @@
 }
 .core-agent-reset-btn svg.i,
 .core-agent-cfg-btn svg.i { width: 14px; height: 14px; flex-shrink: 0; display: block; }
-/* 💬 하위 서브태스크 트리 (공통/특화) */
+/* 💬 하위 직속 대화(채팅) 트리 컨테이너 */
 .sb-core-tree {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin: 0;
+  padding: 0;
 }
 .sb-core-tree:empty { display: none; }
 
-/* 1) 마스터 직속 하위 채팅 트리 */
-.sb-core-tree.master-direct-tree {
-  margin: 2px 0 2px 0;
-  padding-left: 0;
-}
-.master-direct-tree .sb-tree-item::before {
+/* 대화 아이템 공통 가로선/세로선 */
+.sb-core-tree .sb-tree-item::before {
   content: '';
   position: absolute;
-  left: -14px;
+  left: -12px;
   top: 50%;
-  width: 12px;
+  width: 10px;
   height: 1.5px;
   background: rgba(59, 130, 246, 0.4);
 }
-.master-direct-tree .sb-tree-item::after {
+.sb-core-tree .sb-tree-item::after {
   content: '';
   position: absolute;
-  left: -14px;
+  left: -12px;
   top: -2px;
   bottom: -2px;
   width: 1.5px;
   background: rgba(59, 130, 246, 0.4);
 }
-.master-direct-tree .sb-tree-item:first-child::after {
+.sb-core-tree .sb-tree-item:first-child::after {
   top: -6px;
 }
-.master-direct-tree .sb-tree-item:last-child::after {
-  bottom: -6px;
-}
 
-/* 2) 전문가 직속 하위 채팅 트리 (2차 인덴트) */
-.expert-agent-node .sb-core-tree {
-  margin: 3px 0 4px 14px;
-  padding-left: 14px;
-}
-.expert-agent-node .sb-core-tree .sb-tree-item::before {
+/* 대화목록의 마지막 아이템: 기본적으로 깔끔한 L자(└─) 종료 */
+.sb-core-tree .sb-tree-item:last-child::before {
   content: '';
   position: absolute;
-  left: -14px;
-  top: 50%;
-  width: 12px;
-  height: 1.5px;
-  background: rgba(59, 130, 246, 0.4);
-}
-.expert-agent-node .sb-core-tree .sb-tree-item:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: -14px;
-  top: -2px;
-  bottom: -2px;
-  width: 1.5px;
-  background: rgba(59, 130, 246, 0.4);
-}
-.expert-agent-node .sb-core-tree .sb-tree-item:first-child:not(:last-child)::after {
-  top: -5px;
-}
-/* 전문가 하위 트리의 마지막 아이템: 깔끔한 L자(└─) 종료 */
-.expert-agent-node .sb-core-tree .sb-tree-item:last-child::before {
-  content: '';
-  position: absolute;
-  left: -14px;
+  left: -12px;
   top: -2px;
   height: calc(50% + 2px);
-  width: 12px;
+  width: 10px;
   border-left: 1.5px solid rgba(59, 130, 246, 0.4);
   border-bottom: 1.5px solid rgba(59, 130, 246, 0.4);
   border-bottom-left-radius: 4px;
   background: transparent;
 }
-.expert-agent-node .sb-core-tree .sb-tree-item:only-child::before {
-  top: -5px;
-  height: calc(50% + 5px);
+.sb-core-tree .sb-tree-item:only-child::before {
+  top: -6px;
+  height: calc(50% + 6px);
 }
-.expert-agent-node .sb-core-tree .sb-tree-item:last-child::after {
+.sb-core-tree .sb-tree-item:last-child::after {
   display: none;
+}
+
+/* 🌟 버그 해결 핵심: 뒤에 하위 에이전트 컨테이너가 비어있지 않으면, 마지막 chat item은 L자가 아닌 직진 통과선(├─) 유지! */
+.sb-core-tree:has(~ .sb-subagents-container:not(:empty)) .sb-tree-item:last-child::before,
+.sb-core-tree:has(~ .sb-agent-tree-container:not(:empty)) .sb-tree-item:last-child::before {
+  top: 50%;
+  height: 1.5px;
+  border: none;
+  border-radius: 0;
+  background: rgba(59, 130, 246, 0.4);
+}
+.sb-core-tree:has(~ .sb-subagents-container:not(:empty)) .sb-tree-item:last-child::after,
+.sb-core-tree:has(~ .sb-agent-tree-container:not(:empty)) .sb-tree-item:last-child::after {
+  display: block;
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: -2px;
+  bottom: -6px;
+  width: 1.5px;
+  background: rgba(59, 130, 246, 0.4);
+}
+.sb-core-tree:has(~ .sb-subagents-container:not(:empty)) .sb-tree-item:only-child::before,
+.sb-core-tree:has(~ .sb-agent-tree-container:not(:empty)) .sb-tree-item:only-child::before {
+  top: 50%;
+  height: 1.5px;
+  border: none;
+  border-radius: 0;
+  background: rgba(59, 130, 246, 0.4);
+}
+.sb-core-tree:has(~ .sb-subagents-container:not(:empty)) .sb-tree-item:only-child::after,
+.sb-core-tree:has(~ .sb-agent-tree-container:not(:empty)) .sb-tree-item:only-child::after {
+  display: block;
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: -6px;
+  bottom: -6px;
+  width: 1.5px;
+  background: rgba(59, 130, 246, 0.4);
 }
 
 /* 서브태스크 아이템 공통 스타일 */
