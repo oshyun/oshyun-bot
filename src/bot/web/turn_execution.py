@@ -100,17 +100,32 @@ async def execute_chat_turn(
     room_db = current_chat_db.get_room(room_key) if room_key != "__default__" else None
     room_model = (room_db.get("model") if room_db else None) or None
     room_effort = (room_db.get("effort") if room_db else None) or None
+    parent_agent_id = (room_db.get("parent_agent_id") if room_db else None) or (
+        room_db.get("parentAgentId") if room_db else None
+    )
+    parent_cfg = agent_configs.get_agent_config(parent_agent_id) if parent_agent_id else None
+
     room_workdir = (room_db.get("workdir") if room_db else None) or (
-        child_default_workdir(room_db.get("parent_agent_id")) if room_db else None
+        child_default_workdir(parent_agent_id) if room_db else None
     )
     if room_workdir and not is_orchestrator:
         target_workdir = room_workdir
 
-    fallback_model = room_model or (agent_cfg.get("model") if agent_cfg else None) or get_model()
+    if is_orchestrator and agent_cfg:
+        agent_def_model = agent_cfg.get("model")
+        agent_def_effort = agent_cfg.get("effort")
+    elif parent_cfg:
+        agent_def_model = parent_cfg.get("childModel") or parent_cfg.get("model")
+        agent_def_effort = parent_cfg.get("childEffort") or parent_cfg.get("effort")
+    else:
+        agent_def_model = None
+        agent_def_effort = None
+
+    fallback_model = room_model or agent_def_model or get_model()
     fallback_effort = (
         room_effort
         if room_effort is not None
-        else ((agent_cfg.get("effort") if agent_cfg and agent_cfg.get("effort") else None) or get_effort())
+        else (agent_def_effort or get_effort())
     )
 
     active_model = model.strip() if (isinstance(model, str) and model.strip()) else fallback_model

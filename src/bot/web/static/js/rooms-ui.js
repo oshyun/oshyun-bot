@@ -185,6 +185,51 @@ function getSupportedEffortsForModel(modelId) {
   return (serverStatus && Array.isArray(serverStatus.supportedEfforts)) ? serverStatus.supportedEfforts : ['low', 'medium', 'high'];
 }
 
+function getRoomEffectiveDefaultConfig(room) {
+  const serverModel = (serverStatus && serverStatus.model) || 'gemini-3.8-flash';
+  const serverEffort = (serverStatus && serverStatus.effort) || 'medium';
+
+  if (!room) {
+    return { model: serverModel, effort: serverEffort };
+  }
+
+  // 1. 방 객체에 백엔드가 계산해 주입한 defaultModel/defaultEffort가 있는 경우 우선 적용
+  if (room.defaultModel) {
+    return {
+      model: room.defaultModel,
+      effort: room.defaultEffort || serverEffort,
+    };
+  }
+
+  const roomId = String(room.id || '').trim();
+  const parentId = String(room.parentAgentId || room.parent_agent_id || '').trim();
+
+  // 2. 오케스트레이터/에이전트 본체 대화방인 경우 에이전트 설정(model/effort) 따름
+  if (typeof getAgentConfigById === 'function') {
+    const directCfg = getAgentConfigById(roomId);
+    if (directCfg) {
+      return {
+        model: directCfg.model || serverModel,
+        effort: directCfg.effort || serverEffort,
+      };
+    }
+
+    // 3. 하위 세션(자식 방)인 경우 부모 에이전트의 childModel/childEffort 우선 적용
+    if (parentId) {
+      const parentCfg = getAgentConfigById(parentId);
+      if (parentCfg) {
+        return {
+          model: parentCfg.childModel || parentCfg.model || serverModel,
+          effort: parentCfg.childEffort || parentCfg.effort || serverEffort,
+        };
+      }
+    }
+  }
+
+  // 4. 전역 기본값 폴백
+  return { model: serverModel, effort: serverEffort };
+}
+
 function updateRoomConfigBar() {
   const room = getCurrentRoom();
   const modelSel = document.getElementById('chat-room-model');
@@ -196,14 +241,15 @@ function updateRoomConfigBar() {
   const segBar = document.getElementById('effort-segmented-bar');
   const unsupportedNote = document.getElementById('effort-unsupported-note');
 
-  const serverModel = (serverStatus && serverStatus.model) || 'gemini-3.8-flash';
-  const serverEffort = (serverStatus && serverStatus.effort) || 'medium';
+  const defCfg = getRoomEffectiveDefaultConfig(room);
+  const roomDefaultModel = defCfg.model;
+  const roomDefaultEffort = defCfg.effort || 'medium';
 
   const curModelVal = (room && room.model) ? room.model : '';
   let curEffortVal = (room && room.effort) ? room.effort : '';
   const isCustomized = Boolean(curModelVal || curEffortVal);
 
-  const displayModel = curModelVal || serverModel;
+  const displayModel = curModelVal || roomDefaultModel;
   const supportedEfforts = getSupportedEffortsForModel(displayModel);
 
   // 모델 변경 등으로 현재 effort가 지원되지 않는 경우 자동 기본값 보정
@@ -221,14 +267,14 @@ function updateRoomConfigBar() {
   }
 
   // 1. 상단바 뱃지(Pill) 텍스트 및 스타일 갱신
-  const displayEffort = (curEffortVal || serverEffort || 'med').toLowerCase();
+  const displayEffort = (curEffortVal || roomDefaultEffort || 'med').toLowerCase();
   const effortShortMap = { low: 'low', medium: 'med', high: 'high', xhigh: 'xhigh', max: 'max' };
 
   if (pillModel) pillModel.textContent = formatShortModelName(displayModel);
   if (pillEffort) pillEffort.textContent = effortShortMap[displayEffort] || displayEffort;
   if (pillBtn) {
     pillBtn.classList.toggle('customized', isCustomized);
-    const effortFull = curEffortVal ? `${curEffortVal.toUpperCase()} (방 전용)` : `${serverEffort.toUpperCase()} (기본)`;
+    const effortFull = curEffortVal ? `${curEffortVal.toUpperCase()} (방 전용)` : `${roomDefaultEffort.toUpperCase()} (기본)`;
     pillBtn.title = `대화방 AI 설정: ${displayModel} [${effortFull}] — 클릭하여 변경`;
   }
 
@@ -244,7 +290,7 @@ function updateRoomConfigBar() {
       }
     }
 
-    const defaultModelLabel = serverModel ? `기본값 (${serverModel})` : '기본값: 서버 설정 따름';
+    const defaultModelLabel = roomDefaultModel ? `기본값 (${formatShortModelName(roomDefaultModel) || roomDefaultModel})` : '기본값: 서버 설정 따름';
     let modelOptionsHtml = `<option value="">${escapeHtml(defaultModelLabel)}</option>`;
     let hasSelectedModel = !curModelVal;
     for (const m of modelsList) {
@@ -261,7 +307,7 @@ function updateRoomConfigBar() {
 
   // 3. Segmented 추론 강도 버튼 동적 렌더링 및 설명 갱신
   const effortDescMap = {
-    '': `기본값 (${serverEffort.toUpperCase()})`,
+    '': `기본값 (${roomDefaultEffort.toUpperCase()})`,
     low: '빠른 응답 · 일상 대화',
     medium: '균형 잡힌 사고 · 일반 리서치',
     high: '심층 추론 · 정밀 설계 & 디버깅',
@@ -285,7 +331,7 @@ function updateRoomConfigBar() {
         max: { label: 'Max', title: 'Max · 최대 추론' }
       };
 
-      let btnsHtml = `<button type="button" class="effort-seg-btn ${!curEffortVal ? 'active' : ''}" data-effort="" onclick="onSegmentedEffortClick('')" title="서버 기본값 (${serverEffort.toUpperCase()}) 사용">기본</button>`;
+      let btnsHtml = `<button type="button" class="effort-seg-btn ${!curEffortVal ? 'active' : ''}" data-effort="" onclick="onSegmentedEffortClick('')" title="기본값 (${roomDefaultEffort.toUpperCase()}) 사용">기본</button>`;
       for (const eff of supportedEfforts) {
         const meta = effortMeta[eff] || { label: eff.toUpperCase(), title: eff };
         const isActive = (curEffortVal === eff);
@@ -318,13 +364,15 @@ async function resetRoomConfigToDefault() {
   room.effort = null;
   saveChatRoomsToStorage();
   updateRoomConfigBar();
+  const defCfg = getRoomEffectiveDefaultConfig(room);
+  const defModelLabel = formatShortModelName(defCfg.model) || defCfg.model;
   try {
     await fetch('/api/chat/room/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roomId: room.id, model: '', effort: '' })
     });
-    showToast('대화방 설정을 서버 기본값으로 복원했습니다.');
+    showToast(`대화방 설정을 기본값(${defModelLabel})으로 복원했습니다.`);
   } catch (err) {
     console.error('설정 복원 실패:', err);
   }

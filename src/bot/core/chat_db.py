@@ -520,16 +520,19 @@ def get_or_create_room(
         }
 
 
+_UNSET = object()
+
+
 def update_room(
     room_id: str,
     title: str | None = None,
     preview: str | None = None,
     session_id: str | None = None,
     channel: str | None = None,
-    model: str | None = None,
-    effort: str | None = None,
-    workdir: str | None = None,
-    parent_agent_id: str | None = None,
+    model: Any = _UNSET,
+    effort: Any = _UNSET,
+    workdir: Any = _UNSET,
+    parent_agent_id: Any = _UNSET,
     is_archived: bool | None = None,
     updated_at: float | None = None,
     force_title: bool = True,
@@ -570,20 +573,20 @@ def update_room(
         if channel:
             updates.append("last_channel = ?")
             params.append(channel)
-        if model is not None:
-            clean_m = str(model).strip() if model else None
+        if model is not _UNSET:
+            clean_m = str(model).strip() if (model and str(model).strip()) else None
             updates.append("model = ?")
             params.append(clean_m)
-        if effort is not None:
-            clean_e = str(effort).strip() if effort else None
+        if effort is not _UNSET:
+            clean_e = str(effort).strip() if (effort and str(effort).strip()) else None
             updates.append("effort = ?")
             params.append(clean_e)
-        if workdir is not None:
-            clean_w = str(workdir).strip() if workdir else None
+        if workdir is not _UNSET:
+            clean_w = str(workdir).strip() if (workdir and str(workdir).strip()) else None
             updates.append("workdir = ?")
             params.append(clean_w)
-        if parent_agent_id is not None:
-            clean_p = str(parent_agent_id).strip() if parent_agent_id else None
+        if parent_agent_id is not _UNSET:
+            clean_p = str(parent_agent_id).strip() if (parent_agent_id and str(parent_agent_id).strip()) else None
             updates.append("parent_agent_id = ?")
             params.append(clean_p)
         if is_archived is not None:

@@ -353,6 +353,59 @@ class TestAgentConfigsSystem(unittest.IsolatedAsyncioTestCase):
         self.assertIn("~시켜", eff_prompt_domain)
         self.assertIn(f"--parent {cosmetics_id}", eff_prompt_domain)
 
+    async def test_room_settings_default_inheritance_and_reset(self):
+        """대화방 설정에서 모델/Effort 복원 시 에이전트 계층의 기본값이 올바르게 계산·적용되는지 검증."""
+        import bot.web.rooms as web_rooms
+
+        # 1. 커스텀 코딩 하위 에이전트 생성 (상위: __expert_coding__)
+        custom_coder = agent_configs.upsert_agent_config({
+            "name": "고난도코더",
+            "parentAgentId": "__expert_coding__",
+            "model": "gemini-4-argon",
+            "effort": "high",
+            "childModel": "gemini-4-hydrogen",
+            "childEffort": "xhigh",
+        })
+        coder_id = custom_coder["id"]
+
+        # 2. chat.db에 방 생성 (오케스트레이터 방 & 자식 방)
+        chat_db.get_or_create_room(coder_id, title="고난도코더 에이전트")
+        chat_db.get_or_create_room(
+            "room-sub-task",
+            title="고난도 작업 서브챗",
+            parent_agent_id=coder_id,
+            model="gemini-3.8-flash",
+            effort="low",
+        )
+
+        # 3. _load_chat_rooms_index() 호출 시 defaultModel/defaultEffort 확인
+        rooms = web_rooms._load_chat_rooms_index()
+        coder_room = next(r for r in rooms if r["id"] == coder_id)
+        sub_room = next(r for r in rooms if r["id"] == "room-sub-task")
+
+        # 에이전트 본체 방의 기본값은 해당 에이전트의 model/effort
+        self.assertEqual(coder_room["defaultModel"], "gemini-4-argon")
+        self.assertEqual(coder_room["defaultEffort"], "high")
+
+        # 자식 방의 기본값은 부모 에이전트의 childModel/childEffort
+        self.assertEqual(sub_room["defaultModel"], "gemini-4-hydrogen")
+        self.assertEqual(sub_room["defaultEffort"], "xhigh")
+
+        # 4. 자식 방 설정 초기화(복원) API 호출 시 (model="", effort="")
+        req = DummyRequest(body={"roomId": "room-sub-task", "model": "", "effort": ""})
+        resp = await web_rooms.handle_api_room_settings(req)
+        data = json.loads(resp.text)
+        self.assertTrue(data["ok"])
+        self.assertIsNone(data["model"])
+        self.assertIsNone(data["effort"])
+        self.assertEqual(data["defaultModel"], "gemini-4-hydrogen")
+        self.assertEqual(data["defaultEffort"], "xhigh")
+
+        # 5. DB에서 모델 오버라이드가 제거되었는지 확인
+        sub_db = chat_db.get_room("room-sub-task")
+        self.assertIsNone(sub_db.get("model"))
+        self.assertIsNone(sub_db.get("effort"))
+
 
 if __name__ == "__main__":
     unittest.main()

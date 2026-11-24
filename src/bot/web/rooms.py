@@ -21,7 +21,7 @@ import bot.core.agent_configs as agent_configs
 import bot.core.chat_db as chat_db
 from bot.engine.agent_engine import clear_session, delete_session_files, kill_job
 from bot.core.bot_logger import logger, vault_log
-from bot.engine.engine_settings import get_coding_mode
+from bot.engine.engine_settings import get_coding_mode, get_effort, get_model
 import bot.core.paths as paths
 from bot.core.paths import ATTACHED_FILES_DIR, CHATS_DIR, STATE_DIR, child_default_workdir
 from bot.web.runtime_state import _get_mod_attr, get_master_supervisor
@@ -427,6 +427,19 @@ def _load_chat_rooms_index() -> list[dict]:
         if merged.get("isOrchestratorChild") and not merged.get("parentAgentId"):
             merged["parentAgentId"] = CORE_ORCHESTRATOR_ROOM_ID
 
+        # 에이전트/부모 계층 기반 기본 모델 및 Effort 계산
+        parent_aid = merged.get("parentAgentId")
+        parent_cfg = agent_configs.get_agent_config(parent_aid) if parent_aid else None
+        if canonical_id in all_orch_ids_set and agent_cfg:
+            merged["defaultModel"] = agent_cfg.get("model") or get_model()
+            merged["defaultEffort"] = agent_cfg.get("effort") or get_effort()
+        elif parent_cfg:
+            merged["defaultModel"] = parent_cfg.get("childModel") or parent_cfg.get("model") or get_model()
+            merged["defaultEffort"] = parent_cfg.get("childEffort") or parent_cfg.get("effort") or get_effort()
+        else:
+            merged["defaultModel"] = get_model()
+            merged["defaultEffort"] = get_effort()
+
         if merged["messages"] and len(merged["messages"]) > merged["messageCount"]:
             merged["messageCount"] = len(merged["messages"])
 
@@ -781,6 +794,19 @@ async def handle_api_room_settings(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
 
     updated_room = current_chat_db.get_room(target_key)
+    parent_aid = (updated_room.get("parent_agent_id") or updated_room.get("parentAgentId")) if updated_room else None
+    parent_cfg = agent_configs.get_agent_config(parent_aid) if parent_aid else None
+    orch_cfg = agent_configs.get_agent_config(target_key) if target_key in agent_configs.get_orchestrator_room_ids() else None
+    if orch_cfg:
+        def_m = orch_cfg.get("model") or get_model()
+        def_e = orch_cfg.get("effort") or get_effort()
+    elif parent_cfg:
+        def_m = parent_cfg.get("childModel") or parent_cfg.get("model") or get_model()
+        def_e = parent_cfg.get("childEffort") or parent_cfg.get("effort") or get_effort()
+    else:
+        def_m = get_model()
+        def_e = get_effort()
+
     broadcast_fn = _get_mod_attr("broadcast_ws_json", None)
     if broadcast_fn:
         broadcast_data: dict[str, Any] = {
@@ -789,6 +815,8 @@ async def handle_api_room_settings(request: web.Request) -> web.Response:
             "sessionId": session_id,
             "model": clean_model,
             "effort": clean_effort,
+            "defaultModel": def_m,
+            "defaultEffort": def_e,
             "room": updated_room,
         }
         if "workdir" in payload:
@@ -801,6 +829,8 @@ async def handle_api_room_settings(request: web.Request) -> web.Response:
         "sessionId": session_id,
         "model": clean_model,
         "effort": clean_effort,
+        "defaultModel": def_m,
+        "defaultEffort": def_e,
         "room": updated_room,
     }
     if "workdir" in payload:
