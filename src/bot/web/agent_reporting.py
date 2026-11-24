@@ -326,11 +326,15 @@ async def _notify_master_agent(
                 "text": msg_text,
                 "steps": steps,
                 "agentName": subagent_name,
+                "subagentTitle": room_title,
                 "model": model,
                 "effort": effort,
                 "bypassedFromRoomId": room_id,
+                "turnType": "delegation_result",
+                "notifyLevel": "silent",
                 "silentNotification": True,
                 "delegatedRooms": delegated_rooms,
+                "isSuccess": is_success,
                 "createdAt": time.time(),
             })
     except Exception as exc:

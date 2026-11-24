@@ -1289,7 +1289,9 @@ function handleWsEvent(data) {
       renderThreadPanelBody();
     }
 
-    const isSilent = Boolean(data.silentNotification || data.bypassedFromRoomId);
+    const notifyLevel = data.notifyLevel || (data.silentNotification ? 'silent' : 'alert');
+    const isSilent = notifyLevel === 'silent' || Boolean(data.silentNotification);
+    const isDelegationResult = data.turnType === 'delegation_result';
     const isChildRoom = Boolean(targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId));
 
     if (targetRoom.id === currentRoomId) {
@@ -1298,20 +1300,25 @@ function handleWsEvent(data) {
       updateSessionBar();
       updateSendButtonState();
     } else {
-      if (!isSilent && !isChildRoom) {
-        showToast(`[${targetRoom.title}] 답변이 도착했습니다.`, { roomId: targetRoom.id });
+      if (!isSilent && (!isChildRoom || isDelegationResult)) {
+        const toastTitle = isDelegationResult
+          ? `[${targetRoom.title}] 하위 작업이 완료되었습니다.`
+          : `[${targetRoom.title}] 답변이 도착했습니다.`;
+        showToast(toastTitle, { roomId: targetRoom.id });
       }
     }
 
     // 브라우저 및 시스템 레벨 알림 (백그라운드/다른 탭/다른 방)
-    // 마스터가 스폰한 하위 에이전트의 작업 결과나 바이패스 결과는 중복 알림을 방지하기 위해 침묵(silent)
-    if (!isSilent && !isChildRoom && typeof handleAgentResponseNotification === 'function') {
+    // 상위 에이전트의 단순 스폰 안내(delegation_ack), 내부 보고(internal_report)는 침묵(silent)
+    // 하위 작업 완료 바이패스(delegation_result) 또는 일반 직접 답변(direct_answer)만 알림 발송
+    if (!isSilent && (!isChildRoom || isDelegationResult) && typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, replyText);
     }
 
     const ttsMode = getTtsMode();
     const wasVoiceTurn = Boolean(data.voiceMode);
-    const shouldPlayTts = ttsMode === 'always' || (ttsMode === 'voice_only' && wasVoiceTurn);
+    // 스폰 안내나 silent 메시지는 TTS 음성 낭독도 억제
+    const shouldPlayTts = !isSilent && (ttsMode === 'always' || (ttsMode === 'voice_only' && wasVoiceTurn));
 
     if (isCurrentRoom && data.speechText && shouldPlayTts) {
       playTts(data.speechText);
@@ -1340,7 +1347,9 @@ function handleWsEvent(data) {
     saveChatRoomsToStorage();
     renderRoomList();
 
-    const isSilent = Boolean(data.silentNotification || data.bypassedFromRoomId);
+    const notifyLevel = data.notifyLevel || (data.silentNotification ? 'silent' : 'alert');
+    const isSilent = notifyLevel === 'silent' || Boolean(data.silentNotification);
+    const isDelegationResult = data.turnType === 'delegation_result';
     const isChildRoom = Boolean(targetRoom && (targetRoom.isOrchestratorChild || targetRoom.parentAgentId));
 
     if (isCurrentRoom) {
@@ -1348,11 +1357,11 @@ function handleWsEvent(data) {
       renderMessagesForCurrentRoom();
       updateSendButtonState();
     } else {
-      if (!isSilent && !isChildRoom) {
+      if (!isSilent && (!isChildRoom || isDelegationResult)) {
         showToast(`[${targetRoom.title}] 실행 오류가 발생했습니다.`, { roomId: targetRoom.id });
       }
     }
-    if (!isSilent && !isChildRoom && typeof handleAgentResponseNotification === 'function') {
+    if (!isSilent && (!isChildRoom || isDelegationResult) && typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, errMsg, { isError: true });
     }
   }
