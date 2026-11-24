@@ -1,5 +1,5 @@
 // oshyun-bot PWA Service Worker
-const CACHE_NAME = 'oshyun-hub-v19';
+const CACHE_NAME = 'oshyun-hub-v20';
 const CORE_ASSETS = [
   '/manifest.json',
   '/favicon.svg',

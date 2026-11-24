@@ -431,14 +431,110 @@ function expandThreadToMainRoom() {
   }
 }
 
+function resolveChatRoomStatus(room, roomIdOrDisplay = '') {
+  let roomId = room ? (room.id || '') : '';
+  if (!roomId && typeof roomIdOrDisplay === 'string') {
+    if (roomIdOrDisplay.startsWith('room-')) {
+      roomId = roomIdOrDisplay;
+    } else if (typeof findChatRoom === 'function') {
+      const found = findChatRoom(roomIdOrDisplay);
+      if (found && found.id) roomId = found.id;
+    }
+  }
+
+  // 1. 실시간 실행 중 여부 확인 (최우선)
+  if (roomId) {
+    const live = (typeof roomLiveStates !== 'undefined' && roomLiveStates) ? roomLiveStates[roomId] : null;
+    if (live && live.isRunning) return 'running';
+    if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r && (r.roomId === roomId || r.id === roomId))) {
+      return 'running';
+    }
+  }
+
+  // 2. masterTasks 확인 (하위 작업인 경우)
+  if (typeof latestMasterTasks !== 'undefined' && Array.isArray(latestMasterTasks)) {
+    const task = latestMasterTasks.find(t => t && (t.roomId === roomId || (roomId && t.id === roomId)));
+    if (task) {
+      const tStatus = String(task.status || '').toLowerCase();
+      if (tStatus === 'running' || tStatus === 'in_progress' || tStatus === 'processing') return 'running';
+      if (tStatus === 'failed' || tStatus === 'error' || tStatus === 'stalled') return 'failed';
+      if (tStatus === 'done' || tStatus === 'completed' || tStatus === 'success') return 'done';
+    }
+  }
+
+  // 3. room 객체 자체 상태 확인
+  if (room) {
+    const rStatus = String(room.status || room.task_status || '').toLowerCase();
+    if (rStatus === 'running') return 'running';
+    if (rStatus === 'failed' || rStatus === 'error') return 'failed';
+    if (rStatus === 'done' || rStatus === 'completed' || rStatus === 'success') return 'done';
+
+    // 만약 하위 세션/채팅(isSubtaskOrChildRoom)이라면: 실행 중이 아니면 기본적으로 완료
+    if (typeof isSubtaskOrChildRoom === 'function' && isSubtaskOrChildRoom(room, roomId || roomIdOrDisplay)) {
+      if (room.isFailed || room.hasError) return 'failed';
+      return 'done';
+    }
+  } else if (roomId && /^room-[a-zA-Z0-9_\-]+$/.test(roomId)) {
+    if (typeof getRoomById === 'function') {
+      const targetRoom = getRoomById(roomId);
+      if (targetRoom) return resolveChatRoomStatus(targetRoom, roomId);
+    }
+  }
+
+  return '';
+}
+
+function updateInlineChatChipsStatus(targetRoomId, explicitStatus = null) {
+  if (!targetRoomId) return;
+  const chips = document.querySelectorAll(`.md-link-chip[data-room-id="${targetRoomId}"]`);
+  if (!chips || chips.length === 0) return;
+
+  let nextStatus = explicitStatus;
+  if (!nextStatus) {
+    const r = typeof getRoomById === 'function' ? getRoomById(targetRoomId) : null;
+    nextStatus = resolveChatRoomStatus(r, targetRoomId);
+  }
+
+  chips.forEach(chip => {
+    if (nextStatus) {
+      chip.setAttribute('data-status', nextStatus);
+    } else {
+      chip.removeAttribute('data-status');
+    }
+  });
+}
+
+function updateAllInlineChatChips() {
+  const chips = document.querySelectorAll('.md-link-chip[data-room-id]');
+  if (!chips || chips.length === 0) return;
+  chips.forEach(chip => {
+    const rId = chip.getAttribute('data-room-id');
+    if (!rId) return;
+    const r = typeof getRoomById === 'function' ? getRoomById(rId) : null;
+    const st = resolveChatRoomStatus(r, rId);
+    if (st) {
+      chip.setAttribute('data-status', st);
+    } else {
+      chip.removeAttribute('data-status');
+    }
+  });
+}
+
 function buildChatRoomChipHtml(room, explicitLabel = '') {
   const roomId = room ? (room.id || '') : '';
   const roomTitle = room ? (room.title || '') : '';
   const display = String(explicitLabel || roomTitle || roomId || '채팅방').trim();
   const isChild = isSubtaskOrChildRoom(room, roomId || display);
+  const status = resolveChatRoomStatus(room, roomId || display);
+
+  let statusText = '';
+  if (status === 'running') statusText = ' · 상태: 실행 중';
+  else if (status === 'done') statusText = ' · 상태: 완료';
+  else if (status === 'failed') statusText = ' · 상태: 실패';
+
   const titleAttr = roomTitle
-    ? `${roomTitle} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`
-    : `${display} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`;
+    ? `${roomTitle}${statusText} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`
+    : `${display}${statusText} (클릭 시 ${isChild ? '우측 사이드 패널에서 열람' : '해당 채팅방으로 이동'})`;
 
   let iconSvg = ICONS.chat || '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   let roleClass = 'is-room';
@@ -470,7 +566,18 @@ function buildChatRoomChipHtml(room, explicitLabel = '') {
     ? `if(typeof openThreadPanel==='function'){openThreadPanel(null, '${escapeHtml(roomId)}', '${escapeHtml(jsTitle)}');}else{navigateToChatRoom('${escapeHtml(jsTarget)}');}`
     : `navigateToChatRoom('${escapeHtml(jsTarget)}')`;
 
-  return `<button type="button" class="md-link-chip ${roleClass}" onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+  const statusHtml = `
+    <span class="chip-status-wrap" aria-hidden="true">
+      <span class="chip-status-icon is-running" title="실행 중"><span class="chip-spin-wheel"></span></span>
+      <span class="chip-status-icon is-done" title="완료"><svg class="i chip-status-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+      <span class="chip-status-icon is-failed" title="실패"><svg class="i chip-status-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+    </span>
+  `;
+
+  const statusAttr = status ? ` data-status="${escapeHtml(status)}"` : '';
+  const roomIdAttr = roomId ? ` data-room-id="${escapeHtml(roomId)}"` : '';
+
+  return `<button type="button" class="md-link-chip ${roleClass}"${roomIdAttr}${statusAttr} onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}${statusHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
 }
 
 function ensureRoomLiveState(roomId) {
@@ -714,6 +821,9 @@ function applyActiveRunsSnapshot(activeRuns, isFullSnapshot = true) {
     updateComposerStatusBar();
     updateSendButtonState();
   }
+  if (typeof updateAllInlineChatChips === 'function') {
+    updateAllInlineChatChips();
+  }
 }
 
 let _liveTimerInterval = null;
@@ -795,6 +905,9 @@ function handleWsEvent(data) {
   if (data.type === 'master_graph') {
     if (data.graph) {
       handleMasterGraphWsEvent(data.graph);
+    }
+    if (typeof updateAllInlineChatChips === 'function') {
+      updateAllInlineChatChips();
     }
     return;
   }
@@ -999,6 +1112,9 @@ function handleWsEvent(data) {
   if (!targetRoom) {
     if (data.roomId && (data.type === 'started' || data.type === 'queued' || data.type === 'result')) {
       scheduleRoomsRefreshFromEvent();
+      if (typeof updateInlineChatChipsStatus === 'function') {
+        updateInlineChatChipsStatus(data.roomId);
+      }
     }
     return;
   }
@@ -1039,6 +1155,9 @@ function handleWsEvent(data) {
       saveChatRoomsToStorage();
     }
     liveState.isRunning = true;
+    if (typeof updateInlineChatChipsStatus === 'function') {
+      updateInlineChatChipsStatus(targetRoom.id, 'running');
+    }
     if (data.jobId) liveState.jobId = data.jobId;
     if (data.asstMsgId) liveState.asstMsgId = data.asstMsgId;
     liveState.feed = '생각하는 중…';
@@ -1174,6 +1293,9 @@ function handleWsEvent(data) {
     }
   } else if (data.type === 'cancelled') {
     liveState.isRunning = false;
+    if (typeof updateInlineChatChipsStatus === 'function') {
+      updateInlineChatChipsStatus(targetRoom.id, 'failed');
+    }
     liveState.feed = '';
     liveState.steps = [];
     liveState.streamText = '';
@@ -1201,6 +1323,9 @@ function handleWsEvent(data) {
     const remainingQueued = getQueuedMessagesCount(targetRoom);
 
     liveState.isRunning = remainingQueued > 0;
+    if (typeof updateInlineChatChipsStatus === 'function') {
+      updateInlineChatChipsStatus(targetRoom.id, remainingQueued > 0 ? 'running' : 'done');
+    }
     liveState.feed = remainingQueued > 0 ? '다음 대기열 질문 실행 준비 중…' : '';
     liveState.steps = [];
     liveState.streamText = '';
@@ -1329,6 +1454,9 @@ function handleWsEvent(data) {
     const errMsg = '⚠️ ' + (data.message || data.error || '실행 중 오류가 발생했습니다.');
     const remainingQueued = getQueuedMessagesCount(targetRoom);
     liveState.isRunning = remainingQueued > 0;
+    if (typeof updateInlineChatChipsStatus === 'function') {
+      updateInlineChatChipsStatus(targetRoom.id, remainingQueued > 0 ? 'running' : 'failed');
+    }
     liveState.feed = remainingQueued > 0 ? '다음 대기열 질문 실행 준비 중…' : '';
     liveState.steps = [];
     liveState.streamText = '';
