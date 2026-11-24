@@ -183,6 +183,71 @@
   color: var(--text);
   border-color: var(--border-strong);
 }
+/* 하위 에이전트 말풍선 및 발신자 정보 클릭 네비게이션 스타일 */
+.msg.is-child-navigable {
+  position: relative;
+}
+.msg.is-child-navigable .sub-agent-md.is-child-clickable,
+.msg.is-child-navigable > .md.is-child-clickable {
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.msg.is-child-navigable .sub-agent-md.is-child-clickable:hover,
+.msg.is-child-navigable > .md.is-child-clickable:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
+  box-shadow: 0 1px 6px rgba(16, 185, 129, 0.08);
+}
+.msg.is-child-navigable pre,
+.msg.is-child-navigable code {
+  cursor: text;
+}
+.msg.is-child-navigable .sub-agent-details {
+  cursor: default;
+}
+.assistant-head.is-child-clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity .15s ease;
+}
+.assistant-head.is-child-clickable:hover {
+  opacity: 0.88;
+}
+.child-nav-hint {
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  color: var(--accent);
+  margin-left: 3px;
+  font-weight: 700;
+  display: inline-block;
+  transition: transform .15s ease;
+}
+.assistant-head.is-child-clickable:hover .child-nav-hint,
+.sub-agent-room-btn:hover .child-nav-hint,
+.child-room-badge:hover .child-nav-hint {
+  transform: translate(1px, -1px);
+}
+.child-room-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 1px solid rgba(16, 185, 129, .28);
+  border-radius: 999px;
+  padding: 1px 8px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.child-room-badge:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
 /* 마스터 에이전트 하위 에이전트 위임 칩 UI */
 .sub-agent-chips-wrap {
   margin-top: 10px;
