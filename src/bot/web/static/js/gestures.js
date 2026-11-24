@@ -97,11 +97,10 @@ function initMobileSwipeGestures() {
 }
 
 // ─── 모바일 당겨서 새로고침 (Pull to Refresh - 상단 당김 & 하단 당김 지원) ───
-const PTR_CAPTURE_THRESHOLD_PX = 8;   // 경계 바깥 당김 시 네이티브 바운스/스크롤 조기 차단 임계값
-const PTR_DEADZONE_PX = 70;           // 인디케이터가 나타나기 시작하는 최소 당김 거리 (의도치 않은 당김 방지)
-const PTR_TRIGGER_THRESHOLD_PX = 165; // 새로고침이 실제로 트리거되는 당김 임계값 (충분히 당겼을 때만 작동)
+const PTR_DEADZONE_PX = 80;           // 인디케이터가 나타나고 스크롤 차단이 시작되는 최소 당김 거리 (의도치 않은 당김 방지)
+const PTR_TRIGGER_THRESHOLD_PX = 180; // 새로고침이 실제로 트리거되는 당김 임계값 (충분히 당겼을 때만 작동)
 const PTR_MAX_VISUAL_PX = 68;         // 인디케이터 최대 시각적 이동 한계
-const PTR_DAMPING_K = 105;            // 지수 감쇠(Asymptotic Rubber-band) 저항 계수
+const PTR_DAMPING_K = 110;            // 지수 감쇠(Asymptotic Rubber-band) 저항 계수
 
 let _ptrResetTimer = null;
 
@@ -143,22 +142,28 @@ function initPullToRefresh() {
 
   let startY = 0;
   let startX = 0;
-  let isAtTop = false;
-  let isAtBottom = false;
-  let canScrollUp = false;
-  let canScrollDown = false;
+  let startedAtTop = false;
+  let startedAtBottom = false;
+  let hasScrolledDuringTouch = false;
   let isEligible = false;
   let isPulling = false;
   let pullDirection = null; // 'top' | 'bottom' | null
   let activeScroller = null;
 
   function getActiveScrollable(touchTarget) {
-    // 1) 터치 대상에서 가장 가까운 실제 스크롤 가능 조상 우선 탐색 (모든 페이지·탭 공통 지원)
+    // 1) 터치 대상에서 가장 가까운 실제 스크롤 가능 조상 우선 탐색
     let el = touchTarget && touchTarget.nodeType === 1 ? touchTarget : (touchTarget && touchTarget.parentElement ? touchTarget.parentElement : null);
     while (el && el !== document.body && el !== document.documentElement) {
-      if (el.scrollHeight > el.clientHeight + 1) {
-        const ov = window.getComputedStyle(el).overflowY;
-        if (ov === 'auto' || ov === 'scroll' || ov === 'overlay') {
+      const ov = window.getComputedStyle(el).overflowY;
+      if (ov === 'auto' || ov === 'scroll' || ov === 'overlay') {
+        if (
+          el.scrollHeight > el.clientHeight + 1 ||
+          el.id === 'messages-container' ||
+          el.id === 'view-automation' ||
+          el.id === 'vault-preview' ||
+          el.id === 'vault-tree-container' ||
+          el.classList.contains('page-scroll')
+        ) {
           return el;
         }
       }
@@ -168,8 +173,9 @@ function initPullToRefresh() {
       return document.getElementById('messages-container');
     }
     if (currentView === 'vault') {
-      return document.querySelector('#view-vault .vault-editor-body') ||
-             document.querySelector('#view-vault .vault-tree') ||
+      const previewEl = document.getElementById('vault-preview');
+      if (previewEl && previewEl.style.display !== 'none') return previewEl;
+      return document.getElementById('vault-tree-container') ||
              document.getElementById('view-vault');
     }
     const activeView = document.getElementById('view-' + currentView) || document.querySelector('.view.active');
@@ -233,18 +239,32 @@ function initPullToRefresh() {
       resetPullToRefreshIndicator(true);
     }
 
-    // 모바일 사이드바 드로어가 열려 있거나 다중 선택 모드이면 무시
+    // 모바일 사이드바·우측 슬라이드 패널·모달이 열려 있거나 다중 선택 모드이면 무시
     const sidebar = document.getElementById('room-sidebar');
     const masterSidebar = document.getElementById('master-sidebar');
-    if ((sidebar && (sidebar.classList.contains('open') || sidebar.classList.contains('select-mode'))) ||
-        (window.innerWidth <= 1024 && masterSidebar && masterSidebar.classList.contains('open'))) {
+    const threadPanel = document.getElementById('thread-slide-panel');
+    const noteViewer = document.getElementById('note-viewer-panel');
+    const openModal = document.querySelector('.modal-overlay[style*="flex"], .modal-backdrop.open, .image-lightbox.open, .auto-modal-backdrop');
+    if (
+      openModal ||
+      (sidebar && (sidebar.classList.contains('open') || sidebar.classList.contains('select-mode'))) ||
+      (window.innerWidth <= 1024 && masterSidebar && masterSidebar.classList.contains('open')) ||
+      (threadPanel && threadPanel.classList.contains('open')) ||
+      (noteViewer && noteViewer.classList.contains('open'))
+    ) {
       isEligible = false;
       return;
     }
 
-    // 입력창, 모달, 버튼, 사이드바 등 인터랙티브 영역 터치 시 무시
+    // 입력창, 컴포저, 모달, 버튼, 코드블록, 슬라이드 패널, 사이드바 등 인터랙티브 영역 터치 시 무시
     const target = e.target;
-    if (target && target.closest && target.closest('textarea, input, select, button, .icon-btn, .btn, .modal-backdrop, #room-sidebar, .sidebar, #master-sidebar, .master-sidebar, .master-drawer-backdrop')) {
+    if (
+      target &&
+      target.closest &&
+      target.closest(
+        'textarea, input, select, button, a, pre, code, [contenteditable="true"], .composer-wrap, .topbar, .icon-btn, .btn, .modal-overlay, .modal-backdrop, .auto-modal-backdrop, #room-sidebar, .sidebar, #master-sidebar, .master-sidebar, .master-drawer-backdrop, #thread-slide-panel, #note-viewer-panel, .thread-drawer-backdrop'
+      )
+    ) {
       isEligible = false;
       return;
     }
@@ -259,16 +279,12 @@ function initPullToRefresh() {
     const scrollTop = getScrollTop(scroller);
     const distFromBottom = getDistFromBottom(scroller);
 
-    // 스크롤 가능한 추가 컨텐츠 존재 여부 (2px 오차 허용)
-    canScrollUp = scrollTop > 2;
-    canScrollDown = distFromBottom > 2;
+    // 터치 시작 시점에 이미 최상단(<= 1px) 또는 최하단(<= 1px)에 정지해 있었는지 엄격히 확인
+    // (스크롤 도중 경계에 도달한 제스처가 곧바로 새로고침으로 이어지는 오작동을 원천 차단)
+    startedAtTop = scrollTop <= 1;
+    startedAtBottom = distFromBottom <= 1;
 
-    // 최상단이거나 최하단인 경우 PTR 제스처 후보
-    // (스크롤할 컨텐츠가 없는 짧은 방이나 빈 화면은 canScrollUp=false, canScrollDown=false 이므로 isAtTop, isAtBottom 모두 true)
-    isAtTop = !canScrollUp;
-    isAtBottom = !canScrollDown;
-
-    if (!isAtTop && !isAtBottom) {
+    if (!startedAtTop && !startedAtBottom) {
       isEligible = false;
       return;
     }
@@ -276,6 +292,7 @@ function initPullToRefresh() {
     activeScroller = scroller;
     startY = e.touches[0].clientY;
     startX = e.touches[0].clientX;
+    hasScrolledDuringTouch = false;
     isEligible = true;
     isPulling = false;
     pullDirection = null;
@@ -292,34 +309,53 @@ function initPullToRefresh() {
   }
 
   window.addEventListener('touchmove', (e) => {
-    if (!isEligible || !e.touches || !e.touches[0]) return;
+    if (!isEligible || !activeScroller || !e.touches || e.touches.length !== 1) return;
 
-    const dy = e.touches[0].clientY - startY;
-    const dx = Math.abs(e.touches[0].clientX - startX);
+    const currentY = e.touches[0].clientY;
+    const currentX = e.touches[0].clientX;
+    const totalDy = currentY - startY;
+    const totalDx = Math.abs(currentX - startX);
 
-    // 수평 스와이프 제스처인 경우 PTR 취소하여 사이드바 등 정상 스와이프 보장
-    if (!pullDirection && dx > Math.abs(dy)) {
+    // 실시간 스크롤 위치 재검증
+    const curScrollTop = getScrollTop(activeScroller);
+    const curDistBottom = getDistFromBottom(activeScroller);
+    const nowAtTop = curScrollTop <= 1;
+    const nowAtBottom = curDistBottom <= 1;
+
+    // 터치 시작 후 내부 컨텐츠가 실제로 스크롤되었으면 이번 제스처는 일반 스크롤로 간주하여 PTR 영구 취소
+    if (!nowAtTop && startedAtTop) {
+      hasScrolledDuringTouch = true;
+    }
+    if (!nowAtBottom && startedAtBottom) {
+      hasScrolledDuringTouch = true;
+    }
+    if (hasScrolledDuringTouch || (!nowAtTop && !nowAtBottom)) {
       cancelPull();
       return;
     }
 
-    // 실제로 스크롤할 내용이 남아있는 방향으로 일반 스크롤을 시도할 때만 PTR 취소 (방향 확정 전에만!)
-    // - 아래로 스크롤할 내용이 남아있는데 손가락을 위로 밀 때 (dy < 0)
-    // - 위로 스크롤할 내용이 남아있는데 손가락을 아래로 내릴 때 (dy > 0)
-    if (!pullDirection && ((canScrollDown && dy < 0) || (canScrollUp && dy > 0))) {
+    // 수평 이동이 우세하면(사이드바 드로어/메모리 패널 스와이프 등) 즉시 PTR 취소
+    if (!isPulling && totalDx > 10 && totalDx * 1.25 > Math.abs(totalDy)) {
       cancelPull();
       return;
     }
 
-    // 방향 조기 선점: 경계(최상단/최하단)에서 바깥 방향으로 PTR_CAPTURE_THRESHOLD_PX(8px) 이상 수직 이동 시
-    // 네이티브 브라우저 오버스크롤/러버밴드가 시작되기 전에 방향을 확정하고 e.preventDefault()로 스크롤 튐을 원천 차단
+    // 스크롤 가능한 컨텐츠가 있는 방향으로 밀면 일반 스크롤이므로 즉시 PTR 취소
+    const canCurrentlyScrollDown = curDistBottom > 1;
+    const canCurrentlyScrollUp = curScrollTop > 1;
+    if (!isPulling && ((canCurrentlyScrollDown && totalDy < -4) || (canCurrentlyScrollUp && totalDy > 4))) {
+      cancelPull();
+      return;
+    }
+
+    // 데드존(PTR_DEADZONE_PX = 80px)을 넘기 전까지는 절대 e.preventDefault()를 호출하거나 방향을 잠그지 않음
     if (!pullDirection) {
-      if (isAtTop && dy > PTR_CAPTURE_THRESHOLD_PX && dy > dx * 1.5) {
+      if (startedAtTop && nowAtTop && totalDy >= PTR_DEADZONE_PX && totalDy > totalDx * 1.6) {
         pullDirection = 'top';
         ptrIndicator.classList.remove('from-bottom', 'returning');
         ptrIndicator.style.top = '';
         ptrIndicator.style.bottom = '';
-      } else if (isAtBottom && dy < -PTR_CAPTURE_THRESHOLD_PX && -dy > dx * 1.5) {
+      } else if (startedAtBottom && nowAtBottom && -totalDy >= PTR_DEADZONE_PX && -totalDy > totalDx * 1.6) {
         pullDirection = 'bottom';
         ptrIndicator.classList.remove('returning');
         ptrIndicator.classList.add('from-bottom');
@@ -330,22 +366,24 @@ function initPullToRefresh() {
       }
     }
 
-    // PTR 방향이 확정된 즉시 브라우저 기본 스크롤/바운스를 차단하고 스크롤 앵커를 고정
-    if (e.cancelable) e.preventDefault();
-    restoreScrollerAnchor();
-
-    // 상단/하단 당김 중 처리 (시각적 노출은 PTR_DEADZONE_PX 이상 당겼을 때부터만 시작)
     const isBottom = pullDirection === 'bottom';
-    const signedDy = isBottom ? -dy : dy;
-    if (signedDy <= PTR_DEADZONE_PX) {
+    const signedDy = isBottom ? -totalDy : totalDy;
+
+    // 당기던 중 다시 데드존 이하로 손가락을 되돌리면 인디케이터를 숨기고 잠금 해제
+    if (signedDy < PTR_DEADZONE_PX) {
       if (isPulling) {
         isPulling = false;
         ptrIndicator.classList.remove('pulling', 'ready');
         ptrIndicator.style.transform = '';
         ptrIndicator.style.opacity = '';
       }
+      pullDirection = null;
       return;
     }
+
+    // 데드존(80px)을 확실히 넘어 인디케이터가 노출되는 시점부터만 네이티브 바운스 차단
+    if (e.cancelable) e.preventDefault();
+    restoreScrollerAnchor();
 
     isPulling = true;
     ptrIndicator.classList.add('pulling');
@@ -353,11 +391,16 @@ function initPullToRefresh() {
     const pullDist = calcDampedPullDist(effectiveDy);
     const offsetY = isBottom ? (50 - pullDist) : (pullDist - 50);
     ptrIndicator.style.transform = `translate3d(0, ${offsetY}px, 0)`;
-    ptrIndicator.style.opacity = String(Math.min(effectiveDy / 45, 1));
+    ptrIndicator.style.opacity = String(Math.min(effectiveDy / 50, 1));
 
     if (signedDy >= PTR_TRIGGER_THRESHOLD_PX) {
-      ptrIndicator.classList.add('ready');
-      ptrText.innerText = '놓아서 새로고침';
+      if (!ptrIndicator.classList.contains('ready')) {
+        ptrIndicator.classList.add('ready');
+        ptrText.innerText = '놓아서 새로고침';
+        if (navigator.vibrate) {
+          try { navigator.vibrate(10); } catch (_) {}
+        }
+      }
     } else {
       ptrIndicator.classList.remove('ready');
       ptrText.innerText = isBottom ? '올려서 새로고침' : '당겨서 새로고침';
@@ -368,7 +411,7 @@ function initPullToRefresh() {
     if (!isEligible && !isPulling && !pullDirection) return;
     isEligible = false;
 
-    if (pullDirection) {
+    if (pullDirection || isPulling) {
       const wasReady = isPulling && ptrIndicator.classList.contains('ready');
       isPulling = false;
       ptrIndicator.classList.remove('pulling');

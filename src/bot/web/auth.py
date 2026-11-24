@@ -488,4 +488,11 @@ async def cors_middleware(request: web.Request, handler):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    if (
+        request.path.startswith("/js/")
+        or request.path.startswith("/css/")
+        or request.path.endswith(".js")
+        or request.path.endswith(".css")
+    ) and "Cache-Control" not in response.headers:
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response

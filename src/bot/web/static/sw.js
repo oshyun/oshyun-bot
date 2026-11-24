@@ -1,5 +1,5 @@
 // oshyun-bot PWA Service Worker
-const CACHE_NAME = 'oshyun-hub-v16';
+const CACHE_NAME = 'oshyun-hub-v19';
 const CORE_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -40,10 +40,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // WebSocket(/ws), API(/api/*), 인증(/login, /logout), 루트 HTML(/)은 캐시하지 않고 항상 네트워크 직접 전달
+  // WebSocket(/ws), API(/api/*), 인증(/login, /logout), 루트 HTML(/), JS/CSS 코드는 캐시하지 않고 항상 네트워크 직접 전달
   if (
     url.pathname === '/' ||
     url.pathname.endsWith('.html') ||
+    url.pathname.startsWith('/js/') ||
+    url.pathname.startsWith('/css/') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
     url.pathname.startsWith('/ws') ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/login') ||
