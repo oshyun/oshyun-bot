@@ -344,6 +344,110 @@ function parseSubAgentReport(m) {
   };
 }
 
+/**
+ * 주어진 ID가 유효한 하위(서브) 에이전트 대화방 ID인지 검증한다.
+ * 마스터 및 고정 전문가 방, 현재 활성 방은 제외한다.
+ */
+function isValidChildRoomId(id) {
+  if (!id || typeof id !== 'string') return false;
+  const clean = id.trim();
+  if (!clean) return false;
+  const orchIds = (typeof ORCHESTRATOR_ROOM_IDS !== 'undefined' && Array.isArray(ORCHESTRATOR_ROOM_IDS))
+    ? ORCHESTRATOR_ROOM_IDS
+    : [CORE_ROOM_ID, '__expert_vault__', '__expert_coding__', '__expert_general__'];
+  if (orchIds.includes(clean)) return false;
+  if (clean === CORE_ROOM_ID || clean === EXPERT_VAULT_ROOM_ID || clean === EXPERT_CODING_ROOM_ID || clean === EXPERT_GENERAL_ROOM_ID) return false;
+  if (typeof currentRoomId !== 'undefined' && clean === currentRoomId) return false;
+  if (/^room-[a-zA-Z0-9_\-]+$/.test(clean)) return true;
+  if (typeof chatRooms !== 'undefined' && Array.isArray(chatRooms)) {
+    return chatRooms.some(r => r && r.id === clean);
+  }
+  return false;
+}
+
+/**
+ * 메시지 객체 및 파싱 결과로부터 이동 가능한 대상 하위 에이전트 방 ID(childRoomId)를 추출한다.
+ */
+function getChildAgentRoomId(m, parsed = null) {
+  if (!m || typeof m !== 'object') return null;
+
+  // 1. 서브에이전트 보고서 파싱 결과에서 확인
+  const report = parsed || (isSubAgentReportMessage(m) ? parseSubAgentReport(m) : null);
+  if (report) {
+    const rId = String(report.roomId || '').trim();
+    if (rId && isValidChildRoomId(rId)) {
+      return rId;
+    }
+    if (report.roomTitle) {
+      const found = (typeof findChatRoom === 'function' ? findChatRoom(report.roomTitle) : null)
+        || (Array.isArray(chatRooms) ? chatRooms.find(r => r && isValidChildRoomId(r.id) && r.title && r.title.trim().toLowerCase() === report.roomTitle.trim().toLowerCase()) : null);
+      if (found && found.id && isValidChildRoomId(found.id)) {
+        return found.id;
+      }
+    }
+  }
+
+  // 2. 메시지 자체의 bypassedFromRoomId 확인
+  if (m.bypassedFromRoomId && isValidChildRoomId(m.bypassedFromRoomId)) {
+    return String(m.bypassedFromRoomId).trim();
+  }
+
+  // 3. steps 내 subagent_bypass / bypass 스텝 확인
+  if (Array.isArray(m.steps)) {
+    const bStep = m.steps.find(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass'));
+    if (bStep) {
+      const stepRid = bStep.roomId || bStep.bypassedFromRoomId;
+      if (stepRid && isValidChildRoomId(stepRid)) {
+        return String(stepRid).trim();
+      }
+    }
+  }
+
+  // 4. delegatedRooms 배열 확인 (단일 위임 방이거나 유효한 첫 번째 하위 방)
+  const delRooms = Array.isArray(m.delegatedRooms) ? m.delegatedRooms : (Array.isArray(m.delegated_rooms) ? m.delegated_rooms : null);
+  if (delRooms && delRooms.length > 0) {
+    for (const d of delRooms) {
+      if (d && d.roomId && isValidChildRoomId(d.roomId)) {
+        return String(d.roomId).trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 하위 에이전트 말풍선/헤더 클릭 시 안전하게 해당 채팅방으로 화면을 전환한다.
+ * 텍스트 드래그(선택) 복사, 내부 버튼/링크/details 토글 클릭 시에는 방 이동을 방지한다.
+ */
+function handleSafeChildRoomNavigation(ev, targetRoomId) {
+  if (!targetRoomId) return;
+
+  // 1. 텍스트 드래그(선택) 중인 경우 방 이동 방지 (텍스트 복사 UX 보호)
+  const selection = window.getSelection();
+  if (selection && selection.toString().trim().length > 0) {
+    return;
+  }
+
+  // 2. 내부 상호작용 요소 클릭 방지 (버튼, 링크, 입력창, details/summary 토글, msg-actions, 코드블록 등)
+  const target = ev.target;
+  if (!target) return;
+  const isInteractive = Boolean(target.closest(
+    'button, a, input, textarea, summary, details, .msg-actions, .steps, .bubble-expand-btn, pre, code'
+  ));
+  if (isInteractive) return;
+
+  // 3. 브라우저 단축키/새 탭 키(Cmd, Ctrl, Shift) 클릭 방지
+  if (ev.metaKey || ev.ctrlKey || ev.shiftKey) return;
+
+  ev.preventDefault();
+  ev.stopPropagation();
+
+  if (typeof selectRoom === 'function') {
+    selectRoom(targetRoomId);
+  }
+}
+
 function buildQueueStatusTagDom(idx, orderNum) {
   const qTag = document.createElement('div');
   qTag.className = 'queue-status-tag';
@@ -873,8 +977,14 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
 
   if (isSubAgent) {
     const parsed = parseSubAgentReport(m);
+    const childRoomId = getChildAgentRoomId(m, parsed);
     if (parsed.statusKind === 'error') {
       row.classList.add('is-error');
+    }
+    if (childRoomId) {
+      row.setAttribute('data-child-room-id', childRoomId);
+      row.classList.add('is-child-navigable');
+      row.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
     }
     if (isQueued) {
       row.appendChild(buildQueueStatusTagDom(idx, qOrder || m.queuePos || 1));
@@ -882,19 +992,30 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
 
     const head = document.createElement('div');
     head.className = 'assistant-head';
+    if (childRoomId) {
+      head.classList.add('is-child-clickable');
+      head.setAttribute('data-child-room-id', childRoomId);
+      head.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
+    }
     const avatarErrCls = parsed.statusKind === 'error' ? ' is-error' : '';
     const tagTitleAttr = parsed.badgeTitle ? ` title="${escapeHtml(parsed.badgeTitle)}"` : '';
-    const matchedSubRoom = parsed.roomId ? getRoomById(parsed.roomId) : (parsed.roomTitle ? findChatRoom(parsed.roomTitle) : null);
-    const navSubTarget = (matchedSubRoom && matchedSubRoom.id) || parsed.roomId || (matchedSubRoom ? matchedSubRoom.title : (findChatRoom(parsed.roomTitle) ? parsed.roomTitle : ''));
+    const matchedSubRoom = (childRoomId && getRoomById(childRoomId)) || (parsed.roomId ? getRoomById(parsed.roomId) : (parsed.roomTitle ? findChatRoom(parsed.roomTitle) : null));
+    const navSubTarget = childRoomId || (matchedSubRoom && matchedSubRoom.id) || parsed.roomId || (matchedSubRoom ? matchedSubRoom.title : (findChatRoom(parsed.roomTitle) ? parsed.roomTitle : ''));
     const displaySubTitle = parsed.roomTitle || (matchedSubRoom && matchedSubRoom.title) || navSubTarget;
+    if (childRoomId) {
+      head.setAttribute('title', `클릭 시 [${displaySubTitle}] 채팅방으로 이동`);
+    }
     const roomChipHtml = navSubTarget
-      ? `<button type="button" class="sub-agent-room-btn" onclick="openSubSessionChip('${escapeHtml(navSubTarget)}', '${escapeHtml(displaySubTitle)}')" title="우측 스레드 패널에서 하위 세션 열람">${escapeHtml(displaySubTitle)}</button>`
+      ? `<button type="button" class="sub-agent-room-btn" onclick="event.stopPropagation(); ${childRoomId ? `selectRoom('${escapeHtml(childRoomId)}')` : `openSubSessionChip('${escapeHtml(navSubTarget)}', '${escapeHtml(displaySubTitle)}')`};" title="클릭 시 [${escapeHtml(displaySubTitle)}] 채팅방으로 이동">${escapeHtml(displaySubTitle)}<span class="child-nav-hint">↗</span></button>`
       : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || '하위 에이전트')}</span>`;
     head.innerHTML = `<span class="assistant-avatar sub-agent-avatar${avatarErrCls}">${ICONS.spark}</span>${roomChipHtml}<span class="model-tag sub-agent-tag is-${parsed.statusKind}"${tagTitleAttr}>${escapeHtml(parsed.metaBadge)}</span>${buildMsgTimeHtml(m.createdAt)}`;
     row.appendChild(head);
 
     const md = document.createElement('div');
-    md.className = 'md sub-agent-md';
+    md.className = 'md sub-agent-md' + (childRoomId ? ' is-child-clickable' : '');
+    if (childRoomId) {
+      md.setAttribute('title', `클릭 시 [${displaySubTitle}] 채팅방으로 이동`);
+    }
     const bodyLines = parsed.bodyMarkdown.split(/\r?\n/).filter(l => l.trim().length > 0);
     if (bodyLines.length > 4 || parsed.bodyMarkdown.length > 260) {
       const previewText = bodyLines.slice(0, 2).join('\n');
@@ -1068,8 +1189,20 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     }
     row.appendChild(uFooter);
   } else {
+    const childRoomId = getChildAgentRoomId(m);
+    if (childRoomId) {
+      row.setAttribute('data-child-room-id', childRoomId);
+      row.classList.add('is-child-navigable');
+      row.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
+    }
+
     const head = document.createElement('div');
     head.className = 'assistant-head';
+    if (childRoomId) {
+      head.classList.add('is-child-clickable');
+      head.setAttribute('data-child-room-id', childRoomId);
+      head.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
+    }
     const headEffort = m.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
     const modelLabel = m.model ? `<span class="model-tag">${escapeHtml(m.model + (headEffort ? ` (${headEffort})` : ''))}</span>` : '';
     const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);
@@ -1089,7 +1222,15 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(targetThreadRoomId)}', '${escapeHtml(targetThreadTitle || agentInfo.name)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;"><svg class="i" viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드 열기</span></button>`
       : '';
 
-    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
+    let childBadgeHtml = '';
+    if (childRoomId) {
+      const subRoom = getRoomById(childRoomId);
+      const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId);
+      head.setAttribute('title', `클릭 시 [${subRoomTitle}] 채팅방으로 이동`);
+      childBadgeHtml = `<button type="button" class="child-room-badge" onclick="event.stopPropagation(); selectRoom('${escapeHtml(childRoomId)}');" title="클릭 시 [${escapeHtml(subRoomTitle)}] 채팅방으로 이동"><span class="child-room-badge-text">${escapeHtml(subRoomTitle)}</span><span class="child-nav-hint">↗</span></button>`;
+    }
+
+    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${childBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
     row.appendChild(head);
 
     const toolSteps = filterToolSteps(m.steps);
@@ -1122,7 +1263,12 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
 
     if (displayBody && !isErrorMsg) {
       const md = document.createElement('div');
-      md.className = 'md';
+      md.className = 'md' + (childRoomId ? ' is-child-clickable' : '');
+      if (childRoomId) {
+        const subRoom = getRoomById(childRoomId);
+        const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId);
+        md.setAttribute('title', `클릭 시 [${subRoomTitle}] 채팅방으로 이동`);
+      }
       md.innerHTML = m.isHtml ? displayBody : formatMarkdown(displayBody);
       row.appendChild(md);
     } else if (isErrorMsg) {
