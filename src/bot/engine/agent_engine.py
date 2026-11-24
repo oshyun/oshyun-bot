@@ -147,15 +147,12 @@ def _inject_quota_alert_for_agy(
     expert_coding: bool = False,
     agent_id: str | None = None,
 ) -> str:
-    """AGY 엔진은 --append-system-prompt 가 없으므로 쿼터 부족 시 프롬프트 상단에 [QUOTA ALERT] 를 주입한다."""
+    """AGY 엔진은 --append-system-prompt 가 없으므로 프롬프트 상단에 [GEMINI CONSULT] 지침을 주입한다."""
     if (
         orchestrator
-        or expert_vault
-        or expert_coding
-        or agent_id
         or slash_commands
         or not prompt
-        or prompt.lstrip().startswith(("/", "[QUOTA ALERT]"))
+        or prompt.lstrip().startswith(("/", "[GEMINI CONSULT", "[QUOTA ALERT]"))
         or get_engine_instance().name != "agy"
     ):
         return prompt

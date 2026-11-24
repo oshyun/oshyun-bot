@@ -51,9 +51,16 @@
   (subpath (param "JOBS_DIR"))
   ;; claude 스크래치(AGENT_CODE_TMPDIR).
   (subpath (param "AGENT_TMP_DIR"))
-  ;; AGY CLI 설정·설치ID·세션 브레인 디렉토리.
+  ;; AGY CLI 설정·설치ID·세션 브레인 디렉토리 및 전역 gemini 설정.
   (subpath (param "AGY_CLI_HOME"))
   (subpath (param "AGY_HOME"))
+  (subpath (param "GEMINI_DIR"))
+  ;; CLI 실행 경로 (~/.local/bin) 및 전역 에이전트 스킬/스크립트 (~/.agents)
+  (subpath (param "LOCAL_BIN"))
+  (subpath (param "AGENTS_DIR"))
+  ;; 캐시(~/.cache) 및 전역 설정(~/.config) 읽기 (AGY 쿼터 캐시, API 키 파일 등)
+  (subpath (param "CACHE_DIR"))
+  (subpath (param "CONFIG_DIR"))
   ;; 인증: macOS Keychain DB(암호화·securityd ACL 보호) + 프레임워크가 읽는 prefs.
   ;; claude 의 OAuth 토큰이 로그인 Keychain 에 저장되므로 read 가 필요하다.
   (subpath (param "LIB_KEYCHAINS"))

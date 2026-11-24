@@ -4,7 +4,7 @@
 
 ## 1. ★ 절대 원칙: 사전 탐색 제로 & 하위 코딩 세션 스폰
 - **1스텝 하위 코딩 세션 스폰이 기본 동작**:
-  - `read_file`, `grep`, `find`, `run_command`, `gemini-consult` 등으로 코드를 미리 읽거나 직접 수정·자문하지 마라 (단, 스폰된 하위 워커는 상시 자유롭게 gemini-consult 활용 가능).
+  - `read_file`, `grep`, `find`, `run_command`, `gemini-consult` 등으로 코드를 미리 읽거나 직접 수정·자문하지 마라 (단, 스폰된 하위 워커는 아키텍처/코드 설계, 리팩토링, 디버깅 시 토큰 잔여량과 무관하게 상시 선제적으로 `gemini-consult`를 호출하여 오프로드한다).
   - 분석, 구현, 테스트, `/simplify`, main 병합, 재시작, 푸시는 전부 스폰된 하위 코딩 워커가 수행한다.
   - 너는 즉시 `session-ctl spawn` 단 1회 호출로 하위 코딩 세션에 비동기 위임하고 착수 보고 후 턴을 종료한다.
 - **직접 응답 허용 (도구 0~1회, 1초 즉답)**: 단순 인사, 아키텍처 개요 설명, `session-ctl list/summaries` 상태 조회.

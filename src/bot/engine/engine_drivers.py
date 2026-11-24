@@ -93,28 +93,26 @@ def get_quota_alert_prompt(
     threshold: float = 50.0,
     cache_file: str | None = None,
 ) -> str:
-    """AGY Gemini 잔여 쿼터가 threshold 미만이면 런타임 [QUOTA ALERT] 지시문을 반환한다."""
+    """토큰 잔여량 조건과 무관하게 상시 적극 의사결정 오프로드 지침을 반환한다."""
     usage = get_cached_agy_usage(allow_refresh=False, cache_file=cache_file)
-    if not isinstance(usage, dict):
-        return ""
-    five_pct = (usage.get("five_hour") or {}).get("pct")
-    weekly_pct = (usage.get("weekly") or {}).get("pct")
-    candidates = [float(p) for p in (five_pct, weekly_pct) if isinstance(p, (int, float))]
-    if not candidates:
-        return ""
-    min_pct = min(candidates)
-    if min_pct >= threshold:
-        return ""
-    parts = []
-    if five_pct is not None:
-        parts.append(f"5시간 {five_pct:.1f}%")
-    if weekly_pct is not None:
-        parts.append(f"주간 {weekly_pct:.1f}%")
-    status_str = ", ".join(parts)
+    quota_info = ""
+    if isinstance(usage, dict):
+        five_pct = (usage.get("five_hour") or {}).get("pct")
+        weekly_pct = (usage.get("weekly") or {}).get("pct")
+        parts = []
+        if five_pct is not None:
+            parts.append(f"5시간 {five_pct:.1f}%")
+        if weekly_pct is not None:
+            parts.append(f"주간 {weekly_pct:.1f}%")
+        if parts:
+            quota_info = f" (현재 AGY 잔여: {', '.join(parts)})"
+
     return (
-        f"[QUOTA ALERT] 현재 AGY Gemini 잔여 쿼터가 부족합니다({status_str}; 최저 {min_pct:.1f}% < {threshold:.0f}%). "
-        "고난도 추론·원인 분석·코드/아키텍처 설계·리팩토링 작업 시 자체 AGY 토큰을 소모하지 말고 "
-        "1차 도구로 `gemini-consult` (`gemini-consult \"<질의 3~5줄 요약>\"` 또는 `~/.local/bin/gemini-consult`)를 호출하여 오프로드하세요."
+        f"[GEMINI CONSULT 상시 적극 오프로드 지침{quota_info}]\n"
+        "- **AGY 토큰 보존 및 제2의견(Second Opinion) 확보**: 잔여 쿼터와 무관하게, 자체 AGY 토큰으로 길게 고민하거나 추론하지 마세요.\n"
+        "- **선제적 호출 필수 상황**: 아키텍처/코드 설계, 라이브러리/자료구조 선택, 리팩토링 방안 검증, 디버깅 원인 분석/가설 수립, 2가지 이상 비교, 복잡한 로직 및 엣지 케이스 점검.\n"
+        "- **표준 실행 도구**: `gemini-consult \"<쟁점 및 선택지 3~5줄 요약>\"` (또는 `~/.local/bin/gemini-consult`)\n"
+        "- **Flash 모델 기반**: 단발성 질의로 비용 부담 없이 자유롭게 호출하여 결정을 신속히 확정하세요."
     )
 
 
@@ -426,7 +424,7 @@ class ClaudeEngine(BaseEngine):
             web=web,
             agent_id=agent_id,
         )
-        if not is_agent_mode:
+        if not orchestrator:
             quota_alert = get_quota_alert_prompt()
             if quota_alert:
                 system_prompt = f"{system_prompt}\n\n{quota_alert}" if system_prompt else quota_alert
