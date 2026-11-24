@@ -41,20 +41,26 @@ class TestQuotaAlertInjection(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_path = os.path.join(tmpdir, "agy_quota_cache.json")
 
-            # 캐시 없음 -> 빈 문자열
-            self.assertEqual(engine_drivers.get_quota_alert_prompt(cache_file=cache_path), "")
+            # 캐시 없음 -> 잔여 쿼터 수치 없이 상시 지침 반환
+            alert_no_cache = engine_drivers.get_quota_alert_prompt(cache_file=cache_path)
+            self.assertIn("[GEMINI CONSULT 상시 적극 오프로드 지침]", alert_no_cache)
+            self.assertIn("gemini-consult", alert_no_cache)
+            self.assertIn("~/.local/bin/gemini-consult", alert_no_cache)
 
-            # 50% 이상 -> 빈 문자열
+            # 50% 이상 -> 잔여량 조건 없이 상시 반환하며 쿼터 정보 표기
             self._write_cache(cache_path, weekly_pct=62.0, five_pct=80.0)
-            self.assertEqual(engine_drivers.get_quota_alert_prompt(cache_file=cache_path), "")
+            alert_high = engine_drivers.get_quota_alert_prompt(cache_file=cache_path)
+            self.assertIn("[GEMINI CONSULT 상시 적극 오프로드 지침", alert_high)
+            self.assertIn("62.0%", alert_high)
+            self.assertIn("gemini-consult", alert_high)
 
-            # 50% 미만 -> [QUOTA ALERT] 반환
+            # 50% 미만 -> 상시 반환하며 쿼터 정보 표기
             self._write_cache(cache_path, weekly_pct=18.3, five_pct=73.5)
-            alert = engine_drivers.get_quota_alert_prompt(cache_file=cache_path)
-            self.assertIn("[QUOTA ALERT]", alert)
-            self.assertIn("18.3%", alert)
-            self.assertIn("gemini-consult", alert)
-            self.assertIn("~/.local/bin/gemini-consult", alert)
+            alert_low = engine_drivers.get_quota_alert_prompt(cache_file=cache_path)
+            self.assertIn("[GEMINI CONSULT 상시 적극 오프로드 지침", alert_low)
+            self.assertIn("18.3%", alert_low)
+            self.assertIn("gemini-consult", alert_low)
+            self.assertIn("~/.local/bin/gemini-consult", alert_low)
 
     def test_claude_engine_injects_quota_alert_into_system_prompt(self):
         engine = engine_drivers.ClaudeEngine()
@@ -110,19 +116,16 @@ class TestQuotaAlertInjection(unittest.TestCase):
                 "일반",
             )
 
-            # 마스터/전문가 -> 미주입
+            # 마스터(오케스트레이터) -> 미주입
             self.assertEqual(
                 agent_engine._inject_quota_alert_for_agy("위임", orchestrator=True),
                 "위임",
             )
-            self.assertEqual(
-                agent_engine._inject_quota_alert_for_agy("위임", expert_coding=True),
-                "위임",
-            )
-            self.assertEqual(
-                agent_engine._inject_quota_alert_for_agy("위임", expert_vault=True),
-                "위임",
-            )
+            # 전문가/실무 세션 -> 상시 주입됨
+            injected_coding = agent_engine._inject_quota_alert_for_agy("위임", expert_coding=True)
+            self.assertTrue(injected_coding.startswith(fake_alert))
+            injected_vault = agent_engine._inject_quota_alert_for_agy("위임", expert_vault=True)
+            self.assertTrue(injected_vault.startswith(fake_alert))
 
 
 if __name__ == "__main__":
