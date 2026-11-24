@@ -1050,10 +1050,17 @@ async function openThreadPanel(taskId, roomId, title = '') {
     }
   }
 
-  // roomId를 여전히 못 찾았고 title이 있다면 chatRooms 및 findChatRoom 검색
+  // roomId를 여전히 못 찾았고 title이 있다면 chatRooms 및 findChatRoom 검색 (필요 시 서버 동기화 1회 시도)
   if (!roomId && title) {
-    const roomByTitle = (typeof findChatRoom === 'function' ? findChatRoom(title) : null) ||
+    let roomByTitle = (typeof findChatRoom === 'function' ? findChatRoom(title) : null) ||
       (Array.isArray(chatRooms) ? chatRooms.find(r => r && (r.title === title || (r.title && r.title.trim().toLowerCase() === title.trim().toLowerCase()))) : null);
+    if (!roomByTitle && typeof syncRoomsWithServer === 'function') {
+      try {
+        await syncRoomsWithServer();
+        roomByTitle = (typeof findChatRoom === 'function' ? findChatRoom(title) : null) ||
+          (Array.isArray(chatRooms) ? chatRooms.find(r => r && (r.title === title || (r.title && r.title.trim().toLowerCase() === title.trim().toLowerCase()))) : null);
+      } catch (_) {}
+    }
     if (roomByTitle && roomByTitle.id) {
       roomId = roomByTitle.id;
     }
