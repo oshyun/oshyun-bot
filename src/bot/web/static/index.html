@@ -45,6 +45,7 @@
   <link rel="stylesheet" href="/css/views-modals.css?v=18">
   <link rel="stylesheet" href="/css/responsive.css?v=18">
   <link rel="stylesheet" href="/css/master-inspector.css?v=18">
+  <link rel="stylesheet" href="/css/prompts-center.css?v=18">
 </head>
 <body>
   <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeRoomDrawer()"></div>
@@ -480,7 +481,19 @@
             </div>
 
             <div class="settings-group">
-              <div class="settings-group-title">에이전트</div>
+              <div class="settings-group-title">에이전트 및 프롬프트 체계</div>
+              <!-- 시스템 프롬프트 & 인스트럭션 센터 바로가기 배너 -->
+              <div class="settings-prompts-banner-card" onclick="openPromptsCenterModal()" style="cursor:pointer;" title="시스템 프롬프트 & 인스트럭션 센터 열기">
+                <div class="settings-prompts-banner-left">
+                  <div class="settings-prompts-banner-icon">⚡</div>
+                  <div>
+                    <div class="settings-prompts-banner-title">시스템 프롬프트 &amp; 인스트럭션 센터</div>
+                    <div class="settings-prompts-banner-desc">공통 시스템 지침, 채널별 기본 원칙 및 에이전트별 런타임 지침을 투명하게 확인하고 수정합니다</div>
+                  </div>
+                </div>
+                <button type="button" class="btn sm accent" onclick="event.stopPropagation(); openPromptsCenterModal()">열기</button>
+              </div>
+
               <div class="settings-card">
                 <div class="setting-row">
                   <div><div class="setting-label">엔진</div><div class="setting-desc">질문을 처리할 에이전트</div></div>
@@ -1043,7 +1056,10 @@
             </div>
           </div>
         </div>
-        <button type="button" class="icon-btn" onclick="closeAgentConfigModal()"><svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button type="button" class="btn xs ghost" onclick="closeAgentConfigModal(); openPromptsCenterModal(editingAgentId)" title="전체 시스템 프롬프트 &amp; 인스트럭션 센터 열기" style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:3px 8px;">⚡ 전체 프롬프트 센터</button>
+          <button type="button" class="icon-btn" onclick="closeAgentConfigModal()"><svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
       </div>
 
       <!-- 상단 에이전트 선택 탭 바 (+ 새 에이전트 추가) -->
@@ -1237,6 +1253,124 @@
     </div>
   </div>
 
+  <!-- ═══ 시스템 프롬프트 & 인스트럭션 투명 센터 모달 ═══ -->
+  <div id="modal-prompts-center" class="modal-overlay" onclick="onModalBackdropClick(event, 'modal-prompts-center')">
+    <div class="modal-card prompts-center-modal-card">
+      <div class="prompts-center-header">
+        <div class="prompts-center-head-left">
+          <div class="prompts-center-icon-badge">⚡</div>
+          <div>
+            <div class="prompts-center-title">시스템 프롬프트 &amp; 인스트럭션 센터</div>
+            <div class="prompts-center-subtitle">공통 시스템 지침, 채널별 기본 원칙 및 에이전트 런타임 프롬프트를 투명하게 검사하고 수정합니다</div>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" onclick="closePromptsCenterModal()"><svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+
+      <div class="prompts-center-layout">
+        <!-- 좌측 지침 목록 사이드바 -->
+        <div class="prompts-center-sidebar" id="prompts-center-sidebar-content"></div>
+
+        <!-- 우측 메인 에디터 및 인스펙터 -->
+        <div class="prompts-center-main">
+          <div class="prompt-editor-topbar">
+            <div class="prompt-editor-meta">
+              <span class="prompt-editor-title" id="prompt-editor-title">지침 선택</span>
+              <span class="prompt-tag" id="prompt-editor-badge">기본 원본 유지</span>
+              <span class="prompt-tag scope" id="prompt-editor-scope">주입 범위</span>
+            </div>
+            <div class="prompt-editor-actions">
+              <button type="button" class="btn ghost sm" id="btn-prompt-reset" onclick="resetCurrentPromptLayer()" style="display:none;">초기 기본값 복원</button>
+              <button type="button" class="btn accent sm" id="btn-prompt-save" onclick="saveCurrentPromptLayer()">저장 및 즉시 반영</button>
+            </div>
+          </div>
+
+          <!-- 탭 바 -->
+          <div class="prompt-tabs-bar">
+            <button type="button" class="prompt-tab-btn active" id="tab-prompt-edit" onclick="switchPromptTab('edit')">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <span>인스트럭션 편집 (Edit)</span>
+            </button>
+            <button type="button" class="prompt-tab-btn" id="tab-prompt-assembled" onclick="switchPromptTab('assembled')">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>최종 조립 투명 조회 (Assembled Preview)</span>
+            </button>
+            <button type="button" class="prompt-tab-btn" id="tab-prompt-default" onclick="switchPromptTab('default')">
+              <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>리포 기본 원본 (Default Reference)</span>
+            </button>
+          </div>
+
+          <!-- 본문 패널 -->
+          <div class="prompt-panel-content">
+            <!-- [탭 1] 에디터 -->
+            <div id="pane-prompt-edit">
+              <div class="prompt-textarea-wrap">
+                <textarea id="prompt-editor-textarea" class="prompt-code-textarea" placeholder="시스템 프롬프트/인스트럭션 본문..." oninput="updatePromptCounters()"></textarea>
+                <div class="prompt-status-counter">
+                  <span id="prompt-editor-counter">0자 · 0줄</span>
+                  <span>저장 시 런타임 파일에 즉시 동기화되며 실행 엔진에 반영됩니다.</span>
+                </div>
+              </div>
+
+              <!-- 에이전트 전용: 하위 세션 템플릿 영역 -->
+              <div id="prompt-agent-child-section" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <label for="prompt-agent-child-textarea" style="font-size:13px;font-weight:700;color:var(--text);">하위 세션 스폰 자동 주입 템플릿 (동작 규칙)</label>
+                  <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-text);cursor:pointer;font-weight:600;">
+                    <input type="checkbox" id="prompt-agent-child-inject" checked>
+                    <span>하위 작업 지시 시 자동 주입</span>
+                  </label>
+                </div>
+                <textarea id="prompt-agent-child-textarea" class="prompt-code-textarea" rows="4" style="min-height:90px;" placeholder="[하위 워커 동작 규칙]..."></textarea>
+              </div>
+            </div>
+
+            <!-- [탭 2] 최종 조립 투명 조회 -->
+            <div id="pane-prompt-assembled" style="display:none;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:700;color:var(--text);">실제 봇 실행 시 모델(agy/claude)에 주입되는 계층별 프롬프트 분해</div>
+                <button type="button" class="btn ghost xs" onclick="copyAssembledPrompt()">조립 프롬프트 복사</button>
+              </div>
+              <div id="prompt-layers-breakdown" class="prompt-layer-breakdown"></div>
+
+              <div class="prompt-assembly-card">
+                <div class="prompt-assembly-head">
+                  <span>최종 조립 시스템 프롬프트 (Assembled Full System Prompt)</span>
+                  <span style="font-size:11px;font-weight:normal;color:var(--text-3);">--add-dir 및 런타임 지침 결합본</span>
+                </div>
+                <pre class="prompt-assembly-code" id="prompt-assembled-full-text"></pre>
+              </div>
+
+              <div id="prompt-preview-child-wrap" style="margin-top:14px;">
+                <div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px;">하위 세션 전달 사용자 프롬프트 시뮬레이션</div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <input type="text" id="prompt-preview-sample-task" class="input sm" value="최근 데이터 확인 및 요약 보고서 작성해줘" oninput="refreshAssembledPreviewSample()">
+                  <button type="button" class="btn sm ghost" onclick="refreshAssembledPreviewSample()">새로고침</button>
+                </div>
+                <pre class="prompt-assembly-code" id="prompt-assembled-child-text" style="max-height:120px;"></pre>
+              </div>
+            </div>
+
+            <!-- [탭 3] 리포 기본 원본 보기 -->
+            <div id="pane-prompt-default" style="display:none;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:700;color:var(--text);">리포지토리 기본 원본 지침 (Read-Only Reference)</div>
+                <button type="button" class="btn ghost xs" onclick="copyDefaultPrompt()">원본 복사</button>
+              </div>
+              <div class="prompt-assembly-card">
+                <div class="prompt-assembly-head">
+                  <span>src/bot/instructions/... 초기 정의 내용</span>
+                </div>
+                <pre class="prompt-assembly-code" id="prompt-default-ref-text"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script src="/js/core.js?v=18"></script>
@@ -1251,6 +1385,7 @@
   <script src="/js/voice.js?v=18"></script>
   <script src="/js/vault.js?v=18"></script>
   <script src="/js/settings.js?v=18"></script>
+  <script src="/js/prompts-center.js?v=18"></script>
   <script src="/js/init.js?v=18"></script>
   <script src="/js/automation.js?v=18"></script>
 </body>

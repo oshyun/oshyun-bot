@@ -65,7 +65,7 @@ from bot.web.automation import handle_burn_run, handle_burn_status, handle_burn_
 from bot.web.rooms import CORE_ORCHESTRATOR_TITLE, HIDDEN_ROOMS_FILE, _append_room_message, _load_chat_rooms_index, _load_hidden_rooms, _load_room_messages, _save_hidden_room, _update_room_metadata, handle_api_delete_session, handle_api_rename_room, handle_api_room_settings, handle_api_upload, handle_chat_history, handle_chat_rooms, handle_chat_rooms_backup, handle_chat_rooms_backup_save, handle_get_attachment, handle_archive_chat_room, handle_batch_archive_chat_rooms, handle_search_chat_rooms
 
 import bot.core.agent_configs as agent_configs
-from bot.web.orchestrator import _WebServerSupervisorHost, _resolve_orchestrator_target_room, handle_orchestrator_agent_delete, handle_orchestrator_agent_preview, handle_orchestrator_agent_upsert, handle_orchestrator_agents_get, handle_orchestrator_archive_session, handle_orchestrator_dispatch, handle_orchestrator_graph, handle_orchestrator_memory_get, handle_orchestrator_memory_post, handle_orchestrator_skill_post, handle_orchestrator_notify, handle_orchestrator_patrol_trigger, handle_orchestrator_read, handle_orchestrator_reset, handle_orchestrator_sessions, handle_orchestrator_summaries, handle_orchestrator_summary_update, handle_orchestrator_room_mark_read, handle_orchestrator_task_update, handle_orchestrator_tasks, handle_task_events_callback, reset_core_orchestrator_state
+from bot.web.orchestrator import _WebServerSupervisorHost, _resolve_orchestrator_target_room, handle_orchestrator_agent_delete, handle_orchestrator_agent_preview, handle_orchestrator_agent_upsert, handle_orchestrator_agents_get, handle_orchestrator_archive_session, handle_orchestrator_dispatch, handle_orchestrator_graph, handle_orchestrator_memory_get, handle_orchestrator_memory_post, handle_orchestrator_skill_post, handle_orchestrator_notify, handle_orchestrator_patrol_trigger, handle_orchestrator_read, handle_orchestrator_reset, handle_orchestrator_sessions, handle_orchestrator_summaries, handle_orchestrator_summary_update, handle_orchestrator_room_mark_read, handle_orchestrator_task_update, handle_orchestrator_tasks, handle_prompt_detail, handle_prompt_reset, handle_prompt_save, handle_prompts_list, handle_task_events_callback, reset_core_orchestrator_state
 
 from bot.web.ws import handle_websocket
 
@@ -540,6 +540,12 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_get("/api/attachments/{filename}", handle_get_attachment)
     web_app.router.add_post("/api/upload", handle_api_upload)
     web_app.router.add_post("/api/attachments/upload", handle_api_upload)
+
+    # 시스템 프롬프트 및 인스트럭션 투명 조회/수정/복원 REST API
+    web_app.router.add_get("/api/prompts", handle_prompts_list)
+    web_app.router.add_get("/api/prompts/detail", handle_prompt_detail)
+    web_app.router.add_post("/api/prompts/save", handle_prompt_save)
+    web_app.router.add_post("/api/prompts/reset", handle_prompt_reset)
 
     # 총괄 에이전트 (Core Orchestrator) 모니터 REST API
     web_app.router.add_get("/api/orchestrator/agents", handle_orchestrator_agents_get)

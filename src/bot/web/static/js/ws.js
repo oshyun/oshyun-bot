@@ -765,6 +765,13 @@ function handleWsEvent(data) {
     }
     return;
   }
+  if (data.type === 'prompt_layers_updated') {
+    const modal = document.getElementById('modal-prompts-center');
+    if (modal && modal.classList.contains('open') && typeof window.selectPromptLayer === 'function') {
+      window.selectPromptLayer(data.targetId || 'common', true);
+    }
+    return;
+  }
   if (data.type === 'session_reset') {
     if (data.roomId && (data.roomId === CORE_ROOM_ID || ORCHESTRATOR_ROOM_IDS.includes(data.roomId))) {
       applyOrchestratorSessionResetLocal(data.roomId, data);

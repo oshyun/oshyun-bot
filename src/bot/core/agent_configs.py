@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from bot.core.json_store import read_json, write_json_atomic
-from bot.core.paths import AGENT_CONFIGS_FILE, CODEDIR, INSTRUCTIONS_DIR, RUNTIME_INSTRUCTIONS_DIR, WORKDIR
+from bot.core.paths import AGENT_CONFIGS_FILE, CODEDIR, CUSTOM_INSTRUCTIONS_DIR, INSTRUCTIONS_DIR, RUNTIME_INSTRUCTIONS_DIR, WORKDIR
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 EXPERT_GENERAL_ROOM_ID = "__expert_general__"
@@ -682,3 +682,354 @@ def build_agent_prompt_preview(
             "cliInvocation": agy_child_cli_preview,
         },
     }
+
+
+# ==============================================================================
+# 시스템 프롬프트 및 인스트럭션 투명 조회/수정/복원 통합 관리 체계
+# ==============================================================================
+
+GLOBAL_INSTRUCTION_TARGETS: dict[str, dict[str, str]] = {
+    "common": {
+        "id": "common",
+        "name": "전체 공통 시스템 지침 (Common Rules)",
+        "category": "global",
+        "emoji": "🌐",
+        "color": "#10b981",
+        "description": "모든 에이전트와 대화방이 상속하는 최상위 공통 행동 원칙, 도구 규칙, Obsidian 볼트 탐색 및 응답 가이드라인",
+        "injectScope": "모든 CLI 실행 시 최우선 지침(--add-dir common)으로 주입",
+    },
+    "web": {
+        "id": "web",
+        "name": "웹 대화 기본 지침 (Web Chat Rules)",
+        "category": "channel",
+        "emoji": "💬",
+        "color": "#64748b",
+        "description": "웹/모바일 브라우저 사용자 대화 전용 마크다운 서식, obsid.net 위키링크 및 간결한 결론 중심 보고 원칙",
+        "injectScope": "일반 대화 및 웹 채널 기본 실행 시(--add-dir web) 주입",
+    },
+    "coding": {
+        "id": "coding",
+        "name": "코딩 모드 기본 지침 (Coding Mode Rules)",
+        "category": "channel",
+        "emoji": "💻",
+        "color": "#3b82f6",
+        "description": "코드 저장소 직접 편집 및 일반 코딩 모드 실행 시 적용되는 개발 원칙",
+        "injectScope": "코딩 모드 세션 실행 시(--add-dir coding) 주입",
+    },
+}
+
+
+def _read_custom_instruction(mode: str) -> str:
+    """사용자가 수정한 커스텀 지침 파일 내용을 읽는다."""
+    path = os.path.join(CUSTOM_INSTRUCTIONS_DIR, mode, "AGENTS.md")
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            pass
+    return ""
+
+
+def _write_custom_instruction(mode: str, content: str) -> str:
+    """사용자 커스텀 지침을 data/state/custom_instructions/<mode>/AGENTS.md 에 안전하게 기록한다."""
+    target_dir = os.path.join(CUSTOM_INSTRUCTIONS_DIR, mode)
+    os.makedirs(target_dir, exist_ok=True)
+    target_file = os.path.join(target_dir, "AGENTS.md")
+    clean_text = str(content or "").strip()
+    with open(target_file, "w", encoding="utf-8") as f:
+        f.write(clean_text + ("\n" if clean_text else ""))
+    return target_file
+
+
+def _delete_custom_instruction(mode: str) -> bool:
+    """커스텀 지침 파일을 삭제하여 리포지토리 기본값으로 복귀한다."""
+    target_file = os.path.join(CUSTOM_INSTRUCTIONS_DIR, mode, "AGENTS.md")
+    if os.path.isfile(target_file):
+        try:
+            os.remove(target_file)
+            return True
+        except OSError:
+            pass
+    return False
+
+
+def list_all_prompt_layers() -> list[dict[str, Any]]:
+    """앱에서 투명하게 확인하고 수정할 수 있는 모든 시스템 프롬프트/인스트럭션 레이어 목록을 반환한다."""
+    results: list[dict[str, Any]] = []
+
+    # 1. 글로벌 및 채널 기본 지침 (common, web, coding)
+    for mode, meta in GLOBAL_INSTRUCTION_TARGETS.items():
+        default_content = _read_repo_instruction(mode)
+        custom_content = _read_custom_instruction(mode)
+        has_custom = bool(custom_content and custom_content != default_content)
+        current_content = custom_content if has_custom else default_content
+        custom_file = os.path.join(CUSTOM_INSTRUCTIONS_DIR, mode, "AGENTS.md")
+        repo_file = os.path.join(INSTRUCTIONS_DIR, mode, "AGENTS.md")
+        active_path = custom_file if has_custom else repo_file
+
+        mtime = None
+        if has_custom and os.path.isfile(custom_file):
+            try:
+                mtime = os.path.getmtime(custom_file)
+            except OSError:
+                pass
+
+        results.append({
+            "id": mode,
+            "targetType": "global" if meta["category"] == "global" else "channel",
+            "category": meta["category"],
+            "name": meta["name"],
+            "emoji": meta["emoji"],
+            "color": meta["color"],
+            "description": meta["description"],
+            "injectScope": meta["injectScope"],
+            "isCustomized": has_custom,
+            "isBuiltin": True,
+            "canDelete": False,
+            "charCount": len(current_content),
+            "lineCount": len(current_content.splitlines()) if current_content else 0,
+            "activePath": active_path,
+            "updatedAt": mtime,
+        })
+
+    # 2. 에이전트별 지침 (__core__, __expert_vault__, __expert_coding__, __expert_general__, 커스텀 에이전트)
+    all_agents = list_agent_configs()
+    defaults_map = _builtin_defaults()
+
+    for ag in all_agents:
+        ag_id = str(ag.get("id") or "").strip()
+        is_builtin = bool(ag.get("isBuiltin"))
+        repo_mode = _BUILTIN_REPO_MODE_MAP.get(ag_id)
+        default_content = _read_repo_instruction(repo_mode) if repo_mode else (
+            defaults_map.get(ag_id, {}).get("systemPrompt") or ""
+        )
+        cur_content = str(ag.get("systemPrompt") or "").strip()
+        has_custom = bool(cur_content and cur_content != default_content)
+
+        scope_desc = f"{ag.get('name')} 방 대화 및 세션 실행 시 단독/결합 주입"
+        if ag_id == CORE_ORCHESTRATOR_ROOM_ID:
+            scope_desc = "마스터 총괄 오케스트레이터 세션 실행 시 단독 주입"
+        elif ag.get("childPromptTemplate"):
+            scope_desc = f"{ag.get('name')} 방 지침 및 하위 세션 위임 시 동작 규칙 주입"
+
+        results.append({
+            "id": ag_id,
+            "targetType": "agent",
+            "category": "agent",
+            "name": f"{ag.get('name')} 지침",
+            "emoji": ag.get("emoji") or "🤖",
+            "color": ag.get("color") or "#3b82f6",
+            "description": ag.get("roleDescription") or f"{ag.get('name')} 전용 시스템 지침",
+            "injectScope": scope_desc,
+            "isCustomized": has_custom,
+            "isBuiltin": is_builtin,
+            "canDelete": not is_builtin,
+            "charCount": len(cur_content),
+            "lineCount": len(cur_content.splitlines()) if cur_content else 0,
+            "childPromptTemplate": ag.get("childPromptTemplate") or "",
+            "injectChildTemplate": ag.get("injectChildTemplate") is not False,
+            "updatedAt": ag.get("updatedAt"),
+        })
+
+    return results
+
+
+def get_prompt_layer_detail(target_id: str, sample_task: str = "") -> dict[str, Any]:
+    """특정 프롬프트 레이어의 원본 기본값, 현재 활성 지침, 그리고 실제 런타임에 결합되는 최종 시스템 프롬프트를 상세 분해 반환한다."""
+    clean_id = str(target_id or "").strip()
+    common_repo = _read_repo_instruction("common")
+    common_custom = _read_custom_instruction("common")
+    common_active = common_custom if common_custom else common_repo
+
+    sample = str(sample_task or "").strip() or "최근 볼트 노트의 상태를 점검하고 요약 보고서를 작성해줘."
+
+    # 1. 글로벌/채널 지침 (common, web, coding)
+    if clean_id in GLOBAL_INSTRUCTION_TARGETS:
+        meta = GLOBAL_INSTRUCTION_TARGETS[clean_id]
+        default_content = _read_repo_instruction(clean_id)
+        custom_content = _read_custom_instruction(clean_id)
+        has_custom = bool(custom_content and custom_content != default_content)
+        current_content = custom_content if has_custom else default_content
+
+        layers: list[dict[str, Any]] = []
+        if clean_id == "common":
+            layers.append({
+                "layer": 1,
+                "title": "공통 시스템 지침 (Common)",
+                "description": "모든 에이전트/모드 공통 행동 원칙",
+                "content": current_content,
+                "charCount": len(current_content),
+            })
+            assembled = current_content
+        else:
+            layers.append({
+                "layer": 1,
+                "title": "공통 상속 지침 (Common)",
+                "description": "최상위 공통 시스템 원칙",
+                "content": common_active,
+                "charCount": len(common_active),
+            })
+            layers.append({
+                "layer": 2,
+                "title": f"{meta['name']} (Mode Specific)",
+                "description": meta["description"],
+                "content": current_content,
+                "charCount": len(current_content),
+            })
+            assembled = f"{common_active}\n\n{current_content}".strip() if common_active else current_content
+
+        return {
+            "ok": True,
+            "id": clean_id,
+            "targetType": "global" if meta["category"] == "global" else "channel",
+            "category": meta["category"],
+            "name": meta["name"],
+            "emoji": meta["emoji"],
+            "color": meta["color"],
+            "description": meta["description"],
+            "injectScope": meta["injectScope"],
+            "isCustomized": has_custom,
+            "isBuiltin": True,
+            "canDelete": False,
+            "defaultContent": default_content,
+            "currentContent": current_content,
+            "charCount": len(current_content),
+            "lineCount": len(current_content.splitlines()) if current_content else 0,
+            "assembledSystemPrompt": assembled,
+            "assembledCharCount": len(assembled),
+            "layers": layers,
+            "sampleTask": sample,
+        }
+
+    # 2. 에이전트 지침
+    cfg = get_agent_config(clean_id)
+    if not cfg:
+        defaults_map = _builtin_defaults()
+        if clean_id in defaults_map:
+            cfg = copy.deepcopy(defaults_map[clean_id])
+        else:
+            raise ValueError(f"프롬프트 대상을 찾을 수 없습니다: {clean_id}")
+
+    is_builtin = bool(cfg.get("isBuiltin"))
+    repo_mode = _BUILTIN_REPO_MODE_MAP.get(clean_id)
+    default_content = _read_repo_instruction(repo_mode) if repo_mode else (
+        _builtin_defaults().get(clean_id, {}).get("systemPrompt") or ""
+    )
+    current_content = str(cfg.get("systemPrompt") or "").strip()
+    has_custom = bool(current_content and current_content != default_content)
+
+    child_tpl = str(cfg.get("childPromptTemplate") or "").strip()
+    inject_enabled = bool(cfg.get("injectChildTemplate", True))
+
+    layers = [
+        {
+            "layer": 1,
+            "title": "공통 상속 지침 (Common)",
+            "description": "모든 에이전트가 공유하는 볼트 탐색 및 도구 사용 원칙",
+            "content": common_active,
+            "charCount": len(common_active),
+        },
+        {
+            "layer": 2,
+            "title": f"{cfg.get('name')} 전용 지침 (Agent Specific)",
+            "description": cfg.get("roleDescription") or "에이전트 고유 역할 지침",
+            "content": current_content,
+            "charCount": len(current_content),
+        },
+    ]
+
+    assembled = f"{common_active}\n\n{current_content}".strip() if common_active else current_content
+
+    # 하위 세션 스폰 프롬프트 조립 미리보기
+    if inject_enabled and child_tpl:
+        assembled_child_user_prompt = f"{child_tpl}\n\n[작업 지시]\n{sample}"
+    else:
+        assembled_child_user_prompt = sample
+
+    child_preview = {
+        "childPromptTemplate": child_tpl,
+        "injectChildTemplate": inject_enabled,
+        "sampleTask": sample,
+        "assembledChildUserPrompt": assembled_child_user_prompt,
+    }
+
+    return {
+        "ok": True,
+        "id": clean_id,
+        "targetType": "agent",
+        "category": "agent",
+        "name": f"{cfg.get('name')} 지침",
+        "emoji": cfg.get("emoji") or "🤖",
+        "color": cfg.get("color") or "#3b82f6",
+        "description": cfg.get("roleDescription") or "에이전트 전용 시스템 지침",
+        "injectScope": f"{cfg.get('name')} 방 대화 및 세션 실행 시 자동 주입",
+        "isCustomized": has_custom,
+        "isBuiltin": is_builtin,
+        "canDelete": not is_builtin,
+        "defaultContent": default_content,
+        "currentContent": current_content,
+        "charCount": len(current_content),
+        "lineCount": len(current_content.splitlines()) if current_content else 0,
+        "assembledSystemPrompt": assembled,
+        "assembledCharCount": len(assembled),
+        "layers": layers,
+        "childPreview": child_preview,
+    }
+
+
+def save_prompt_layer(
+    target_id: str,
+    content: str,
+    *,
+    child_prompt: str | None = None,
+    inject_child: bool | None = None,
+) -> dict[str, Any]:
+    """프롬프트 레이어(공통/채널/에이전트)의 시스템 프롬프트를 저장하고 런타임에 즉시 반영한다."""
+    clean_id = str(target_id or "").strip()
+    clean_content = str(content or "").strip()
+
+    if clean_id in GLOBAL_INSTRUCTION_TARGETS:
+        default_content = _read_repo_instruction(clean_id)
+        if clean_content == default_content:
+            _delete_custom_instruction(clean_id)
+        else:
+            _write_custom_instruction(clean_id, clean_content)
+        return get_prompt_layer_detail(clean_id)
+
+    # 에이전트 지침인 경우
+    cfg = get_agent_config(clean_id)
+    if not cfg:
+        defaults_map = _builtin_defaults()
+        if clean_id in defaults_map:
+            cfg = copy.deepcopy(defaults_map[clean_id])
+        else:
+            raise ValueError(f"에이전트를 찾을 수 없습니다: {clean_id}")
+
+    payload: dict[str, Any] = {
+        "id": clean_id,
+        "systemPrompt": clean_content,
+    }
+    if child_prompt is not None:
+        payload["childPromptTemplate"] = str(child_prompt).strip()
+    if inject_child is not None:
+        payload["injectChildTemplate"] = bool(inject_child)
+
+    upsert_agent_config(payload)
+    return get_prompt_layer_detail(clean_id)
+
+
+def reset_prompt_layer(target_id: str) -> dict[str, Any]:
+    """프롬프트 레이어를 초기 리포지토리 기본값으로 복원한다."""
+    clean_id = str(target_id or "").strip()
+    if clean_id in GLOBAL_INSTRUCTION_TARGETS:
+        _delete_custom_instruction(clean_id)
+        return get_prompt_layer_detail(clean_id)
+
+    if clean_id in BUILTIN_AGENT_IDS:
+        reset_builtin_agent_config(clean_id)
+        return get_prompt_layer_detail(clean_id)
+
+    # 커스텀 에이전트의 경우 systemPrompt 비우기
+    upsert_agent_config({"id": clean_id, "systemPrompt": ""})
+    return get_prompt_layer_detail(clean_id)
