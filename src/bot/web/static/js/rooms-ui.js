@@ -120,6 +120,25 @@ function updateSessionBar(options = {}) {
   }
 }
 
+function positionRoomConfigPopover() {
+  const popover = document.getElementById('room-config-popover');
+  const btn = document.getElementById('btn-topbar-model-config');
+  if (!popover || !btn) return;
+  const rect = btn.getBoundingClientRect();
+  const popoverWidth = Math.min(295, window.innerWidth - 16);
+  popover.style.position = 'fixed';
+  popover.style.top = `${rect.bottom + 8}px`;
+  popover.style.width = `${popoverWidth}px`;
+
+  let left = rect.right - popoverWidth;
+  if (left + popoverWidth > window.innerWidth - 8) {
+    left = window.innerWidth - popoverWidth - 8;
+  }
+  if (left < 8) left = 8;
+  popover.style.left = `${left}px`;
+  popover.style.right = 'auto';
+}
+
 function toggleRoomConfigPopover(e) {
   if (e) {
     e.preventDefault();
@@ -137,7 +156,11 @@ function toggleRoomConfigPopover(e) {
 function openRoomConfigPopover() {
   const popover = document.getElementById('room-config-popover');
   const btn = document.getElementById('btn-topbar-model-config');
-  if (popover) popover.classList.add('open');
+  if (typeof closeTopbarCustomizer === 'function') closeTopbarCustomizer();
+  if (popover && btn) {
+    positionRoomConfigPopover();
+    popover.classList.add('open');
+  }
   if (btn) {
     btn.classList.add('menu-open');
     btn.setAttribute('aria-expanded', 'true');
@@ -153,6 +176,199 @@ function closeRoomConfigPopover() {
     btn.classList.remove('menu-open');
     btn.setAttribute('aria-expanded', 'false');
   }
+}
+
+// ─── 상단바 버튼 표시 커스텀 & 가로 스크롤/스와이프 ───
+const TOPBAR_STORAGE_KEY = 'oshyun_topbar_visible_items_v1';
+const TOPBAR_ACTION_ITEMS = [
+  { id: 'usage', label: 'AI 사용량 배지', icon: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>' },
+  { id: 'workdir', label: '작업 폴더', icon: '<svg class="i" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' },
+  { id: 'model', label: '모델·추론강도', icon: '<svg class="i" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>' },
+  { id: 'agent-config', label: '에이전트 지침', icon: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
+  { id: 'shortcut', label: '바로가기 (PWA)', icon: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 8 12 5 15 8"/><line x1="12" y1="5" x2="12" y2="13"/></svg>' },
+  { id: 'cli', label: 'CLI 명령어 복사', icon: '<svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>' },
+  { id: 'memory', label: '마스터 메모리', icon: '<svg class="i" viewBox="0 0 24 24"><polygon points="12 2 2 6 12 10 22 6 12 2"/><polyline points="2 10 12 14 22 10"/><polyline points="2 14 12 18 22 14"/><polyline points="2 18 12 22 22 18"/></svg>' }
+];
+
+function getTopbarVisibilityPreferences() {
+  try {
+    const raw = localStorage.getItem(TOPBAR_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return {};
+}
+
+function saveTopbarVisibilityPreferences(prefs) {
+  try {
+    localStorage.setItem(TOPBAR_STORAGE_KEY, JSON.stringify(prefs));
+  } catch (_) {}
+}
+
+function applyTopbarVisibility() {
+  const prefs = getTopbarVisibilityPreferences();
+  TOPBAR_ACTION_ITEMS.forEach(item => {
+    const isVisible = prefs[item.id] !== false;
+    const el = document.querySelector(`[data-action-id="${item.id}"]`);
+    if (el) {
+      if (isVisible) {
+        el.removeAttribute('data-topbar-hidden');
+      } else {
+        el.setAttribute('data-topbar-hidden', 'true');
+      }
+    }
+  });
+  updateTopbarScrollIndicators();
+}
+
+function renderTopbarCustomizerList() {
+  const container = document.getElementById('topbar-customizer-list');
+  if (!container) return;
+  const prefs = getTopbarVisibilityPreferences();
+  container.innerHTML = '';
+
+  TOPBAR_ACTION_ITEMS.forEach(item => {
+    const isChecked = prefs[item.id] !== false;
+    const label = document.createElement('label');
+    label.className = 'customizer-item';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isChecked;
+    checkbox.dataset.itemId = item.id;
+    checkbox.addEventListener('change', (e) => {
+      const current = getTopbarVisibilityPreferences();
+      current[item.id] = e.target.checked;
+      saveTopbarVisibilityPreferences(current);
+      applyTopbarVisibility();
+    });
+
+    const iconSpan = document.createElement('span');
+    iconSpan.innerHTML = item.icon;
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'customizer-item-label';
+    textSpan.textContent = item.label;
+
+    label.appendChild(checkbox);
+    label.appendChild(iconSpan.firstElementChild || iconSpan);
+    label.appendChild(textSpan);
+    container.appendChild(label);
+  });
+}
+
+function toggleTopbarCustomizer(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const popover = document.getElementById('topbar-customizer-popover');
+  if (!popover) return;
+  if (popover.classList.contains('open')) {
+    closeTopbarCustomizer();
+  } else {
+    openTopbarCustomizer();
+  }
+}
+
+function openTopbarCustomizer() {
+  const popover = document.getElementById('topbar-customizer-popover');
+  const btn = document.getElementById('btn-topbar-customizer');
+  if (typeof closeRoomConfigPopover === 'function') closeRoomConfigPopover();
+  if (popover) {
+    renderTopbarCustomizerList();
+    popover.classList.add('open');
+  }
+  if (btn) {
+    btn.classList.add('menu-open', 'active');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+function closeTopbarCustomizer() {
+  const popover = document.getElementById('topbar-customizer-popover');
+  const btn = document.getElementById('btn-topbar-customizer');
+  if (popover) popover.classList.remove('open');
+  if (btn) {
+    btn.classList.remove('menu-open', 'active');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function resetTopbarVisibilityPreferences() {
+  saveTopbarVisibilityPreferences({});
+  applyTopbarVisibility();
+  renderTopbarCustomizerList();
+}
+
+function updateTopbarScrollIndicators() {
+  const scrollEl = document.getElementById('topbar-actions-scroll');
+  if (!scrollEl) return;
+  const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+  if (maxScroll <= 1) {
+    scrollEl.classList.remove('can-scroll-left', 'can-scroll-right');
+    return;
+  }
+  const cur = scrollEl.scrollLeft;
+  scrollEl.classList.toggle('can-scroll-left', cur > 4);
+  scrollEl.classList.toggle('can-scroll-right', cur < maxScroll - 4);
+}
+
+function initTopbarSwipeAndScroll() {
+  const scrollEl = document.getElementById('topbar-actions-scroll');
+  if (!scrollEl || scrollEl.dataset.initialized) return;
+  scrollEl.dataset.initialized = 'true';
+
+  // 스크롤 시 인디케이터 갱신 및 모델 팝오버 닫기
+  scrollEl.addEventListener('scroll', () => {
+    updateTopbarScrollIndicators();
+    if (typeof closeRoomConfigPopover === 'function') {
+      const popover = document.getElementById('room-config-popover');
+      if (popover && popover.classList.contains('open')) {
+        closeRoomConfigPopover();
+      }
+    }
+  }, { passive: true });
+
+  // 휠 스크롤을 가로 스크롤로 변환 (데스크톱 마우스 휠 지원)
+  scrollEl.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      scrollEl.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // 데스크톱 마우스 드래그 스크롤
+  let isDown = false;
+  let startX = 0;
+  let scrollLeftStart = 0;
+
+  scrollEl.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button, select, input, a')) return;
+    isDown = true;
+    startX = e.pageX - scrollEl.offsetLeft;
+    scrollLeftStart = scrollEl.scrollLeft;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    const x = e.pageX - scrollEl.offsetLeft;
+    const walk = (x - startX) * 1.2;
+    scrollEl.scrollLeft = scrollLeftStart - walk;
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDown = false;
+  });
+
+  window.addEventListener('resize', () => {
+    updateTopbarScrollIndicators();
+    const popover = document.getElementById('room-config-popover');
+    if (popover && popover.classList.contains('open') && typeof positionRoomConfigPopover === 'function') {
+      positionRoomConfigPopover();
+    }
+  });
+
+  setTimeout(updateTopbarScrollIndicators, 100);
 }
 
 function formatShortModelName(modelId) {

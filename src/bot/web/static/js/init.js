@@ -25,6 +25,12 @@ window.addEventListener('keydown', (e) => {
     closeModal('modal-task-note');
     closeModal('modal-agent-config');
     closeImageLightbox();
+    if (typeof closeRoomConfigPopover === 'function') {
+      closeRoomConfigPopover();
+    }
+    if (typeof closeTopbarCustomizer === 'function') {
+      closeTopbarCustomizer();
+    }
     if (typeof closeThreadPanel === 'function') {
       closeThreadPanel();
     }
@@ -277,8 +283,15 @@ window.addEventListener('DOMContentLoaded', () => {
       const cfgMenu = document.getElementById('room-config-popover');
       if (cfgMenu && cfgMenu.classList.contains('open')) {
         const cfgWrap = document.getElementById('topbar-config-wrap');
-        if (cfgWrap && !cfgWrap.contains(e.target)) {
+        if (cfgWrap && !cfgWrap.contains(e.target) && !cfgMenu.contains(e.target)) {
           closeRoomConfigPopover();
+        }
+      }
+      const customizerMenu = document.getElementById('topbar-customizer-popover');
+      if (customizerMenu && customizerMenu.classList.contains('open')) {
+        const customizerWrap = document.getElementById('topbar-customizer');
+        if (customizerWrap && !customizerWrap.contains(e.target) && !customizerMenu.contains(e.target)) {
+          closeTopbarCustomizer();
         }
       }
       // 프롬프트 창(#chat-input) 바깥 영역 터치/클릭 시 포커스 해제하여 모바일/iPad 가상 키보드 닫기
@@ -297,6 +310,12 @@ window.addEventListener('DOMContentLoaded', () => {
     });
 
     updateSessionBar();
+    if (typeof applyTopbarVisibility === 'function') {
+      applyTopbarVisibility();
+    }
+    if (typeof initTopbarSwipeAndScroll === 'function') {
+      initTopbarSwipeAndScroll();
+    }
     updateTtsUi();
     updateMobileAutofocusUi();
     updateUiFontSizeUi();

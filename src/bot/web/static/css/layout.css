@@ -998,7 +998,226 @@
 .state-dot.thinking { background: #F59E0B; box-shadow: 0 0 0 3px rgba(245, 158, 11, .2); animation: pulse 1.2s infinite; }
 .state-dot.listening { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: pulse 1s infinite; }
 .state-dot.speaking { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: pulse 1.4s infinite; }
-.topbar-actions { display: flex; align-items: center; gap: 4px; }
+
+/* ═══ 상단바 액션 가로 스크롤 및 버튼 표시 커스텀 드롭다운 ═══ */
+.topbar-actions-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  display: flex;
+  align-items: center;
+  position: relative;
+  touch-action: pan-x;
+  margin-left: auto;
+  padding: 2px 0;
+}
+.topbar-actions-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 스크롤 가능한 경우 좌우 페이드 마스크 힌트 */
+.topbar-actions-scroll.can-scroll-left.can-scroll-right {
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent 100%);
+}
+.topbar-actions-scroll.can-scroll-left:not(.can-scroll-right) {
+  mask-image: linear-gradient(to right, transparent, black 16px, black 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black 100%);
+}
+.topbar-actions-scroll.can-scroll-right:not(.can-scroll-left) {
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);
+}
+
+.topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.topbar-actions > * {
+  flex-shrink: 0;
+}
+
+/* 커스텀 설정으로 숨겨진 상단바 아이템 */
+[data-topbar-hidden="true"],
+.topbar-item-hidden {
+  display: none !important;
+}
+
+/* 최우측 고정 버튼 표시 설정 버튼 및 팝오버 */
+.topbar-customizer {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+.topbar-customizer-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all .14s ease;
+  padding: 0;
+}
+.topbar-customizer-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.topbar-customizer-btn.active,
+.topbar-customizer-btn.menu-open {
+  background: var(--accent-subtle, rgba(16, 185, 129, 0.12));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.topbar-customizer-btn svg.i {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.2;
+}
+
+.topbar-customizer-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 250px;
+  max-width: calc(100vw - 20px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 12px);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top right;
+  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.topbar-customizer-popover.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.customizer-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+}
+.customizer-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  font-weight: 650;
+  color: var(--text);
+}
+.customizer-popover-title svg.i {
+  width: 13.5px;
+  height: 13.5px;
+  color: var(--accent);
+  stroke-width: 2.2;
+}
+.customizer-reset-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: calc(11.5px * var(--ui-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background .12s ease;
+}
+.customizer-reset-btn:hover {
+  background: var(--accent-subtle, rgba(16, 185, 129, 0.12));
+}
+.customizer-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 290px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.customizer-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  color: var(--text);
+  transition: background .12s ease;
+}
+.customizer-item:hover {
+  background: var(--bg-hover);
+}
+.customizer-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--border-strong, #cbd5e1);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+  transition: all .14s ease;
+  margin: 0;
+}
+.customizer-item input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.customizer-item input[type="checkbox"]:checked::before {
+  content: "";
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid #FFFFFF;
+  border-bottom: 2px solid #FFFFFF;
+  transform: rotate(-45deg) translate(0.5px, -0.5px);
+}
+.customizer-item svg.i {
+  width: 14px;
+  height: 14px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.customizer-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mobile-only { display: none !important; }
 
 .conn-banner {
@@ -1127,10 +1346,9 @@
 
 /* 팝오버 카드 */
 .room-config-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   width: 295px;
+  max-width: calc(100vw - 16px);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1375,7 +1593,6 @@
     max-width: 100px;
   }
   .room-config-popover {
-    right: -40px;
     width: 280px;
   }
 }
