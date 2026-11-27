@@ -1105,3 +1105,97 @@
   justify-content: center; font-size: calc(20px * var(--ui-scale, 1)); transition: background .15s;
 }
 .image-lightbox-close:hover { background: rgba(255, 255, 255, 0.4); }
+
+/* ═══════════════════════════════════════════════════════════════
+   채팅 및 사이드바 초기 로딩 스켈레톤 (라이트 / 에메랄드 쉬머)
+   ═══════════════════════════════════════════════════════════════ */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--skel-base, #F1F5F9);
+  border-radius: 6px;
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--skel-highlight, rgba(255, 255, 255, 0.85)) 35%,
+    var(--skel-emerald-glow, rgba(209, 250, 229, 0.45)) 50%,
+    var(--skel-highlight, rgba(255, 255, 255, 0.85)) 65%,
+    transparent 100%
+  );
+  animation: emeraldShimmer 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes emeraldShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.chat-skeleton-thread {
+  opacity: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.skeleton-msg {
+  animation: none !important;
+}
+
+.skeleton-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+.skeleton-bubble.skeleton-bot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 8px;
+  max-width: 90%;
+}
+
+.skeleton-user-bubble {
+  border-radius: 20px 20px 6px 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  background-color: var(--skel-base, #F1F5F9);
+  max-width: 80%;
+}
+
+.skeleton-line {
+  border-radius: 4px;
+}
+
+.sb-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.sb-skeleton-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+}
+
+.skeleton-sub-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+

@@ -38,14 +38,14 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/css/automation.css?v=20">
-  <link rel="stylesheet" href="/css/base.css?v=20">
-  <link rel="stylesheet" href="/css/layout.css?v=20">
-  <link rel="stylesheet" href="/css/chat.css?v=20">
-  <link rel="stylesheet" href="/css/views-modals.css?v=20">
-  <link rel="stylesheet" href="/css/responsive.css?v=20">
-  <link rel="stylesheet" href="/css/master-inspector.css?v=20">
-  <link rel="stylesheet" href="/css/prompts-center.css?v=20">
+  <link rel="stylesheet" href="/css/automation.css?v=21">
+  <link rel="stylesheet" href="/css/base.css?v=21">
+  <link rel="stylesheet" href="/css/layout.css?v=21">
+  <link rel="stylesheet" href="/css/chat.css?v=21">
+  <link rel="stylesheet" href="/css/views-modals.css?v=21">
+  <link rel="stylesheet" href="/css/responsive.css?v=21">
+  <link rel="stylesheet" href="/css/master-inspector.css?v=21">
+  <link rel="stylesheet" href="/css/prompts-center.css?v=21">
 </head>
 <body>
   <div id="drawer-backdrop" class="drawer-backdrop" onclick="closeRoomDrawer()"></div>
@@ -157,7 +157,18 @@
                 </button>
               </div>
               <div class="sb-agent-branch" id="branch-__expert_general__">
-                <div class="sb-core-tree sb-subtask-tree" id="expert-general-subtask-tree"></div>
+                <div class="sb-core-tree sb-subtask-tree" id="expert-general-subtask-tree">
+                  <div class="sb-skeleton-wrap" id="sb-initial-skeleton">
+                    <div class="sb-skeleton-item">
+                      <div class="skeleton-shimmer skeleton-sub-dot"></div>
+                      <div class="skeleton-shimmer skeleton-line" style="width: 110px; height: 13px;"></div>
+                    </div>
+                    <div class="sb-skeleton-item">
+                      <div class="skeleton-shimmer skeleton-sub-dot"></div>
+                      <div class="skeleton-shimmer skeleton-line" style="width: 140px; height: 13px;"></div>
+                    </div>
+                  </div>
+                </div>
                 <div class="sb-subagents-container" id="subagents-__expert_general__"></div>
               </div>
             </div>
@@ -404,7 +415,35 @@
         <!-- 뷰: 대화 -->
         <section id="view-chat" class="view active">
           <div class="chat-main-area" id="chat-main-area">
-            <div class="messages-scroll" id="messages-container" onscroll="onMessagesScroll()"></div>
+            <div class="messages-scroll" id="messages-container" onscroll="onMessagesScroll()">
+              <div class="thread chat-skeleton-thread" id="chat-loading-skeleton" aria-hidden="true">
+                <div class="msg assistant skeleton-msg">
+                  <div class="assistant-head">
+                    <div class="skeleton-shimmer skeleton-avatar"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 75px; height: 14px;"></div>
+                  </div>
+                  <div class="skeleton-bubble skeleton-bot">
+                    <div class="skeleton-shimmer skeleton-line" style="width: 92%; height: 15px;"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 80%; height: 15px;"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 48%; height: 15px;"></div>
+                  </div>
+                </div>
+                <div class="msg user skeleton-msg">
+                  <div class="skeleton-shimmer skeleton-user-bubble" style="width: 200px; height: 38px;"></div>
+                </div>
+                <div class="msg assistant skeleton-msg">
+                  <div class="assistant-head">
+                    <div class="skeleton-shimmer skeleton-avatar"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 95px; height: 14px;"></div>
+                  </div>
+                  <div class="skeleton-bubble skeleton-bot">
+                    <div class="skeleton-shimmer skeleton-line" style="width: 98%; height: 15px;"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 86%; height: 15px;"></div>
+                    <div class="skeleton-shimmer skeleton-line" style="width: 65%; height: 15px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <button type="button" id="btn-scroll-bottom" class="scroll-bottom-btn" onclick="scrollToBottomIfNear(true, true)">
               <svg class="i" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
               <span>맨 아래로</span>

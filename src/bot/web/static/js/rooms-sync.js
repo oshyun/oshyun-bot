@@ -1,4 +1,6 @@
 // ─── 대화방 스토리지 & 서버 동기화 (SQLite chat.db 단일 SSOT) ───
+let isInitialRoomsLoading = true;
+
 function scheduleServerBackup() {
   // SQLite DB 단일 진실 원천(SSOT) 원칙에 따라 브라우저 캐시의 서버 역동기화를 완전 비활성화
 }
@@ -610,7 +612,10 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
       }
       focusChatInput();
     }
-  } catch (_) {}
+  } catch (_) {
+  } finally {
+    isInitialRoomsLoading = false;
+  }
 }
 
 async function syncRoomsWithServer() {
@@ -842,6 +847,9 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
     }
   } catch (err) {
     const room = getRoomById(roomId) || getRoomById(sessionId);
+    if (room) {
+      room.historyLoaded = true;
+    }
     if (room && room.id === currentRoomId) {
       renderMessagesForCurrentRoom(true);
     }

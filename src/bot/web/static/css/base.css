@@ -48,6 +48,9 @@
   --bg-secondary: var(--bg-subtle);
   --bg-card: var(--bg-elevated);
   --text-primary: var(--text);
+  --skel-base: #F1F5F9;
+  --skel-highlight: rgba(255, 255, 255, 0.85);
+  --skel-emerald-glow: rgba(209, 250, 229, 0.45);
   --text-secondary: var(--text-2);
   --text-tertiary: var(--text-3);
   --border-color: var(--border);
@@ -75,6 +78,9 @@
     --selection-bg: rgba(16, 185, 129, 0.16);
     --selection-border: rgba(52, 211, 153, 0.45);
     --user-bubble: #25252B;
+    --skel-base: #202025;
+    --skel-highlight: rgba(255, 255, 255, 0.08);
+    --skel-emerald-glow: rgba(16, 185, 129, 0.15);
     --user-bubble-gradient: linear-gradient(135deg, #282830 0%, #212127 100%);
     --code-bg: #19191E;
     --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.42);

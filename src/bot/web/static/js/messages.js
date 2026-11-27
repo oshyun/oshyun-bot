@@ -1452,13 +1452,65 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
   return row;
 }
 
+function renderMessagesSkeleton() {
+  return `
+    <div class="thread chat-skeleton-thread" id="chat-loading-skeleton" aria-hidden="true">
+      <div class="msg assistant skeleton-msg">
+        <div class="assistant-head">
+          <div class="skeleton-shimmer skeleton-avatar"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 75px; height: 14px;"></div>
+        </div>
+        <div class="skeleton-bubble skeleton-bot">
+          <div class="skeleton-shimmer skeleton-line" style="width: 92%; height: 15px;"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 80%; height: 15px;"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 48%; height: 15px;"></div>
+        </div>
+      </div>
+      <div class="msg user skeleton-msg">
+        <div class="skeleton-shimmer skeleton-user-bubble" style="width: 200px; height: 38px;"></div>
+      </div>
+      <div class="msg assistant skeleton-msg">
+        <div class="assistant-head">
+          <div class="skeleton-shimmer skeleton-avatar"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 95px; height: 14px;"></div>
+        </div>
+        <div class="skeleton-bubble skeleton-bot">
+          <div class="skeleton-shimmer skeleton-line" style="width: 98%; height: 15px;"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 86%; height: 15px;"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 65%; height: 15px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderMessagesForCurrentRoom(forceScroll = false) {
   const container = document.getElementById('messages-container');
   const room = getCurrentRoom();
-  if (!container || !room) return;
+  if (!container) return;
+  if (!room) {
+    if (!container.querySelector('.chat-skeleton-thread')) {
+      container.innerHTML = renderMessagesSkeleton();
+    }
+    return;
+  }
 
   const msgs = room.messages || [];
   const liveState = ensureRoomLiveState(room.id);
+
+  // 서버 히스토리 로딩 대기 중(초기 방 로딩 또는 과거 대화 내역 미수신 상태)
+  const isHistoryPending = !room.historyLoaded && !room.userCreatedEmpty && (
+    (typeof room.messageCount === 'number' && room.messageCount > 0) ||
+    (typeof isInitialRoomsLoading !== 'undefined' && isInitialRoomsLoading)
+  );
+
+  if (isHistoryPending && msgs.length === 0 && !liveState.isRunning) {
+    if (!container.querySelector('.chat-skeleton-thread')) {
+      container.innerHTML = renderMessagesSkeleton();
+    }
+    updateScrollBottomButton();
+    return;
+  }
 
   if (msgs.length === 0 && !liveState.isRunning) {
     const isCore = room.id === CORE_ROOM_ID;
