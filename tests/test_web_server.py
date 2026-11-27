@@ -997,6 +997,15 @@ class TestPwaSupport(AioHTTPTestCase):
         self.assertEqual(data.get("background_color"), "#FFFFFF")
         self.assertEqual(data.get("launch_handler", {}).get("client_mode"), "focus-existing")
 
+        # 4대 핵심 에이전트 shortcuts 검증
+        shortcuts = data.get("shortcuts", [])
+        self.assertGreaterEqual(len(shortcuts), 4)
+        shortcut_urls = [s.get("url") for s in shortcuts]
+        self.assertIn("/?room=__expert_coding__", shortcut_urls)
+        self.assertIn("/?room=__expert_vault__", shortcut_urls)
+        self.assertIn("/?room=__expert_general__", shortcut_urls)
+        self.assertIn("/?room=__core__", shortcut_urls)
+
         # /api/manifest 엔드포인트도 동일 동작 보장
         api_res = await self.client.request("GET", "/api/manifest?room=room_pwa_trip_99")
         self.assertEqual(api_res.status, 200)

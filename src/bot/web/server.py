@@ -695,29 +695,50 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
                 manifest_data["start_url"] = f"/?room={room_id}"
                 manifest_data["id"] = f"/?room={room_id}"
 
-            # shortcuts 멤버: 최근 활성 대화방 최대 4개 동적 주입
-            try:
-                recent_rooms = chat_db.get_rooms(include_archived=False, limit=4)
-                if recent_rooms:
-                    shortcuts = []
-                    for r in recent_rooms:
-                        rid = r.get("id")
-                        rtitle = r.get("title") or "대화"
-                        if rid and rid != room_id:
-                            shortcuts.append({
-                                "name": rtitle[:15],
-                                "short_name": rtitle[:10],
-                                "url": f"/?room={rid}",
-                                "icons": [{
-                                    "src": "/icons/icon-192.png",
-                                    "sizes": "192x192",
-                                    "type": "image/png"
-                                }]
-                            })
-                    if shortcuts:
-                        manifest_data["shortcuts"] = shortcuts
-            except Exception:
-                pass
+            # shortcuts 멤버: 4대 핵심 에이전트(봇개발, 세컨브레인, 일반대화, 마스터) 바로가기 보장
+            if "shortcuts" not in manifest_data or not manifest_data["shortcuts"]:
+                manifest_data["shortcuts"] = [
+                    {
+                        "name": "봇개발 에이전트",
+                        "short_name": "봇개발",
+                        "description": "코드 개발, 버그 수정 및 시스템 배포",
+                        "url": "/?room=__expert_coding__",
+                        "icons": [
+                            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+                            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+                        ],
+                    },
+                    {
+                        "name": "세컨브레인 볼트",
+                        "short_name": "세컨브레인",
+                        "description": "옵시디언 볼트 개인 지식 및 노트 관리",
+                        "url": "/?room=__expert_vault__",
+                        "icons": [
+                            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+                            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+                        ],
+                    },
+                    {
+                        "name": "일반 대화 비서",
+                        "short_name": "일반 대화",
+                        "description": "자유로운 일상 질의응답 및 범용 비서",
+                        "url": "/?room=__expert_general__",
+                        "icons": [
+                            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+                            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+                        ],
+                    },
+                    {
+                        "name": "마스터 오케스트레이터",
+                        "short_name": "마스터",
+                        "description": "모든 하위 에이전트 총괄 조율 및 현황",
+                        "url": "/?room=__core__",
+                        "icons": [
+                            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+                            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+                        ],
+                    },
+                ]
 
             return web.json_response(
                 manifest_data,
