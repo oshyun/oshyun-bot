@@ -97,10 +97,10 @@ function initMobileSwipeGestures() {
 }
 
 // ─── 모바일 당겨서 새로고침 (Pull to Refresh - 상단 당김 & 하단 당김 지원) ───
-const PTR_DEADZONE_PX = 80;           // 인디케이터가 나타나고 스크롤 차단이 시작되는 최소 당김 거리 (의도치 않은 당김 방지)
-const PTR_TRIGGER_THRESHOLD_PX = 180; // 새로고침이 실제로 트리거되는 당김 임계값 (충분히 당겼을 때만 작동)
+const PTR_DEADZONE_PX = 100;          // 인디케이터가 나타나고 스크롤 차단이 시작되는 최소 당김 거리 (의도치 않은 당김 방지)
+const PTR_TRIGGER_THRESHOLD_PX = 540; // 새로고침이 실제로 트리거되는 당김 임계값 (충분히 당겼을 때만 작동, 기존 180px의 3배)
 const PTR_MAX_VISUAL_PX = 68;         // 인디케이터 최대 시각적 이동 한계
-const PTR_DAMPING_K = 110;            // 지수 감쇠(Asymptotic Rubber-band) 저항 계수
+const PTR_DAMPING_K = 480;            // 지수 감쇠(Asymptotic Rubber-band) 저항 계수 (유효 드래그 증가에 맞춘 비례 감쇠)
 
 let _ptrResetTimer = null;
 
