@@ -56,7 +56,7 @@
     position: relative;
   }
   .master-sidebar {
-    width: 420px;
+    width: var(--right-sidebar-w, 420px);
     flex-shrink: 0;
     background: var(--bg-sidebar);
     border-left: 1px solid var(--border);
@@ -581,6 +581,9 @@
   .thread-sidebar {
     position: relative;
     box-shadow: none;
+    width: var(--right-sidebar-w, 420px);
+    max-width: var(--right-sidebar-w, 420px);
+    flex-shrink: 0;
   }
 }
 .thread-sidebar.open {
@@ -850,6 +853,9 @@
   .note-sidebar {
     position: relative;
     box-shadow: none;
+    width: var(--right-sidebar-w, 420px);
+    max-width: var(--right-sidebar-w, 420px);
+    flex-shrink: 0;
   }
 }
 .note-sidebar.open {

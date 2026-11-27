@@ -36,6 +36,22 @@
         document.documentElement.style.setProperty('--chat-font-size', chatSize + 'px');
         document.documentElement.style.setProperty('--body-font-size', uiSize + 'px');
 
+        // 좌우 사이드바 너비 사전 복원 (FOUC / 레이아웃 튐 방지)
+        var savedLeftW = localStorage.getItem('oshyun_sidebar_width_v1');
+        if (savedLeftW) {
+          var parsedLeft = parseFloat(savedLeftW);
+          if (!isNaN(parsedLeft) && parsedLeft >= 220 && parsedLeft <= 700) {
+            document.documentElement.style.setProperty('--sidebar-w', parsedLeft + 'px');
+          }
+        }
+        var savedRightW = localStorage.getItem('oshyun_right_sidebar_width_v1');
+        if (savedRightW) {
+          var parsedRight = parseFloat(savedRightW);
+          if (!isNaN(parsedRight) && parsedRight >= 300 && parsedRight <= 900) {
+            document.documentElement.style.setProperty('--right-sidebar-w', parsedRight + 'px');
+          }
+        }
+
         // 상단바 버튼 표시 및 순서 커스텀 설정 사전 적용 (FOUC / 깜빡임 방지)
         var rawTopbar = localStorage.getItem('oshyun_topbar_visible_items_v1');
         if (rawTopbar) {
@@ -305,6 +321,11 @@
         </button>
       </div>
     </aside>
+
+    <!-- 좌측 사이드바 리사이저 (데스크톱 전용) -->
+    <div class="sidebar-resizer sidebar-resizer-left" id="sidebar-resizer-left" role="separator" aria-orientation="vertical" title="드래그하여 사이드바 너비 조절 (더블클릭 시 기본값)" tabindex="0">
+      <div class="sidebar-resizer-bar"></div>
+    </div>
 
     <!-- ═══ 메인 ═══ -->
     <div class="main">
@@ -903,6 +924,11 @@
           </div>
         </div>
       </section>
+
+      <!-- 우측 사이드바 리사이저 (데스크톱 전용) -->
+      <div class="sidebar-resizer sidebar-resizer-right" id="sidebar-resizer-right" role="separator" aria-orientation="vertical" title="드래그하여 패널 너비 조절 (더블클릭 시 기본값)" tabindex="0">
+        <div class="sidebar-resizer-bar"></div>
+      </div>
 
       <!-- 마스터 4계층 메모리 오른쪽 인스펙터 (온디맨드 전역 패널) -->
       <aside class="master-sidebar" id="master-sidebar" aria-label="메모리 패널">
@@ -1608,5 +1634,6 @@
   <script src="/js/prompts-center.js?v=25"></script>
   <script src="/js/init.js?v=25"></script>
   <script src="/js/automation.js?v=25"></script>
+  <script src="/js/resizer.js?v=25"></script>
 </body>
 </html>

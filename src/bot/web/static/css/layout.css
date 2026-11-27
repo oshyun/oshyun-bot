@@ -24,6 +24,86 @@
   padding-top: max(12px, env(safe-area-inset-top));
   z-index: 50;
 }
+
+/* ═══ 데스크톱 사이드바/패널 너비 조절 리사이저 (Splitter/Divider) ═══ */
+.sidebar-resizer {
+  display: none;
+}
+
+@media (min-width: 1025px) {
+  .sidebar-resizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 6px;
+    height: 100%;
+    min-height: 0;
+    flex-shrink: 0;
+    cursor: col-resize;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    position: relative;
+    z-index: 55;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .sidebar-resizer-left {
+    margin-left: -3px;
+    margin-right: -3px;
+  }
+
+  .sidebar-resizer-right {
+    margin-left: -3px;
+    margin-right: -3px;
+    display: none;
+  }
+
+  /* 우측 패널(메모리, 스레드, 노트 뷰어) 중 하나라도 열려 있을 때만 우측 리사이저 노출 */
+  .main-views-wrap:has(.master-sidebar.open) .sidebar-resizer-right,
+  .main-views-wrap:has(.thread-sidebar.open) .sidebar-resizer-right,
+  .main-views-wrap:has(.note-sidebar.open) .sidebar-resizer-right,
+  .main-views-wrap.has-right-open .sidebar-resizer-right {
+    display: flex;
+  }
+
+  .sidebar-resizer-bar {
+    width: 2px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--border-strong, #D4D4D8);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, height 0.15s ease;
+    pointer-events: none;
+  }
+
+  .sidebar-resizer:hover,
+  .sidebar-resizer.is-dragging {
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .sidebar-resizer:hover .sidebar-resizer-bar,
+  .sidebar-resizer.is-dragging .sidebar-resizer-bar {
+    opacity: 1;
+    height: 48px;
+    background: var(--accent, #10B981);
+  }
+
+  body.is-resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+  body.is-resizing * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    cursor: col-resize !important;
+  }
+  body.is-resizing iframe {
+    pointer-events: none !important;
+  }
+}
 .sb-top { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px 6px; flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .brand-logo {
@@ -420,6 +500,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  word-break: keep-all;
 }
 .sb-tree-item.unread .sb-tree-title,
 .sb-tree-item.running .sb-tree-title {
@@ -795,6 +876,7 @@
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: calc(13.5px * var(--ui-scale, 1)); line-height: 1.35;
+  word-break: keep-all;
 }
 .room-time {
   font-size: calc(11px * var(--ui-scale, 1)); color: var(--text-3); flex-shrink: 0; font-weight: 400;
