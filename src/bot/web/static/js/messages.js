@@ -1486,13 +1486,30 @@ function renderMessagesSkeleton() {
 
 function renderMessagesForCurrentRoom(forceScroll = false) {
   const container = document.getElementById('messages-container');
-  const room = getCurrentRoom();
+  let room = getCurrentRoom();
   if (!container) return;
   if (!room) {
-    if (!container.querySelector('.chat-skeleton-thread')) {
-      container.innerHTML = renderMessagesSkeleton();
+    if (typeof isInitialRoomsLoading !== 'undefined' && isInitialRoomsLoading) {
+      if (!container.querySelector('.chat-skeleton-thread')) {
+        container.innerHTML = renderMessagesSkeleton();
+      }
+      return;
     }
-    return;
+    if (typeof ensureCoreRoom === 'function') ensureCoreRoom();
+    room = getCurrentRoom() || (Array.isArray(chatRooms) && chatRooms[0]);
+    if (room) {
+      currentRoomId = room.id;
+    } else {
+      if (typeof hideInitialSkeletons === 'function') hideInitialSkeletons();
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-logo">${ICONS.spark}</div>
+          <h2>새 대화</h2>
+          <p>옵시디언 볼트의 노트·일정·할 일을 읽고 답변합니다</p>
+        </div>
+      `;
+      return;
+    }
   }
 
   const msgs = room.messages || [];
@@ -1505,11 +1522,15 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
   );
 
   if (isHistoryPending && msgs.length === 0 && !liveState.isRunning) {
-    if (!container.querySelector('.chat-skeleton-thread')) {
-      container.innerHTML = renderMessagesSkeleton();
+    if (typeof isInitialRoomsLoading !== 'undefined' && !isInitialRoomsLoading && typeof isAppInitialized !== 'undefined' && isAppInitialized) {
+      room.historyLoaded = true;
+    } else {
+      if (!container.querySelector('.chat-skeleton-thread')) {
+        container.innerHTML = renderMessagesSkeleton();
+      }
+      updateScrollBottomButton();
+      return;
     }
-    updateScrollBottomButton();
-    return;
   }
 
   if (msgs.length === 0 && !liveState.isRunning) {

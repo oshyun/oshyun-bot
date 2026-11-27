@@ -177,8 +177,57 @@ function setupDragAndDropAndPaste() {
   });
 }
 
+// ─── 전역 초기 로딩 안전망 (Watchdog & Skeletons Removal) ───
+let isAppInitialized = false;
+
+function hideInitialSkeletons() {
+  const skeletonEl = document.getElementById('chat-loading-skeleton');
+  if (skeletonEl) skeletonEl.remove();
+  const sbSkeleton = document.getElementById('sb-initial-skeleton');
+  if (sbSkeleton) sbSkeleton.remove();
+}
+
+function markAppReady() {
+  if (isAppInitialized) return;
+  isAppInitialized = true;
+  document.body.classList.add('app-ready');
+  hideInitialSkeletons();
+}
+window.markAppReady = markAppReady;
+window.hideInitialSkeletons = hideInitialSkeletons;
+
 // ─── 초기화 ───
 window.addEventListener('DOMContentLoaded', () => {
+  // 3초 전역 세이프가드 워치독: 네트워크, 소켓, API 지연/실패 시에도 무조건 스켈레톤 해제 및 정상 빈 방/캐시 렌더링
+  const initWatchdog = setTimeout(() => {
+    if (!isAppInitialized) {
+      console.warn('[Watchdog] 초기 로딩 타임아웃(2.8s) 도달 — 스켈레톤 강제 해제 및 안전망 렌더링');
+      if (typeof isInitialRoomsLoading !== 'undefined') isInitialRoomsLoading = false;
+      if (typeof ensureCoreRoom === 'function') ensureCoreRoom();
+      if (Array.isArray(chatRooms) && chatRooms.length === 0) {
+        const fallbackId = 'room-' + Date.now();
+        chatRooms.push({
+          id: fallbackId,
+          roomId: fallbackId,
+          title: '새 대화',
+          preview: '',
+          messageCount: 0,
+          messages: [],
+          isNewSession: true,
+          userCreatedEmpty: true,
+          sessionId: null,
+          updatedAt: Date.now()
+        });
+        currentRoomId = fallbackId;
+      }
+      const cur = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
+      if (cur) cur.historyLoaded = true;
+      if (typeof renderRoomList === 'function') renderRoomList();
+      if (typeof renderMessagesForCurrentRoom === 'function') renderMessagesForCurrentRoom(true);
+      markAppReady();
+    }
+  }, 2800);
+
   // 1단계(즉시 실행): 입력창 활성화·포커스 및 WebSocket 연결을 최우선 시작
   updateSendButtonState();
   const chatInput = document.getElementById('chat-input');
@@ -226,6 +275,16 @@ window.addEventListener('DOMContentLoaded', () => {
     // 창 포커스 복귀(홈 화면 바로가기 재진입/앱 복원 등) 시 URL 딥링크 최우선 반영
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
+        if (!isAppInitialized) {
+          console.warn('[VisibilityChange] 탭 활성화 시점 초기화 미완료 — 안전망 즉각 가동');
+          if (typeof isInitialRoomsLoading !== 'undefined') isInitialRoomsLoading = false;
+          if (typeof ensureCoreRoom === 'function') ensureCoreRoom();
+          const cur = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
+          if (cur) cur.historyLoaded = true;
+          if (typeof renderRoomList === 'function') renderRoomList();
+          if (typeof renderMessagesForCurrentRoom === 'function') renderMessagesForCurrentRoom(true);
+          markAppReady();
+        }
         const navigated = checkUrlRoomAndNavigate();
         const preservedRoomId = currentRoomId;
         if (!isFilePickerActive) {
@@ -369,11 +428,18 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (_) {}
   };
 
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => setTimeout(runDeferredInit, 0));
-  } else {
-    setTimeout(runDeferredInit, 0);
+  let deferredStarted = false;
+  const startDeferred = () => {
+    if (deferredStarted) return;
+    deferredStarted = true;
+    runDeferredInit();
+  };
+
+  if (typeof requestAnimationFrame === 'function' && document.visibilityState === 'visible') {
+    requestAnimationFrame(() => setTimeout(startDeferred, 0));
   }
+  // 백그라운드 탭 또는 rAF 쓰로틀링 방지용 하이브리드 폴백 타이머 (32ms)
+  setTimeout(startDeferred, 32);
 });
 
 window.addEventListener('popstate', (event) => {
