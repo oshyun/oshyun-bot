@@ -1409,6 +1409,18 @@ function handleThreadInputKeyDown(e) {
 // ─── PWA 홈 화면 바로가기 / 딥링크 모달 제어 ───
 let currentShortcutRoomId = null;
 
+function isPwaStandalone() {
+  try {
+    return Boolean(
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches)
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 function openRoomShortcutModal(roomId) {
   const targetId = roomId || currentRoomId;
   currentShortcutRoomId = targetId;
@@ -1462,10 +1474,27 @@ function openRoomShortcutModal(roomId) {
   const platform = isIos ? 'ios' : (isAndroid ? 'android' : 'desktop');
   switchShortcutGuide(platform);
 
+  // Standalone(홈 화면에 설치된 PWA 앱) 모드 감지 및 UX 분기
+  const standalone = isPwaStandalone();
+  const bannerEl = document.getElementById('shortcut-standalone-banner');
+  if (bannerEl) bannerEl.style.display = standalone ? 'flex' : 'none';
+
+  const iosTipEl = document.getElementById('guide-ios-standalone-tip');
+  if (iosTipEl) iosTipEl.style.display = standalone ? 'block' : 'none';
+
+  const androidTipEl = document.getElementById('guide-android-standalone-tip');
+  if (androidTipEl) androidTipEl.style.display = standalone ? 'block' : 'none';
+
+  // Android Standalone일 경우 Chrome 브라우저 바로 열기 버튼 지원
+  const btnOpenChrome = document.getElementById('btn-shortcut-open-chrome');
+  if (btnOpenChrome) {
+    btnOpenChrome.style.display = (standalone && isAndroid) ? 'inline-flex' : 'none';
+  }
+
   // 액션 버튼 가시성 (PWA 설치 prompt / Web Share)
   const btnInstall = document.getElementById('btn-shortcut-pwa-install');
   if (btnInstall) {
-    if (typeof deferredPwaPrompt !== 'undefined' && deferredPwaPrompt) {
+    if (!standalone && typeof deferredPwaPrompt !== 'undefined' && deferredPwaPrompt) {
       btnInstall.style.display = 'inline-flex';
     } else {
       btnInstall.style.display = 'none';
@@ -1488,6 +1517,18 @@ function openRoomShortcutModal(roomId) {
 
   const modal = document.getElementById('modal-room-shortcut');
   if (modal) modal.style.display = 'flex';
+}
+
+function openInChromeBrowser() {
+  const urlInput = document.getElementById('shortcut-modal-url');
+  const rawUrl = urlInput ? urlInput.value : window.location.href;
+  const cleanUrl = rawUrl.replace(/^https?:\/\//, '');
+  const intentUrl = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+  try {
+    window.location.href = intentUrl;
+  } catch (_) {
+    copyRoomShortcutUrl();
+  }
 }
 
 function closeRoomShortcutModal() {

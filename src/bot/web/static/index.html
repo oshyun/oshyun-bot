@@ -988,14 +988,27 @@
           </div>
         </div>
 
+        <!-- PWA Standalone(앱 모드) 실행 중 안내 배너 -->
+        <div class="shortcut-standalone-banner" id="shortcut-standalone-banner" style="display:none;">
+          <div class="standalone-banner-icon">📱</div>
+          <div class="standalone-banner-text">
+            <strong>현재 독립 앱(PWA)으로 실행 중</strong>
+            <p>모바일 OS 보안상 설치된 앱 안에서는 브라우저 메뉴가 가려집니다. 개별 방 바로가기를 홈 화면에 추가하려면 아래 링크를 복사하여 Safari/Chrome에서 열어주세요.</p>
+          </div>
+        </div>
+
         <!-- 딥링크 URL 복사 영역 -->
         <div class="shortcut-url-box">
           <input type="text" id="shortcut-modal-url" class="input shortcut-url-input" readonly onclick="this.select()">
-          <button type="button" class="btn" id="btn-shortcut-copy-url" onclick="copyRoomShortcutUrl()" title="링크 복사">복사</button>
+          <button type="button" class="btn primary" id="btn-shortcut-copy-url" onclick="copyRoomShortcutUrl()" title="링크 복사">링크 복사</button>
         </div>
 
         <!-- 주요 원클릭 액션 버튼들 -->
-        <div class="shortcut-action-btns" id="shortcut-action-btns" style="display:flex;gap:8px;">
+        <div class="shortcut-action-btns" id="shortcut-action-btns" style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button type="button" class="btn accent" id="btn-shortcut-open-chrome" onclick="openInChromeBrowser()" style="flex:1;display:none;align-items:center;justify-content:center;gap:6px;">
+            <svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+            <span>Chrome 브라우저에서 열기</span>
+          </button>
           <button type="button" class="btn accent" id="btn-shortcut-pwa-install" onclick="triggerRoomPwaInstall()" style="flex:1;display:none;align-items:center;justify-content:center;gap:6px;">
             <svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>홈 화면에 앱/바로가기 추가</span>
@@ -1015,6 +1028,10 @@
           </div>
 
           <div class="shortcut-guide-content" id="guide-content-ios">
+            <div class="guide-standalone-tip" id="guide-ios-standalone-tip" style="display:none;margin-bottom:10px;padding:8px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:11.5px;color:var(--text);line-height:1.4;">
+              💡 <strong>앱으로 실행 중이신가요?</strong><br>
+              위 <strong>[링크 복사]</strong>를 누른 후, 홈 화면의 <strong>Safari</strong> 브라우저 앱을 열어 주소창에 붙여넣기 하시면 아래 순서대로 바로가기를 추가할 수 있습니다.
+            </div>
             <ol class="shortcut-steps">
               <li>Safari 하단(iPad는 상단)의 <strong>공유 아이콘 <svg class="i inline" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></strong> 터치</li>
               <li>메뉴를 올려 <strong>'홈 화면에 추가'</strong> 선택</li>
@@ -1023,6 +1040,10 @@
           </div>
 
           <div class="shortcut-guide-content" id="guide-content-android" style="display:none;">
+            <div class="guide-standalone-tip" id="guide-android-standalone-tip" style="display:none;margin-bottom:10px;padding:8px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:11.5px;color:var(--text);line-height:1.4;">
+              💡 <strong>앱으로 실행 중이신가요?</strong><br>
+              위 <strong>[Chrome 브라우저에서 열기]</strong> 버튼을 누르면 크롬 일반 탭으로 바로 열려 홈 화면 추가 메뉴를 사용할 수 있습니다.
+            </div>
             <ol class="shortcut-steps">
               <li>Chrome 우측 상단 <strong>더보기 메뉴(⋮)</strong> 터치</li>
               <li><strong>'홈 화면에 추가'</strong> (또는 '앱 설치') 터치</li>
