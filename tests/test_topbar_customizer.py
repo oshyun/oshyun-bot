@@ -29,8 +29,9 @@ class TestTopbarCustomizer(unittest.TestCase):
         self.assertIn('id="topbar-customizer-list"', self.html)
 
     def test_index_html_all_action_items_tagged(self):
-        """상단바 7대 액션 버튼에 data-action-id 속성이 올바르게 부여되었는지 확인."""
+        """상단바 대화방 제목 및 7대 액션 버튼에 data-action-id 속성이 올바르게 부여되었는지 확인."""
         required_actions = [
+            'data-action-id="title"',
             'data-action-id="usage"',
             'data-action-id="workdir"',
             'data-action-id="model"',
@@ -41,6 +42,19 @@ class TestTopbarCustomizer(unittest.TestCase):
         ]
         for action_attr in required_actions:
             self.assertIn(action_attr, self.html, f"Missing action attribute: {action_attr}")
+
+    def test_settings_screen_has_topbar_items_manager(self):
+        """설정 화면에 상단 헤더 항목 순서/표시 관리 UI 섹션이 존재하는지 확인."""
+        self.assertIn('id="setting-row-topbar-items"', self.html)
+        self.assertIn('id="topbar-items-manager"', self.html)
+        self.assertIn('id="btn-reset-topbar-items"', self.html)
+
+    def test_rooms_ui_js_has_order_and_title_support(self):
+        """rooms-ui.js에 title 항목 포함 및 순서 이동(moveTopbarItem, reorderTopbarItems) 함수가 정의되어 있는지 확인."""
+        self.assertIn("'title'", self.js)
+        self.assertIn("moveTopbarItem", self.js)
+        self.assertIn("reorderTopbarItems", self.js)
+        self.assertIn("getTopbarConfigList", self.js)
 
     def test_index_html_fouc_prestyle_loader(self):
         """FOUC 방지를 위한 사전 스타일 적용 스크립트가 존재하는지 확인."""

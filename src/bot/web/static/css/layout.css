@@ -1164,19 +1164,218 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.customizer-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+  border-radius: var(--radius-sm, 6px);
+  transition: background .12s ease;
+}
+.customizer-item-row:hover {
+  background: var(--bg-hover);
+}
 .customizer-item {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   font-size: calc(12.5px * var(--ui-scale, 1));
   color: var(--text);
-  transition: background .12s ease;
+  flex: 1;
+  min-width: 0;
 }
 .customizer-item:hover {
+  background: transparent;
+}
+.customizer-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  flex-shrink: 0;
+}
+.customizer-order-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background .12s, color .12s;
+}
+.customizer-order-btn:hover:not(:disabled) {
   background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.customizer-order-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.customizer-order-btn svg.i {
+  width: 12px;
+  height: 12px;
+}
+.customizer-popover-footer {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.customizer-settings-link-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: calc(11.5px * var(--ui-scale, 1));
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .14s ease;
+}
+.customizer-settings-link-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.customizer-settings-link-btn svg.i {
+  width: 13px;
+  height: 13px;
+}
+
+/* ─── 설정 화면 내 상단 헤더 매니저 ─── */
+.setting-row.topbar-items-setting-row {
+  align-items: flex-start;
+  padding: 14px 0;
+}
+.setting-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.topbar-items-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.topbar-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform .14s, box-shadow .14s, background-color .14s;
+}
+.topbar-item-row.dragging {
+  opacity: 0.55;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: var(--bg-hover);
+}
+.topbar-item-row.drag-over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+.topbar-item-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-3);
+  cursor: grab;
+  flex-shrink: 0;
+}
+.topbar-item-drag-handle:active {
+  cursor: grabbing;
+}
+.topbar-item-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.topbar-item-check input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+.topbar-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.topbar-item-title {
+  font-size: calc(13px * var(--ui-scale, 1));
+  font-weight: 550;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-item-desc {
+  font-size: calc(11px * var(--ui-scale, 1));
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.topbar-item-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background .14s, color .14s;
+}
+.topbar-item-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.topbar-item-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.topbar-item-btn svg.i {
+  width: 13px;
+  height: 13px;
 }
 .customizer-item input[type="checkbox"] {
   appearance: none;

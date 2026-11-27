@@ -1003,7 +1003,7 @@ function switchView(viewName) {
 
   if (viewName === 'vault') refreshVaultTree();
   else if (viewName === 'automation') { if (typeof loadAutomationData === 'function') loadAutomationData(); }
-  else if (viewName === 'settings') { loadStatusAndSettings(); updatePwaUi(); updateNotificationUi(); updateMobileAutofocusUi(); updateUiFontSizeUi(); updateFontSizeUi(); }
+  else if (viewName === 'settings') { loadStatusAndSettings(); updatePwaUi(); updateNotificationUi(); updateMobileAutofocusUi(); updateUiFontSizeUi(); updateFontSizeUi(); if (typeof renderTopbarSettingsManager === 'function') renderTopbarSettingsManager(); }
   else if (viewName === 'chat') {
     if (chatRooms.length === 0) {
       createNewChat();

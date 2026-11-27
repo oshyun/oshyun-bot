@@ -181,6 +181,7 @@ function closeRoomConfigPopover() {
 // ─── 상단바 버튼 표시 커스텀 & 가로 스크롤/스와이프 ───
 const TOPBAR_STORAGE_KEY = 'oshyun_topbar_visible_items_v1';
 const TOPBAR_ACTION_ITEMS = [
+  { id: 'title', label: '대화방 제목', icon: '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' },
   { id: 'usage', label: 'AI 사용량 배지', icon: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>' },
   { id: 'workdir', label: '작업 폴더', icon: '<svg class="i" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' },
   { id: 'model', label: '모델·추론강도', icon: '<svg class="i" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>' },
@@ -190,69 +191,196 @@ const TOPBAR_ACTION_ITEMS = [
   { id: 'memory', label: '마스터 메모리', icon: '<svg class="i" viewBox="0 0 24 24"><polygon points="12 2 2 6 12 10 22 6 12 2"/><polyline points="2 10 12 14 22 10"/><polyline points="2 14 12 18 22 14"/><polyline points="2 18 12 22 22 18"/></svg>' }
 ];
 
-function getTopbarVisibilityPreferences() {
+function getTopbarConfigList() {
+  const defaultItems = TOPBAR_ACTION_ITEMS.map(item => ({ id: item.id, visible: true }));
   try {
     const raw = localStorage.getItem(TOPBAR_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (!raw) return defaultItems;
+    const parsed = JSON.parse(raw);
+
+    // 1) 배열 형태 (신규 구조: 순서 + 표시여부)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const knownIds = new Set(TOPBAR_ACTION_ITEMS.map(i => i.id));
+      const seen = new Set();
+      const result = [];
+      for (const entry of parsed) {
+        if (entry && entry.id && knownIds.has(entry.id) && !seen.has(entry.id)) {
+          seen.add(entry.id);
+          result.push({ id: entry.id, visible: entry.visible !== false });
+        }
+      }
+      for (const def of defaultItems) {
+        if (!seen.has(def.id)) {
+          result.push({ id: def.id, visible: true });
+        }
+      }
+      return result;
+    }
+
+    // 2) 객체 맵 형태 (레거시 하위호환: { usage: true, ... })
+    if (parsed && typeof parsed === 'object') {
+      return defaultItems.map(item => ({
+        id: item.id,
+        visible: parsed[item.id] !== false
+      }));
+    }
   } catch (_) {}
-  return {};
+  return defaultItems;
+}
+
+function getTopbarVisibilityPreferences() {
+  const list = getTopbarConfigList();
+  const map = {};
+  list.forEach(item => {
+    map[item.id] = item.visible;
+  });
+  return map;
 }
 
 function saveTopbarVisibilityPreferences(prefs) {
-  try {
-    localStorage.setItem(TOPBAR_STORAGE_KEY, JSON.stringify(prefs));
-  } catch (_) {}
+  // prefs가 배열 형태이면 그대로 저장, 객체 형태이면 기존 순서 유지하며 visible 갱신
+  if (Array.isArray(prefs)) {
+    try {
+      localStorage.setItem(TOPBAR_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (_) {}
+  } else if (prefs && typeof prefs === 'object') {
+    const current = getTopbarConfigList();
+    const updated = current.map(item => ({
+      id: item.id,
+      visible: prefs[item.id] !== undefined ? !!prefs[item.id] : item.visible
+    }));
+    try {
+      localStorage.setItem(TOPBAR_STORAGE_KEY, JSON.stringify(updated));
+    } catch (_) {}
+  }
 }
 
 function applyTopbarVisibility() {
-  const prefs = getTopbarVisibilityPreferences();
-  TOPBAR_ACTION_ITEMS.forEach(item => {
-    const isVisible = prefs[item.id] !== false;
+  const config = getTopbarConfigList();
+
+  config.forEach((item, index) => {
     const el = document.querySelector(`[data-action-id="${item.id}"]`);
     if (el) {
-      if (isVisible) {
+      if (item.visible) {
         el.removeAttribute('data-topbar-hidden');
       } else {
         el.setAttribute('data-topbar-hidden', 'true');
       }
+      el.style.order = String(index);
     }
   });
+
   updateTopbarScrollIndicators();
+}
+
+function moveTopbarItem(index, direction) {
+  const config = getTopbarConfigList();
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= config.length) return;
+  const item = config.splice(index, 1)[0];
+  config.splice(targetIndex, 0, item);
+  saveTopbarVisibilityPreferences(config);
+  applyTopbarVisibility();
+  renderTopbarCustomizerList();
+  if (typeof renderTopbarSettingsManager === 'function') {
+    renderTopbarSettingsManager();
+  }
+}
+
+function reorderTopbarItems(fromIndex, toIndex) {
+  const config = getTopbarConfigList();
+  if (fromIndex < 0 || fromIndex >= config.length || toIndex < 0 || toIndex >= config.length) return;
+  const item = config.splice(fromIndex, 1)[0];
+  config.splice(toIndex, 0, item);
+  saveTopbarVisibilityPreferences(config);
+  applyTopbarVisibility();
+  renderTopbarCustomizerList();
+  if (typeof renderTopbarSettingsManager === 'function') {
+    renderTopbarSettingsManager();
+  }
+  showToast('상단바 항목 순서가 변경되었습니다.');
 }
 
 function renderTopbarCustomizerList() {
   const container = document.getElementById('topbar-customizer-list');
   if (!container) return;
-  const prefs = getTopbarVisibilityPreferences();
+  const config = getTopbarConfigList();
   container.innerHTML = '';
 
-  TOPBAR_ACTION_ITEMS.forEach(item => {
-    const isChecked = prefs[item.id] !== false;
+  config.forEach((item, index) => {
+    const def = TOPBAR_ACTION_ITEMS.find(i => i.id === item.id) || { label: item.id, icon: '' };
+    const row = document.createElement('div');
+    row.className = 'customizer-item-row';
+    row.dataset.index = String(index);
+    row.dataset.id = item.id;
+
     const label = document.createElement('label');
     label.className = 'customizer-item';
+    label.htmlFor = `topbar-popover-check-${item.id}`;
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.checked = isChecked;
+    checkbox.id = `topbar-popover-check-${item.id}`;
+    checkbox.checked = item.visible;
     checkbox.dataset.itemId = item.id;
     checkbox.addEventListener('change', (e) => {
-      const current = getTopbarVisibilityPreferences();
-      current[item.id] = e.target.checked;
-      saveTopbarVisibilityPreferences(current);
-      applyTopbarVisibility();
+      e.stopPropagation();
+      const current = getTopbarConfigList();
+      const target = current.find(c => c.id === item.id);
+      if (target) {
+        target.visible = e.target.checked;
+        saveTopbarVisibilityPreferences(current);
+        applyTopbarVisibility();
+        if (typeof renderTopbarSettingsManager === 'function') {
+          renderTopbarSettingsManager();
+        }
+      }
     });
 
     const iconSpan = document.createElement('span');
-    iconSpan.innerHTML = item.icon;
+    iconSpan.innerHTML = def.icon;
 
     const textSpan = document.createElement('span');
     textSpan.className = 'customizer-item-label';
-    textSpan.textContent = item.label;
+    textSpan.textContent = def.label;
 
     label.appendChild(checkbox);
     label.appendChild(iconSpan.firstElementChild || iconSpan);
     label.appendChild(textSpan);
-    container.appendChild(label);
+
+    const actions = document.createElement('div');
+    actions.className = 'customizer-item-actions';
+
+    const btnUp = document.createElement('button');
+    btnUp.type = 'button';
+    btnUp.className = 'customizer-order-btn';
+    btnUp.title = '위로 이동';
+    btnUp.disabled = (index === 0);
+    btnUp.innerHTML = '<svg class="i" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>';
+    btnUp.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      moveTopbarItem(index, -1);
+    });
+
+    const btnDown = document.createElement('button');
+    btnDown.type = 'button';
+    btnDown.className = 'customizer-order-btn';
+    btnDown.title = '아래로 이동';
+    btnDown.disabled = (index === config.length - 1);
+    btnDown.innerHTML = '<svg class="i" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    btnDown.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      moveTopbarItem(index, 1);
+    });
+
+    actions.appendChild(btnUp);
+    actions.appendChild(btnDown);
+
+    row.appendChild(label);
+    row.appendChild(actions);
+    container.appendChild(row);
   });
 }
 
@@ -295,9 +423,33 @@ function closeTopbarCustomizer() {
 }
 
 function resetTopbarVisibilityPreferences() {
-  saveTopbarVisibilityPreferences({});
+  resetTopbarPreferences();
+}
+
+function resetTopbarPreferences() {
+  const defaultItems = TOPBAR_ACTION_ITEMS.map(item => ({ id: item.id, visible: true }));
+  saveTopbarVisibilityPreferences(defaultItems);
   applyTopbarVisibility();
   renderTopbarCustomizerList();
+  if (typeof renderTopbarSettingsManager === 'function') {
+    renderTopbarSettingsManager();
+  }
+  showToast('상단바 항목 표시 및 순서가 기본값으로 복원되었습니다.');
+}
+
+function openTopbarSettingsSection() {
+  if (typeof switchView === 'function') {
+    switchView('settings');
+  }
+  setTimeout(() => {
+    const el = document.getElementById('setting-row-topbar-items');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.outline = '2px solid var(--accent)';
+      el.style.borderRadius = '8px';
+      setTimeout(() => { el.style.outline = 'none'; }, 2000);
+    }
+  }, 100);
 }
 
 function updateTopbarScrollIndicators() {

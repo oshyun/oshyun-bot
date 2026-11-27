@@ -53,6 +53,9 @@ function applyStatusPayload(data) {
   updateMobileAutofocusUi();
   updateUiFontSizeUi();
   updateFontSizeUi();
+  if (typeof renderTopbarSettingsManager === 'function') {
+    renderTopbarSettingsManager();
+  }
 
   const clientIpEl = document.getElementById('client-ip-display');
   if (clientIpEl && data.clientIp) clientIpEl.innerText = data.clientIp;
@@ -761,3 +764,107 @@ window.addEventListener('message', (event) => {
     loadGoogleAuthStatus();
   }
 });
+
+// ─── 상단 헤더(Topbar) 설정 화면 전용 상세 매니저 ───
+let topbarDragSourceIndex = null;
+
+function renderTopbarSettingsManager() {
+  const container = document.getElementById('topbar-items-manager');
+  if (!container) return;
+  if (typeof getTopbarConfigList !== 'function') return;
+
+  const config = getTopbarConfigList();
+  container.innerHTML = '';
+
+  config.forEach((item, index) => {
+    const def = TOPBAR_ACTION_ITEMS.find(i => i.id === item.id) || { label: item.id, icon: '' };
+    const row = document.createElement('div');
+    row.className = 'topbar-item-row';
+    row.draggable = true;
+    row.dataset.index = String(index);
+    row.dataset.id = item.id;
+
+    row.innerHTML = `
+      <div class="topbar-item-drag-handle" title="드래그하여 순서 변경" aria-label="드래그 핸들">
+        <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></svg>
+      </div>
+      <label class="topbar-item-check" for="topbar-settings-check-${item.id}">
+        <input type="checkbox" id="topbar-settings-check-${item.id}" ${item.visible ? 'checked' : ''}>
+        <div class="topbar-item-info">
+          <span class="topbar-item-title">${escapeHtml(def.label)}</span>
+          <span class="topbar-item-desc">${escapeHtml(item.id === 'title' ? '대화방 제목 및 음성 상태 표시등' : def.label)}</span>
+        </div>
+      </label>
+      <div class="topbar-item-actions">
+        <button type="button" class="topbar-item-btn" title="위로 이동" ${index === 0 ? 'disabled' : ''}>
+          <svg class="i" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button type="button" class="topbar-item-btn" title="아래로 이동" ${index === config.length - 1 ? 'disabled' : ''}>
+          <svg class="i" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    `;
+
+    const chk = row.querySelector(`#topbar-settings-check-${item.id}`);
+    if (chk) {
+      chk.addEventListener('change', (e) => {
+        const cur = getTopbarConfigList();
+        const target = cur.find(c => c.id === item.id);
+        if (target) {
+          target.visible = e.target.checked;
+          saveTopbarVisibilityPreferences(cur);
+          applyTopbarVisibility();
+          renderTopbarSettingsManager();
+          if (typeof renderTopbarCustomizerList === 'function') {
+            renderTopbarCustomizerList();
+          }
+          showToast(`'${def.label}' 항목이 ${target.visible ? '표시' : '숨김'} 처리되었습니다.`);
+        }
+      });
+    }
+
+    const [btnUp, btnDown] = row.querySelectorAll('.topbar-item-btn');
+    if (btnUp) {
+      btnUp.addEventListener('click', () => moveTopbarItem(index, -1));
+    }
+    if (btnDown) {
+      btnDown.addEventListener('click', () => moveTopbarItem(index, 1));
+    }
+
+    // 드래그 앤 드롭
+    row.addEventListener('dragstart', (e) => {
+      topbarDragSourceIndex = index;
+      row.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+      }
+    });
+
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      document.querySelectorAll('.topbar-item-row').forEach(el => el.classList.remove('drag-over'));
+      topbarDragSourceIndex = null;
+    });
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    });
+
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('drag-over');
+    });
+
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      if (topbarDragSourceIndex !== null && topbarDragSourceIndex !== index) {
+        reorderTopbarItems(topbarDragSourceIndex, index);
+      }
+    });
+
+    container.appendChild(row);
+  });
+}

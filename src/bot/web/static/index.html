@@ -36,14 +36,22 @@
         document.documentElement.style.setProperty('--chat-font-size', chatSize + 'px');
         document.documentElement.style.setProperty('--body-font-size', uiSize + 'px');
 
-        // 상단바 버튼 표시 커스텀 설정 사전 적용 (FOUC / 깜빡임 방지)
+        // 상단바 버튼 표시 및 순서 커스텀 설정 사전 적용 (FOUC / 깜빡임 방지)
         var rawTopbar = localStorage.getItem('oshyun_topbar_visible_items_v1');
         if (rawTopbar) {
           var topbarPrefs = JSON.parse(rawTopbar);
           var hideSelectors = [];
-          for (var k in topbarPrefs) {
-            if (topbarPrefs[k] === false) {
-              hideSelectors.push('[data-action-id="' + k + '"]');
+          if (Array.isArray(topbarPrefs)) {
+            for (var i = 0; i < topbarPrefs.length; i++) {
+              if (topbarPrefs[i] && topbarPrefs[i].visible === false) {
+                hideSelectors.push('[data-action-id="' + topbarPrefs[i].id + '"]');
+              }
+            }
+          } else if (typeof topbarPrefs === 'object') {
+            for (var k in topbarPrefs) {
+              if (topbarPrefs[k] === false) {
+                hideSelectors.push('[data-action-id="' + k + '"]');
+              }
             }
           }
           if (hideSelectors.length > 0) {
@@ -304,7 +312,7 @@
         <button class="icon-btn menu-btn" onclick="openRoomDrawer()" title="대화방 목록 및 메뉴">
           <svg class="i" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>
         </button>
-        <div class="topbar-title">
+        <div class="topbar-title" data-action-id="title" id="topbar-title-wrap">
           <button type="button" class="topbar-title-btn" id="topbar-title-btn" onclick="onTopbarTitleClick()" title="클릭하여 대화 이름 변경">
             <span class="t" id="topbar-title">새 대화</span>
             <svg class="i edit-hint" id="topbar-edit-hint" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -352,11 +360,17 @@
             <div class="customizer-popover-header">
               <div class="customizer-popover-title">
                 <svg class="i" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-                <span>상단바 버튼 표시</span>
+                <span>상단바 표시 및 순서</span>
               </div>
-              <button type="button" class="customizer-reset-btn" onclick="resetTopbarVisibilityPreferences()" title="모든 버튼 표시로 복원">모두 표시</button>
+              <button type="button" class="customizer-reset-btn" onclick="resetTopbarPreferences()" title="모든 항목 표시 및 순서 기본값으로 복원">기본값</button>
             </div>
             <div class="customizer-popover-list" id="topbar-customizer-list"></div>
+            <div class="customizer-popover-footer">
+              <button type="button" class="customizer-settings-link-btn" onclick="closeTopbarCustomizer(); openTopbarSettingsSection();" title="설정 화면에서 상세 관리">
+                <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>설정 화면에서 상세 관리</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -707,6 +721,18 @@
                       <option value="false" selected>사용 안 함 (추천 · 화면 가림 방지)</option>
                       <option value="true">항상 올림 (자동 포커스)</option>
                     </select>
+                  </div>
+                </div>
+                <div class="setting-row topbar-items-setting-row" id="setting-row-topbar-items">
+                  <div style="flex:1; min-width:0;">
+                    <div class="setting-label-row">
+                      <div class="setting-label">상단 헤더(Topbar) 표시 및 순서</div>
+                      <button type="button" class="btn sm ghost" id="btn-reset-topbar-items" onclick="resetTopbarPreferences()" title="상단 헤더 표시 및 순서를 기본값으로 초기화">기본값 복원</button>
+                    </div>
+                    <div class="setting-desc">상단 헤더에 노출할 항목을 켜고 끄거나, 위/아래(▲/▼) 버튼 또는 드래그하여 원하는 순서로 배치합니다.</div>
+                    <div class="topbar-items-manager" id="topbar-items-manager">
+                      <!-- 자바스크립트로 동적 렌더링 -->
+                    </div>
                   </div>
                 </div>
               </div>
