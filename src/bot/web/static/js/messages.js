@@ -1833,6 +1833,8 @@ function cancelQueuedMessageByIndex(idx) {
   }
 
   const removedText = targetMsg.text || '';
+  const clientMsgId = targetMsg.clientMsgId || null;
+  const userMsgId = targetMsg.id || null;
   room.messages.splice(idx, 1);
 
   const liveState = ensureRoomLiveState(room.id);
@@ -1849,6 +1851,8 @@ function cancelQueuedMessageByIndex(idx) {
       socket.send(JSON.stringify({
         type: 'cancel_queued',
         roomId: room.id,
+        clientMsgId: clientMsgId,
+        userMsgId: userMsgId,
         text: removedText,
         queueIndex: queueIndex
       }));

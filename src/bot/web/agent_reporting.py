@@ -74,6 +74,47 @@ async def _invoke_on_complete_hook(
             exc,
         )
 
+def cancel_slot_message_for_task(task_id: str, room_id: str, reason: str = "사용자에 의해 취소되었습니다.") -> None:
+    """하위 작업의 태스크 원장 및 발주처 슬롯 메시지(Pattern E)를 즉시 취소 상태로 영속화한다."""
+    if not task_id:
+        return
+    _rec = master_tasks.get_task(task_id) or {}
+    _now_done = time.time()
+    _slot_id = _rec.get("slotMsgId")
+    if isinstance(_slot_id, int) and _slot_id > 0:
+        try:
+            current_chat_db = _get_mod_attr("chat_db", chat_db)
+            if current_chat_db and hasattr(current_chat_db, "update_message"):
+                _cancel_steps = [{
+                    "kind": "subagent_bypass",
+                    "tool": "bypass",
+                    "title": str(_rec.get("title") or room_id),
+                    "roomId": room_id,
+                    "taskId": task_id,
+                    "status": "cancelled",
+                    "reason": reason,
+                    "bypassedFromRoomId": room_id,
+                }]
+                current_chat_db.update_message(
+                    _slot_id,
+                    text=f"🛑 **[{_rec.get('title') or room_id}]** 하위 작업이 취소되었습니다.",
+                    steps=_cancel_steps,
+                    update_preview=False,
+                )
+        except Exception:
+            pass
+    master_tasks.update_task(
+        task_id,
+        status="cancelled",
+        user_cancelled=True,
+        user_confirmed=True,
+        reviewed=True,
+        reviewedAt=_now_done,
+        finishedAt=_now_done,
+        error=reason[:400],
+    )
+
+
 async def _finalize_orchestrator_completion(
     *,
     room_id: str,
@@ -100,39 +141,7 @@ async def _finalize_orchestrator_completion(
             is_user_aborted = True
         _now_done = time.time()
         if is_user_aborted:
-            _slot_id = _rec.get("slotMsgId")
-            if isinstance(_slot_id, int) and _slot_id > 0:
-                try:
-                    current_chat_db = _get_mod_attr("chat_db", chat_db)
-                    if current_chat_db and hasattr(current_chat_db, "update_message"):
-                        _cancel_steps = [{
-                            "kind": "subagent_bypass",
-                            "tool": "bypass",
-                            "title": str(_rec.get("title") or room_id),
-                            "roomId": room_id,
-                            "taskId": task_id,
-                            "status": "cancelled",
-                            "reason": "사용자 취소됨",
-                            "bypassedFromRoomId": room_id,
-                        }]
-                        current_chat_db.update_message(
-                            _slot_id,
-                            text=f"🛑 **[{_rec.get('title') or room_id}]** 하위 작업이 사용자에 의해 취소되었습니다.",
-                            steps=_cancel_steps,
-                            update_preview=False,
-                        )
-                except Exception:
-                    pass
-            master_tasks.update_task(
-                task_id,
-                status="cancelled",
-                user_cancelled=True,
-                user_confirmed=True,
-                reviewed=True,
-                reviewedAt=_now_done,
-                finishedAt=_now_done,
-                error=(error_text or result_text or "사용자에 의해 작업이 취소되었습니다.")[:400],
-            )
+            cancel_slot_message_for_task(task_id, room_id, error_text or result_text or "사용자에 의해 작업이 취소되었습니다.")
         elif status == "done":
             done_fields: dict[str, Any] = {
                 "status": "done",
