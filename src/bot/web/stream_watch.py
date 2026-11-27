@@ -261,8 +261,10 @@ async def _run_stream_tail_loop(
     last_db_commit_ts = time.time()
     last_step_count = len(collected_steps)
     last_stream_len = len(live_snapshot.get("streamText") or "")
+    last_activity_ts = time.time()
 
     while not tail_stop_event.is_set():
+        had_data = False
         if out_file_path and os.path.exists(out_file_path):
             try:
                 with open(out_file_path, "rb") as stream_file:
@@ -270,6 +272,8 @@ async def _run_stream_tail_loop(
                     new_bytes = stream_file.read()
                     offset += len(new_bytes)
                     if new_bytes:
+                        had_data = True
+                        last_activity_ts = time.time()
                         read_buffer += new_bytes
                         parts = read_buffer.split(b"\n")
                         read_buffer = parts.pop()
@@ -397,9 +401,11 @@ async def _run_stream_tail_loop(
                                         "stepIndex": target_i,
                                         "step": target_step,
                                     })
-                                elif st == "agent_response" and state == "ACTIVE":
+                                elif st == "agent_response" and (state in ("ACTIVE", "DONE")):
                                     delta = su.get("text_delta") or ""
                                     if delta:
+                                        had_data = True
+                                        last_activity_ts = time.time()
                                         _room_live_feeds[room_key] = "답변 작성 중…"
                                         live_snapshot["feed"] = "답변 작성 중…"
                                         live_snapshot["streamText"] = (live_snapshot.get("streamText") or "") + delta
@@ -437,6 +443,9 @@ async def _run_stream_tail_loop(
                         tf.seek(agy_transcript_offset)
                         new_t_lines = tf.readlines()
                         agy_transcript_offset = tf.tell()
+                        if new_t_lines:
+                            had_data = True
+                            last_activity_ts = time.time()
                         for t_line in new_t_lines:
                             t_line = t_line.strip()
                             if not t_line:
@@ -492,7 +501,9 @@ async def _run_stream_tail_loop(
                 except Exception:
                     pass
 
-        await asyncio.sleep(0.12)
+        # 활성 스트리밍 중이거나 최근 0.5초 이내에 데이터가 유입되었으면 초고속(20ms), 유휴 시 80ms
+        poll_delay = 0.02 if (had_data or (time.time() - last_activity_ts < 0.5)) else 0.08
+        await asyncio.sleep(poll_delay)
 
 async def _watch_and_finish_web_job(
     job_id: str,

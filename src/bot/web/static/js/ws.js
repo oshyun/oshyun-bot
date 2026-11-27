@@ -1308,6 +1308,21 @@ function handleWsEvent(data) {
     if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
       renderThreadPanelBody();
     }
+  } else if (data.type === 'stream_chunk') {
+    const chunkText = data.text || '';
+    if (!chunkText) return;
+    liveState.isRunning = true;
+    liveState.streamText = chunkText;
+    liveState.feed = '답변 작성 중…';
+    setAgentAvatarStatus('working', liveState.feed);
+    if (isCurrentRoom) {
+      setOrbState('thinking', liveState.feed);
+      updateLiveStreamMarkdownDom(liveState.streamText);
+      updateLiveFeedDom(liveState.feed);
+    }
+    if (isThreadRoom && typeof renderThreadPanelBody === 'function') {
+      renderThreadPanelBody();
+    }
   } else if (data.type === 'progress') {
     liveState.isRunning = true;
     const nextFeed = data.feed || data.text || '';
@@ -1323,6 +1338,9 @@ function handleWsEvent(data) {
       renderThreadPanelBody();
     }
   } else if (data.type === 'cancelled') {
+    if (typeof flushLiveStreamBuffer === 'function') {
+      flushLiveStreamBuffer();
+    }
     liveState.isRunning = false;
     if (typeof updateInlineChatChipsStatus === 'function') {
       updateInlineChatChipsStatus(targetRoom.id, 'failed');
@@ -1352,6 +1370,9 @@ function handleWsEvent(data) {
       updateSubAgentChipsStatus(targetRoom.id, 'error', '작업 취소됨', targetRoom.title);
     }
   } else if (data.type === 'result') {
+    if (typeof flushLiveStreamBuffer === 'function') {
+      flushLiveStreamBuffer();
+    }
     const replyText = data.text || data.result || '';
     const finalSteps = filterToolSteps((Array.isArray(data.steps) && data.steps.length > 0) ? data.steps : [...liveState.steps]);
     const remainingQueued = getQueuedMessagesCount(targetRoom);

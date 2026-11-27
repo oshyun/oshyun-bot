@@ -138,23 +138,83 @@ function updateLiveAgentStepInDom(stepIndex, step, allSteps) {
   }
 }
 
-let _pendingStreamRaf = null;
-let _pendingStreamText = '';
+let _liveStreamTargetText = '';
+let _liveStreamRenderedText = '';
+let _liveStreamRafId = null;
+
+function _runSmoothStreamTick() {
+  _liveStreamRafId = null;
+  let streamEl = document.getElementById('live-stream-md');
+  if (!streamEl) {
+    if (typeof renderMessagesForCurrentRoom === 'function') {
+      renderMessagesForCurrentRoom();
+    }
+    streamEl = document.getElementById('live-stream-md');
+    if (!streamEl) return;
+  }
+
+  const targetLen = _liveStreamTargetText.length;
+  const renderedLen = _liveStreamRenderedText.length;
+  const remaining = targetLen - renderedLen;
+
+  if (remaining <= 0) {
+    if (_liveStreamRenderedText !== _liveStreamTargetText) {
+      _liveStreamRenderedText = _liveStreamTargetText;
+      streamEl.style.display = _liveStreamRenderedText ? '' : 'none';
+      streamEl.innerHTML = formatMarkdown(_liveStreamRenderedText);
+      scrollToBottomIfNear();
+    }
+    return;
+  }
+
+  // 적응형 글자 수 계산 (Adaptive Easing):
+  // 60fps 기준 부드러운 타이핑 느낌을 주되, 버퍼가 쌓이면 신속히 캐치업
+  let step = 1;
+  if (remaining > 60) {
+    step = Math.min(24, Math.ceil(remaining / 4));
+  } else if (remaining > 25) {
+    step = Math.min(8, Math.ceil(remaining / 5));
+  } else if (remaining > 8) {
+    step = 3;
+  } else if (remaining > 3) {
+    step = 2;
+  } else {
+    step = 1;
+  }
+
+  const nextLen = Math.min(targetLen, renderedLen + step);
+  _liveStreamRenderedText = _liveStreamTargetText.slice(0, nextLen);
+
+  streamEl.style.display = '';
+  streamEl.innerHTML = formatMarkdown(_liveStreamRenderedText);
+  scrollToBottomIfNear();
+
+  if (_liveStreamRenderedText.length < targetLen) {
+    _liveStreamRafId = requestAnimationFrame(_runSmoothStreamTick);
+  }
+}
 
 function updateLiveStreamMarkdownDom(streamText) {
-  _pendingStreamText = streamText;
-  if (_pendingStreamRaf) return;
-  _pendingStreamRaf = requestAnimationFrame(() => {
-    _pendingStreamRaf = null;
-    const streamEl = document.getElementById('live-stream-md');
-    if (!streamEl) {
-      renderMessagesForCurrentRoom();
-      return;
-    }
+  _liveStreamTargetText = streamText || '';
+  if (!_liveStreamRafId) {
+    _liveStreamRafId = requestAnimationFrame(_runSmoothStreamTick);
+  }
+}
+
+function flushLiveStreamBuffer() {
+  if (_liveStreamRafId) {
+    cancelAnimationFrame(_liveStreamRafId);
+    _liveStreamRafId = null;
+  }
+  _liveStreamRenderedText = _liveStreamTargetText;
+  const streamEl = document.getElementById('live-stream-md');
+  if (streamEl && _liveStreamTargetText) {
     streamEl.style.display = '';
-    streamEl.innerHTML = formatMarkdown(_pendingStreamText);
+    streamEl.innerHTML = formatMarkdown(_liveStreamTargetText);
     scrollToBottomIfNear();
-  });
+  }
+  _liveStreamTargetText = '';
+  _liveStreamRenderedText = '';
 }
 
 function decodeSafeUrlPart(val) {
