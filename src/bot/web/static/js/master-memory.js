@@ -1016,16 +1016,40 @@ function switchView(viewName) {
   }
 }
 
+function formatRoomTitleDisplay(title, limit = 10) {
+  if (!title) return '새 대화';
+  const chars = Array.from(String(title));
+  if (chars.length > limit) {
+    return chars.slice(0, limit).join('') + '…';
+  }
+  return title;
+}
+
 function updateTopbarTitle() {
   const titleEl = document.getElementById('topbar-title');
   if (!titleEl) return;
   if (currentView === 'chat') {
     const cur = getCurrentRoom();
-    titleEl.innerText = (cur && cur.title) ? cur.title : '새 대화';
+    const rawTitle = (cur && cur.title) ? cur.title : '새 대화';
+    titleEl.innerText = formatRoomTitleDisplay(rawTitle, 10);
+    const titleBtn = document.getElementById('topbar-title-btn');
+    if (titleBtn) {
+      titleBtn.title = `클릭하여 대화 이름 변경: ${rawTitle}`;
+      titleBtn.setAttribute('aria-label', `대화 이름: ${rawTitle}`);
+    }
     if (typeof updatePwaManifestForRoom === 'function' && typeof currentRoomId !== 'undefined' && currentRoomId) {
       updatePwaManifestForRoom(currentRoomId);
     }
   } else {
-    titleEl.innerText = VIEW_TITLES[currentView] || 'second-bot';
+    const viewTitle = VIEW_TITLES[currentView] || 'second-bot';
+    titleEl.innerText = formatRoomTitleDisplay(viewTitle, 10);
+    const titleBtn = document.getElementById('topbar-title-btn');
+    if (titleBtn) {
+      titleBtn.title = viewTitle;
+      titleBtn.setAttribute('aria-label', viewTitle);
+    }
+  }
+  if (typeof updateTopbarScrollIndicators === 'function') {
+    updateTopbarScrollIndicators();
   }
 }

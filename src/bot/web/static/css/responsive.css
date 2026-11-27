@@ -19,9 +19,9 @@
   .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
   .menu-btn { display: inline-flex; }
   .topbar { padding: 0 6px; padding-top: env(safe-area-inset-top); height: calc(52px + env(safe-area-inset-top)); gap: 6px; }
-  .topbar-title { justify-content: flex-start; font-size: calc(14.5px * var(--ui-scale, 1)); min-width: 0; flex: 0 1 auto; max-width: min(34vw, 150px); }
+  .topbar-title { justify-content: flex-start; font-size: calc(14.5px * var(--ui-scale, 1)); min-width: 0; flex-shrink: 0; }
   .topbar-title-btn { margin-left: 0; max-width: 100%; min-width: 0; padding: 4px 6px; }
-  .topbar-title-btn span.t { max-width: min(30vw, 130px); }
+  .topbar-title-btn span.t { max-width: 16ch; }
   .mobile-only { display: inline-flex !important; }
   .desktop-only { display: none !important; }
   .thread { padding: 16px 12px 24px; gap: 18px; }
@@ -330,7 +330,6 @@ body.is-pinching-font {
 }
 
 @media (max-width: 480px) {
-  .topbar-title-btn span.t { max-width: min(24vw, 100px); }
   .topbar-usage-badge {
     gap: 2px;
     padding: 2px 3.5px;
@@ -340,9 +339,6 @@ body.is-pinching-font {
   .topbar-usage-badge .quota-tag { font-size: calc(8.5px * var(--ui-scale, 1)); }
 }
 
-@media (max-width: 360px) {
-  .topbar-title-btn span.t { max-width: min(18vw, 65px); }
-}
 
 /* PWA Standalone 모드 (안드로이드 WebAPK / iOS 홈 화면 바로가기) 전용 */
 @media all and (display-mode: standalone) {

@@ -312,15 +312,15 @@
         <button class="icon-btn menu-btn" onclick="openRoomDrawer()" title="대화방 목록 및 메뉴">
           <svg class="i" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>
         </button>
-        <div class="topbar-title" data-action-id="title" id="topbar-title-wrap">
-          <button type="button" class="topbar-title-btn" id="topbar-title-btn" onclick="onTopbarTitleClick()" title="클릭하여 대화 이름 변경">
-            <span class="t" id="topbar-title">새 대화</span>
-            <svg class="i edit-hint" id="topbar-edit-hint" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          </button>
-          <span id="voice-orb" class="state-dot idle" title=""></span>
-        </div>
         <div class="topbar-actions-scroll" id="topbar-actions-scroll">
           <div class="topbar-actions" id="chat-actions">
+            <div class="topbar-title" data-action-id="title" id="topbar-title-wrap">
+              <button type="button" class="topbar-title-btn" id="topbar-title-btn" onclick="onTopbarTitleClick()" title="클릭하여 대화 이름 변경">
+                <span class="t" id="topbar-title">새 대화</span>
+                <svg class="i edit-hint" id="topbar-edit-hint" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </button>
+              <span id="voice-orb" class="state-dot idle" title=""></span>
+            </div>
             <button type="button" class="avatar-usage-badge topbar-usage-badge" id="topbar-usage-badge" data-action-id="usage" style="display:none;" onclick="event.stopPropagation(); openAllUsageModal()" title="클릭하여 전체 모델 사용량 확인"></button>
             <button type="button" class="topbar-workdir-pill" id="btn-topbar-workdir" data-action-id="workdir" onclick="copyCurrentRoomWorkdir()" title="대화방 작업 디렉토리 (클릭하여 경로 복사)">
               <svg class="i pill-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
