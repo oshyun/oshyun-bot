@@ -352,7 +352,7 @@ body.is-pinching-font {
   }
 }
 @media (max-width: 1024px) and (display-mode: standalone) {
-  .topbar-usage-badge {
+  .topbar-usage-badge:not([data-topbar-hidden="true"]) {
     display: inline-flex !important;
   }
 }

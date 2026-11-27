@@ -263,8 +263,14 @@ function applyTopbarVisibility() {
     if (el) {
       if (item.visible) {
         el.removeAttribute('data-topbar-hidden');
+        if (item.id === 'usage' && lastAgyUsageData) {
+          el.style.display = 'inline-flex';
+        }
       } else {
         el.setAttribute('data-topbar-hidden', 'true');
+        if (item.id === 'usage') {
+          el.style.display = 'none';
+        }
       }
       el.style.order = String(index);
     }

@@ -1655,7 +1655,11 @@ function updateAvatarUsageBadge(usage) {
   const tip = buildAgyUsageTooltip(usage);
   badges.forEach(badge => {
     badge.innerHTML = html;
-    badge.style.display = 'inline-flex';
+    if (badge.getAttribute('data-topbar-hidden') === 'true') {
+      badge.style.display = 'none';
+    } else {
+      badge.style.display = 'inline-flex';
+    }
     badge.title = tip;
     // 마우스 호버 시 실시간 상대 시간 재계산 (1회 등록)
     if (!badge.dataset.hoverBound) {

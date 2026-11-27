@@ -1047,6 +1047,9 @@
 
 /* 커스텀 설정으로 숨겨진 상단바 아이템 */
 [data-topbar-hidden="true"],
+.topbar-actions [data-topbar-hidden="true"],
+.topbar [data-topbar-hidden="true"],
+.topbar-usage-badge[data-topbar-hidden="true"],
 .topbar-item-hidden {
   display: none !important;
 }

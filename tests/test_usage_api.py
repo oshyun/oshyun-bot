@@ -279,6 +279,30 @@ class TestUsageHtmlUi(unittest.TestCase):
         self.assertIn("display-mode: standalone", responsive_css)
         self.assertIn("topbar-usage-badge", responsive_css)
 
+    def test_topbar_usage_badge_custom_hide_rules(self):
+        """커스텀 설정(data-topbar-hidden)으로 사용량 배지를 숨겼을 때 CSS 및 JS에서 안전하게 숨겨지는지 검증."""
+        static_dir = os.path.join(_SRC_DIR, "bot", "web", "static")
+        with open(os.path.join(static_dir, "css", "layout.css"), encoding="utf-8") as f:
+            layout_css = f.read()
+        with open(os.path.join(static_dir, "css", "responsive.css"), encoding="utf-8") as f:
+            responsive_css = f.read()
+        with open(os.path.join(static_dir, "js", "rooms-sync.js"), encoding="utf-8") as f:
+            rooms_sync_js = f.read()
+        with open(os.path.join(static_dir, "js", "rooms-ui.js"), encoding="utf-8") as f:
+            rooms_ui_js = f.read()
+
+        # layout.css에 data-topbar-hidden 숨김 처리
+        self.assertIn('.topbar-usage-badge[data-topbar-hidden="true"]', layout_css)
+
+        # responsive.css의 standalone 미디어 쿼리가 data-topbar-hidden을 덮어쓰지 않도록 예외 처리
+        self.assertIn('.topbar-usage-badge:not([data-topbar-hidden="true"])', responsive_css)
+
+        # rooms-sync.js의 updateAvatarUsageBadge가 data-topbar-hidden 상태일 때 style.display = 'none' 유지
+        self.assertIn("badge.getAttribute('data-topbar-hidden') === 'true'", rooms_sync_js)
+
+        # rooms-ui.js의 applyTopbarVisibility가 사용량 배지 visible 토글 시 display 상태 동기화
+        self.assertIn("if (item.id === 'usage')", rooms_ui_js)
+
 
 if __name__ == "__main__":
     unittest.main()
