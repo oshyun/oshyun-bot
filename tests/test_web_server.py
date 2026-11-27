@@ -4608,6 +4608,44 @@ assert.strictEqual(app.state().roomsRefreshCount, 1);
             self.assertEqual(body["rooms"], fake_rooms)
             mock_search.assert_called_once_with("본문", limit=100)
 
+    def test_api_client_errors_endpoint(self):
+        """POST /api/client-errors 엔드포인트가 JSON 페이로드를 정상 수신하고 200 반환하는지 검증."""
+        import json as _json
+        from aiohttp.test_utils import make_mocked_request
+
+        req_payload = {
+            "type": "INITIAL_LOADING_WATCHDOG",
+            "message": "테스트 워치독",
+            "breadcrumbs": [{"t": "12:00:00", "cat": "test", "msg": "test message"}],
+        }
+        req = make_mocked_request(
+            "POST",
+            "/api/client-errors",
+            headers={"Content-Type": "application/json"},
+            payload=_json.dumps(req_payload).encode("utf-8"),
+        )
+        resp = asyncio.run(web_server.handle_client_errors(req))
+        self.assertEqual(resp.status, 200)
+        body = _json.loads(resp.text)
+        self.assertTrue(body["ok"])
+
+    def test_client_errors_auth_exemption(self):
+        """POST /api/client-errors 는 인증 없이도 통과(EXEMPT)되어야 함."""
+        from aiohttp.test_utils import make_mocked_request
+        from bot.web.auth import auth_middleware
+
+        req = make_mocked_request("POST", "/api/client-errors")
+        called = False
+
+        async def dummy_handler(r):
+            nonlocal called
+            called = True
+            return web.Response(text="ok")
+
+        resp = asyncio.run(auth_middleware(req, dummy_handler))
+        self.assertTrue(called)
+        self.assertEqual(resp.text, "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

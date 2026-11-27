@@ -127,10 +127,93 @@ window.fetch = function(url, options = {}) {
   return _nativeFetch.call(this, url, options);
 };
 
+// ─── 클라이언트 진단 링버퍼 & 에러 원격 수집 ───
+const MAX_BREADCRUMBS = 50;
+const _clientBreadcrumbs = [];
+
+function addBreadcrumb(category, message, data = null) {
+  try {
+    const entry = {
+      t: new Date().toISOString().slice(11, 23),
+      cat: String(category || 'info'),
+      msg: String(message || ''),
+    };
+    if (data !== null && data !== undefined) {
+      entry.d = typeof data === 'object' ? JSON.parse(JSON.stringify(data)) : data;
+    }
+    _clientBreadcrumbs.push(entry);
+    if (_clientBreadcrumbs.length > MAX_BREADCRUMBS) {
+      _clientBreadcrumbs.shift();
+    }
+  } catch (_) {}
+}
+window.addBreadcrumb = addBreadcrumb;
+window.getClientBreadcrumbs = () => [..._clientBreadcrumbs];
+
+function reportClientError(type, errorOrMessage, extra = {}) {
+  try {
+    let msg = '';
+    let stack = '';
+    if (errorOrMessage instanceof Error) {
+      msg = errorOrMessage.message || String(errorOrMessage);
+      stack = errorOrMessage.stack || '';
+    } else if (typeof errorOrMessage === 'object' && errorOrMessage !== null) {
+      msg = errorOrMessage.message || JSON.stringify(errorOrMessage);
+      stack = errorOrMessage.stack || '';
+    } else {
+      msg = String(errorOrMessage || '');
+    }
+
+    addBreadcrumb('error_report', `[${type}] ${msg}`);
+
+    const payload = {
+      type: type || 'CLIENT_ERROR',
+      message: msg,
+      stack,
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      currentRoomId: typeof currentRoomId !== 'undefined' ? currentRoomId : null,
+      breadcrumbs: _clientBreadcrumbs.slice(-25),
+      ...extra
+    };
+
+    const serialized = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([serialized], { type: 'application/json' });
+      navigator.sendBeacon('/api/client-errors', blob);
+    } else {
+      fetch('/api/client-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: serialized,
+        keepalive: true
+      }).catch(() => {});
+    }
+  } catch (_) {}
+}
+window.reportClientError = reportClientError;
+
+// ─── 전역 비정상 에러 및 비동기 거부 캡처 ───
+window.addEventListener('error', (event) => {
+  addBreadcrumb('uncaught_error', event.message);
+  reportClientError('UNCAUGHT_ERROR', event.error || event.message, {
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno
+  });
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reasonStr = event.reason ? (event.reason.message || String(event.reason)) : 'unknown';
+  addBreadcrumb('unhandled_rejection', reasonStr);
+  reportClientError('UNHANDLED_REJECTION', event.reason);
+});
+
 // ─── 네트워크 타임아웃 안전망 래퍼 (AbortSignal 기반) ───
 function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
   const controller = new AbortController();
   const timer = setTimeout(() => {
+    addBreadcrumb('net_timeout', `${url} (${timeoutMs}ms 초과)`);
     controller.abort(new Error(`Fetch timed out after ${timeoutMs}ms: ${url}`));
   }, timeoutMs);
 

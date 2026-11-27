@@ -936,16 +936,29 @@ async def handle_api_upload(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "files": uploaded_files})
 
 
+SLOW_API_THRESHOLD_SECONDS = 0.8
+
+
 async def handle_chat_rooms(_request: web.Request) -> web.Response:
     """GET /api/chat/rooms — 우리 앱 전용 대화방 목록 반환 (초고속 단일 진실 원천 SSOT)."""
+    t0 = time.perf_counter()
     current_load_index = _get_mod_attr("_load_chat_rooms_index", _load_chat_rooms_index)
     rooms = current_load_index()
     from bot.web.runtime_state import build_active_runs_payload
     build_payload_fn = _get_mod_attr("build_active_runs_payload", build_active_runs_payload)
+    active_runs = build_payload_fn()
+    elapsed = time.perf_counter() - t0
+    if elapsed >= SLOW_API_THRESHOLD_SECONDS:
+        logger.warning(
+            "[slow_api] /api/chat/rooms 응답 지연: %.2fs (대화방 %d건, 활성실행 %d건)",
+            elapsed,
+            len(rooms),
+            len(active_runs) if active_runs else 0,
+        )
     return web.json_response({
         "ok": True,
         "rooms": rooms,
-        "activeRuns": build_payload_fn(),
+        "activeRuns": active_runs,
     })
 
 
@@ -969,6 +982,7 @@ async def handle_search_chat_rooms(request: web.Request) -> web.Response:
 
 async def handle_chat_history(request: web.Request) -> web.Response:
     """GET /api/chat/history?roomId=...&sessionId=... — 특정 대화방의 대화 내역 전체를 반환한다."""
+    t0 = time.perf_counter()
     room_id = request.query.get("roomId", "").strip() or request.query.get("sessionId", "").strip()
     if not room_id:
         return web.json_response({"ok": False, "error": "roomId 또는 sessionId 파라미터가 필요합니다."}, status=400)
@@ -1027,6 +1041,15 @@ async def handle_chat_history(request: web.Request) -> web.Response:
         else:
             is_coding = get_coding_mode()
             resolved_workdir = (paths.CODEDIR or paths.WORKDIR) if is_coding else paths.WORKDIR
+
+    elapsed = time.perf_counter() - t0
+    if elapsed >= SLOW_API_THRESHOLD_SECONDS:
+        logger.warning(
+            "[slow_api] /api/chat/history 응답 지연: %.2fs (roomId=%s, 메시지 %d건)",
+            elapsed,
+            resolved_room_id,
+            len(messages) if messages else 0,
+        )
 
     return web.json_response({
         "ok": True,

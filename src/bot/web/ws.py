@@ -30,6 +30,10 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     from bot.web.room_queue import cancel_active_run, enqueue_room_turn
     from bot.web.runtime_state import _get_mod_attr, _connected_websockets, _active_watch_tasks, _room_queues, _room_session_ids, _last_chat_requests, broadcast_ws_json
 
+    t_start = time.time()
+    from bot.web.auth import _get_client_ip
+    client_ip = _get_client_ip(request)
+
     websocket = web.WebSocketResponse(heartbeat=25.0)
     await websocket.prepare(request)
     _connected_websockets.add(websocket)
@@ -346,5 +350,11 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                 break
     finally:
         _connected_websockets.discard(websocket)
+        duration = time.time() - t_start
+        close_code = websocket.close_code
+        if close_code and close_code not in (1000, 1001):
+            logger.warning("[ws_disconnect] 비정상 소켓 종료: code=%s (지속: %.1fs, IP: %s)", close_code, duration, client_ip)
+        else:
+            logger.info("[ws_disconnect] 소켓 연결 해제: code=%s (지속: %.1fs, IP: %s)", close_code, duration, client_ip)
 
     return websocket

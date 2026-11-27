@@ -11,6 +11,7 @@ function connectWs() {
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
+    if (typeof addBreadcrumb === 'function') addBreadcrumb('ws', 'WebSocket 연결 수립');
     const banner = document.getElementById('conn-banner');
     if (banner) banner.classList.remove('show');
     if (wsInitialConnected) {
@@ -36,14 +37,17 @@ function connectWs() {
     } catch (_) {}
   };
 
-  socket.onclose = () => {
+  socket.onclose = (e) => {
+    if (typeof addBreadcrumb === 'function') addBreadcrumb('ws_close', `소켓 연결 해제 (code=${e?.code || 'unknown'}, clean=${e?.wasClean})`);
     const banner = document.getElementById('conn-banner');
     if (banner) banner.classList.add('show');
     setAgentAvatarStatus('offline', '재연결 중…');
     setTimeout(connectWs, 2000);
   };
 
-  socket.onerror = () => {};
+  socket.onerror = () => {
+    if (typeof addBreadcrumb === 'function') addBreadcrumb('ws_error', '소켓 오류 발생');
+  };
 }
 
 function setOrbState(state, label) {

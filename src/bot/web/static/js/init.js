@@ -192,9 +192,58 @@ function markAppReady() {
   isAppInitialized = true;
   document.body.classList.add('app-ready');
   hideInitialSkeletons();
+  if (typeof addBreadcrumb === 'function') addBreadcrumb('init', '앱 초기화 완료 (app-ready)');
 }
 window.markAppReady = markAppReady;
 window.hideInitialSkeletons = hideInitialSkeletons;
+
+function dumpDiagnostics() {
+  const diagData = {
+    time: new Date().toISOString(),
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    currentRoomId: typeof currentRoomId !== 'undefined' ? currentRoomId : null,
+    roomCount: Array.isArray(chatRooms) ? chatRooms.length : 0,
+    isAppInitialized: typeof isAppInitialized !== 'undefined' ? isAppInitialized : null,
+    isInitialRoomsLoading: typeof isInitialRoomsLoading !== 'undefined' ? isInitialRoomsLoading : null,
+    wsReady: (typeof socket !== 'undefined' && socket) ? socket.readyState : null,
+    breadcrumbs: typeof getClientBreadcrumbs === 'function' ? getClientBreadcrumbs() : []
+  };
+  return diagData;
+}
+window.dumpDiagnostics = dumpDiagnostics;
+
+function setupDiagnosticGesture() {
+  const triggerEl = document.getElementById('topbar-title-wrap') || document.getElementById('topbar-title');
+  if (!triggerEl) return;
+  let tapCount = 0;
+  let lastTapTime = 0;
+
+  triggerEl.addEventListener('click', (e) => {
+    const now = Date.now();
+    if (now - lastTapTime > 2500) {
+      tapCount = 1;
+    } else {
+      tapCount++;
+    }
+    lastTapTime = now;
+
+    if (tapCount >= 5) {
+      tapCount = 0;
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      const text = JSON.stringify(dumpDiagnostics(), null, 2);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast('📋 클라이언트 진단 로그(최근 50건)가 클립보드에 복사되었습니다.');
+        }).catch(() => {
+          showToast('⚠️ 클립보드 복사 권한이 필요합니다.');
+        });
+      } else {
+        showToast('⚠️ 클립보드 API 미지원 브라우저입니다.');
+      }
+    }
+  });
+}
 
 // ─── 초기화 ───
 window.addEventListener('DOMContentLoaded', () => {
@@ -202,6 +251,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const initWatchdog = setTimeout(() => {
     if (!isAppInitialized) {
       console.warn('[Watchdog] 초기 로딩 타임아웃(2.8s) 도달 — 스켈레톤 강제 해제 및 안전망 렌더링');
+      if (typeof addBreadcrumb === 'function') addBreadcrumb('watchdog', '초기 로딩 워치독 강제 안전망 가동');
+      if (typeof reportClientError === 'function') {
+        reportClientError('INITIAL_LOADING_WATCHDOG', '초기 로딩 타임아웃(2.8s) 도달로 워치독 안전망이 강제 가동되었습니다.');
+      }
       if (typeof isInitialRoomsLoading !== 'undefined') isInitialRoomsLoading = false;
       if (typeof ensureCoreRoom === 'function') ensureCoreRoom();
       if (Array.isArray(chatRooms) && chatRooms.length === 0) {
@@ -334,6 +387,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initPullToRefresh();
     initPinchZoomFontSize();
     initVisualViewportHandler();
+    setupDiagnosticGesture();
     if (typeof initMessagesScrollListeners === 'function') {
       initMessagesScrollListeners();
     }

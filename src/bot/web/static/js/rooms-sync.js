@@ -611,12 +611,17 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
       if (cur && !cur.userCreatedEmpty) {
         await loadChatHistoryFromServer(cur.id, cur.sessionId);
       }
+      if (typeof addBreadcrumb === 'function') addBreadcrumb('rooms_sync', `대화방 ${data.rooms.length}개 로드 성공`);
       focusChatInput();
     } else {
       throw new Error((data && data.error) || '대화방 목록 응답 형식 비정상');
     }
   } catch (err) {
     console.warn('[RoomsSync] 대화방 목록 로드 실패, 안전망 폴백 가동:', err);
+    if (typeof addBreadcrumb === 'function') addBreadcrumb('rooms_sync_error', err.message || String(err));
+    if (typeof reportClientError === 'function') {
+      reportClientError('ROOMS_FETCH_FAILURE', err.message || String(err));
+    }
     ensureCoreRoom();
     if (!chatRooms.some(r => r && !ORCHESTRATOR_ROOM_IDS.includes(r.id))) {
       const defaultId = 'room-' + Date.now();

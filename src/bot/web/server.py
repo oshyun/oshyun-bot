@@ -45,7 +45,20 @@ import bot.engine.agent_engine as agent_engine
 from bot.engine.agent_engine import ENGINE_LABELS, ENGINES, clear_session, get_coding_mode, get_effort, get_engine, get_model, get_model_candidates, get_model_labels, get_session, get_supported_efforts, get_cached_agy_usage, refresh_agy_quota_cache, kill_job, set_coding_mode, set_effort, set_engine, set_model, set_session, spawn_agent, update_last_activity, watch_agent
 
 # ── 서브모듈 심볼 Re-export (100% 하위 호환성 보장) ───────────────────────
-from bot.web.auth import AUTH_COOKIE_NAME, AUTH_MAX_FAILURES, WEB_AUTH_REQUIRED, WEB_TOKEN, _create_session_cookie_value, _failed_auth_attempts, auth_middleware, cors_middleware, handle_login_page, handle_login_submit, handle_logout
+from bot.web.auth import (
+    AUTH_COOKIE_NAME,
+    AUTH_MAX_FAILURES,
+    WEB_AUTH_REQUIRED,
+    WEB_TOKEN,
+    _create_session_cookie_value,
+    _failed_auth_attempts,
+    _get_client_ip,
+    auth_middleware,
+    cors_middleware,
+    handle_login_page,
+    handle_login_submit,
+    handle_logout,
+)
 
 import bot.web.speech as web_speech
 from bot.web.speech import AVAILABLE_TTS_VOICES, DEFAULT_TTS_VOICE, VALID_TTS_MODES, VALID_TTS_VOICE_IDS, _current_tts_mode, _current_tts_voice, clean_text_for_speech, deduplicate_speech_text, handle_tts, synthesize_edge_tts_mp3
@@ -280,6 +293,37 @@ async def handle_settings(request: web.Request) -> web.Response:
     resp_payload["ok"] = True
     resp_payload["status"] = "ok"
     return web.json_response(resp_payload)
+
+
+async def handle_client_errors(request: web.Request) -> web.Response:
+    """POST /api/client-errors — 브라우저/모바일 PWA 런타임 예외, 워치독 타임아웃, 브레드크럼 수집."""
+    client_ip = _get_client_ip(request)
+    try:
+        if request.content_type == "application/json":
+            payload = await request.json()
+        else:
+            body_text = await request.text()
+            payload = json.loads(body_text) if body_text else {}
+    except Exception as exc:
+        payload = {"type": "RAW_PAYLOAD_ERROR", "message": str(exc)}
+
+    err_type = str(payload.get("type") or "CLIENT_ERROR").strip()
+    msg = str(payload.get("message") or "").strip()
+    url = str(payload.get("url") or "").strip()
+    breadcrumbs = payload.get("breadcrumbs")
+    crumbs_summary = ""
+    if isinstance(breadcrumbs, list) and breadcrumbs:
+        crumbs_summary = f" | 최근 {len(breadcrumbs)}건: " + json.dumps(breadcrumbs[-5:], ensure_ascii=False)
+
+    logger.warning(
+        "[client_telemetry] IP=%s | type=%s | msg=%s | url=%s%s",
+        client_ip,
+        err_type,
+        msg,
+        url,
+        crumbs_summary,
+    )
+    return web.json_response({"ok": True})
 
 
 async def handle_fallback_dashboard(request: web.Request) -> web.Response:
@@ -528,6 +572,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_get("/api/status", handle_status)
     web_app.router.add_get("/api/usage", handle_usage)
     web_app.router.add_post("/api/settings", handle_settings)
+    web_app.router.add_post("/api/client-errors", handle_client_errors)
     web_app.router.add_post("/api/session/delete", handle_api_delete_session)
     web_app.router.add_post("/api/session/batch-delete", handle_api_delete_session)
     web_app.router.add_post("/api/session/batch-archive", handle_batch_archive_chat_rooms)
