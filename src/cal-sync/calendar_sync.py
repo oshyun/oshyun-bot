@@ -253,12 +253,30 @@ def _take_trigger() -> bool:
         return False
 
 
+def sync_once(now: datetime | None = None) -> int:
+    """즉시 1회 iCal 동기화를 수행하고 갱신된 일정 건수를 반환한다.
+    
+    scripts/gcal.py 등 외부 도구에서 호출하여 즉시 볼트 캘린더 노트를 갱신할 수 있다.
+    """
+    if not ICAL_URL:
+        raise ValueError("GOOGLE_ICAL_URL(구글 캘린더 iCal 주소)이 설정되지 않았습니다.")
+
+    if now is None:
+        now = datetime.now(LOCAL_TZ)
+    today = now.date()
+    tiers = _tiers()
+
+    events = _fetch_events(now)
+    sections = [_render_section(t, events, today) for t in tiers]
+    _write_note(_assemble(sections, now))
+    return len(events)
+
+
 def main() -> None:
     if not ICAL_URL:
         logger.error("GOOGLE_ICAL_URL 미설정 — 사이드카를 종료합니다.")
         return
 
-    tiers = _tiers()
     last = float("-inf")  # 마지막 동기화 시각(monotonic)
 
     logger.info(
@@ -277,14 +295,10 @@ def main() -> None:
             logger.info("수동 갱신 트리거 감지(%s) — 즉시 동기화", TRIGGER_PATH)
 
         if forced or mono - last >= SYNC_INTERVAL:
-            now = datetime.now(LOCAL_TZ)
-            today = now.date()
             try:
-                events = _fetch_events(now)
-                sections = [_render_section(t, events, today) for t in tiers]
-                _write_note(_assemble(sections, now))
+                count = sync_once()
                 last = mono
-                logger.info("갱신 완료 (일정 %d건)", len(events))
+                logger.info("갱신 완료 (일정 %d건)", count)
             except Exception as exc:  # 네트워크/파싱 오류 — 기존 노트 유지하고 재시도.
                 logger.warning("동기화 실패(다음 주기에 재시도): %s", exc)
                 # last 를 갱신하지 않아 짧게(REFRESH_POLL 주기로) 재시도된다.

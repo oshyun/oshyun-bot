@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,59 @@ SCOPES = [
 ]
 
 _WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def parse_datetime_input(val: datetime | date | str, default_hour: int = 9) -> tuple[datetime | date, bool]:
+    """다양한 형식의 날짜/일시 입력을 (datetime|date, all_day)로 유연하게 정규화한다.
+
+    지원 포맷:
+    - 'YYYY-MM-DD' (종일)
+    - 'YYYY-MM-DD HH:MM' 또는 'YYYY-MM-DDTHH:MM' (시간 지정)
+    - ISO 8601 포맷 (타임존 포함/미포함)
+    - datetime 또는 date 객체
+    """
+    if isinstance(val, datetime):
+        if val.tzinfo is None:
+            local_tz = datetime.now().astimezone().tzinfo or timezone(timedelta(hours=9))
+            val = val.replace(tzinfo=local_tz)
+        return val, False
+    if isinstance(val, date):
+        return val, True
+
+    s = str(val).strip()
+    # 종일 일정 형태 'YYYY-MM-DD'
+    if len(s) == 10 and s.count("-") == 2 and "T" not in s and " " not in s:
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date(), True
+        except ValueError:
+            pass
+
+    # 공백 구분 일시 'YYYY-MM-DD HH:MM' or 'YYYY-MM-DD HH:MM:SS'
+    s_norm = s.replace(" ", "T")
+    try:
+        dt = datetime.fromisoformat(s_norm)
+        if dt.tzinfo is None:
+            local_tz = datetime.now().astimezone().tzinfo or timezone(timedelta(hours=9))
+            dt = dt.replace(tzinfo=local_tz)
+        return dt, False
+    except ValueError:
+        pass
+
+    # 일반적인 날짜+시간 패턴 파싱 시도
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%Y/%m/%d %H:%M", "%Y.%m.%d %H:%M"):
+        try:
+            dt = datetime.strptime(s_norm, fmt)
+            local_tz = datetime.now().astimezone().tzinfo or timezone(timedelta(hours=9))
+            return dt.replace(tzinfo=local_tz), False
+        except ValueError:
+            continue
+
+    # 마지막으로 원본 그대로 문자열 반환 (date 가정)
+    try:
+        return datetime.strptime(s[:10], "%Y-%m-%d").date(), True
+    except Exception:
+        raise ValueError(f"유효하지 않은 일시 형식입니다: {val}")
+
 
 
 def _format_iso_time(iso_str: str) -> tuple[str, bool]:
@@ -183,14 +236,36 @@ class GoogleCalendarManager:
         except Exception as exc:
             logger.warning("볼트 캘린더 트리거 생성 실패: %s", exc)
 
-    def quick_add(self, text: str, calendar_id: str = "primary") -> dict[str, Any]:
+    def sync_vault_now(self, timeout: float = 3.0) -> bool:
+        """볼트 캘린더 노트(_bot/캘린더.md)를 즉시 동기화한다.
+        
+        1. 백그라운드 사이드카가 즉각 반응하도록 트리거 파일(.cal-refresh)을 먼저 터치한다.
+        2. 동시에 calendar_sync.sync_once()를 직접 1회 실행하여 1~2초 내 즉시 볼트 노트를 갱신한다.
+        3. 실패하더라도 트리거 파일이 남아있어 사이드카 데몬이 다음 틱에 갱신하므로 예외를 전파하지 않는다.
+        """
+        self.trigger_vault_refresh()
+        try:
+            import importlib
+            cal_sync = importlib.import_module("cal-sync.calendar_sync")
+            if hasattr(cal_sync, "sync_once"):
+                cal_sync.sync_once()
+                logger.info("볼트 캘린더 즉시 1회 동기화 성공")
+                return True
+        except Exception as exc:
+            logger.debug("캘린더 인라인 동기화 생략 (사이드카 트리거로 위임): %s", exc)
+        return False
+
+    def quick_add(
+        self, text: str, calendar_id: str = "primary", sync_vault: bool = True
+    ) -> dict[str, Any]:
         """자연어 문장을 받아 구글 캘린더의 quickAdd API로 일정을 생성한다.
 
         예: '내일 15:00 치과 진료', 'Friday 7pm Team Dinner at Gangnam'
         """
         service = self.get_service()
         event = service.events().quickAdd(calendarId=calendar_id, text=text).execute()
-        self.trigger_vault_refresh()
+        if sync_vault:
+            self.sync_vault_now()
 
         summary = event.get("summary", "(제목 없음)")
         start_dict = event.get("start", {})
@@ -208,34 +283,47 @@ class GoogleCalendarManager:
     def create_event(
         self,
         summary: str,
-        start_time: datetime | str,
-        end_time: datetime | str | None = None,
+        start_time: datetime | date | str,
+        end_time: datetime | date | str | None = None,
         description: str = "",
         location: str = "",
         all_day: bool = False,
         calendar_id: str = "primary",
+        sync_vault: bool = True,
     ) -> dict[str, Any]:
-        """명시적인 시작/종료 일시로 새 일정을 생성한다."""
+        """명시적인 시작/종료 일시로 새 일정을 생성한다.
+        
+        - end_time이 생략되면 start_time 기준 1시간 뒤(종일은 당일)로 자동 지정된다.
+        - sync_vault=True이면 생성 즉시 볼트 캘린더 노트(_bot/캘린더.md)와 동기화된다.
+        """
         service = self.get_service()
 
-        if all_day:
-            start_body = {"date": start_time if isinstance(start_time, str) else start_time.strftime("%Y-%m-%d")}
+        start_dt, start_is_all_day = parse_datetime_input(start_time)
+        is_all_day = all_day or start_is_all_day
+
+        if is_all_day:
+            s_date = start_dt if isinstance(start_dt, date) else start_dt.date()
             if end_time:
-                end_body = {"date": end_time if isinstance(end_time, str) else end_time.strftime("%Y-%m-%d")}
+                end_dt, _ = parse_datetime_input(end_time)
+                e_date = end_dt if isinstance(end_dt, date) else end_dt.date()
             else:
-                end_body = start_body
+                e_date = s_date
+            start_body = {"date": s_date.isoformat()}
+            end_body = {"date": e_date.isoformat()}
         else:
-            s_iso = start_time if isinstance(start_time, str) else start_time.isoformat()
+            if isinstance(start_dt, date) and not isinstance(start_dt, datetime):
+                local_tz = datetime.now().astimezone().tzinfo or timezone(timedelta(hours=9))
+                start_dt = datetime(start_dt.year, start_dt.month, start_dt.day, 9, 0, tzinfo=local_tz)
+
             if end_time:
-                e_iso = end_time if isinstance(end_time, str) else end_time.isoformat()
+                end_dt, _ = parse_datetime_input(end_time)
+                if isinstance(end_dt, date) and not isinstance(end_dt, datetime):
+                    end_dt = datetime(end_dt.year, end_dt.month, end_dt.day, start_dt.hour + 1, start_dt.minute, tzinfo=start_dt.tzinfo)
             else:
-                # 종료시간 미지정 시 1시간 후로 기본 설정
-                if isinstance(start_time, datetime):
-                    e_iso = (start_time + timedelta(hours=1)).isoformat()
-                else:
-                    e_iso = s_iso
-            start_body = {"dateTime": s_iso}
-            end_body = {"dateTime": e_iso}
+                end_dt = start_dt + timedelta(hours=1)
+
+            start_body = {"dateTime": start_dt.isoformat()}
+            end_body = {"dateTime": end_dt.isoformat()}
 
         body: dict[str, Any] = {
             "summary": summary,
@@ -248,7 +336,8 @@ class GoogleCalendarManager:
             body["location"] = location
 
         event = service.events().insert(calendarId=calendar_id, body=body).execute()
-        self.trigger_vault_refresh()
+        if sync_vault:
+            self.sync_vault_now()
 
         time_str = format_event_range(event.get("start", {}), event.get("end", {}))
         return {
@@ -301,9 +390,12 @@ class GoogleCalendarManager:
 
         return parsed_events
 
-    def delete_event(self, event_id: str, calendar_id: str = "primary") -> bool:
+    def delete_event(
+        self, event_id: str, calendar_id: str = "primary", sync_vault: bool = True
+    ) -> bool:
         """일정 ID로 캘린더에서 일정을 삭제한다."""
         service = self.get_service()
         service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
-        self.trigger_vault_refresh()
+        if sync_vault:
+            self.sync_vault_now()
         return True

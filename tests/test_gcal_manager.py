@@ -12,7 +12,7 @@ _SRC_DIR = os.path.join(
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from bot.google.gcal_manager import GoogleCalendarManager, format_event_range
+from bot.google.gcal_manager import GoogleCalendarManager, format_event_range, parse_datetime_input
 
 
 class TestGoogleCalendarManager(unittest.TestCase):
@@ -156,6 +156,58 @@ class TestGoogleCalendarManager(unittest.TestCase):
             self.assertTrue(ok)
             mock_events.delete.assert_called_once_with(calendarId="primary", eventId="e1")
             self.assertTrue(os.path.exists(self.trigger_file))
+
+    def test_parse_datetime_input(self):
+        # YYYY-MM-DD
+        d, is_all_day = parse_datetime_input("2026-11-28")
+        self.assertTrue(is_all_day)
+        self.assertEqual(d.isoformat(), "2026-11-28")
+
+        # YYYY-MM-DD HH:MM
+        dt, is_all_day = parse_datetime_input("2026-11-28 19:00")
+        self.assertFalse(is_all_day)
+        self.assertEqual(dt.hour, 19)
+        self.assertEqual(dt.minute, 0)
+
+        # ISO format
+        dt2, is_all_day = parse_datetime_input("2026-11-28T19:00:00+09:00")
+        self.assertFalse(is_all_day)
+        self.assertEqual(dt2.hour, 19)
+
+    def test_create_event_auto_duration_and_string_parsing(self):
+        mock_service = MagicMock()
+        mock_events = MagicMock()
+        mock_insert = MagicMock()
+        mock_insert.execute.return_value = {
+            "id": "event_vocal",
+            "summary": "보컬레슨",
+            "start": {"dateTime": "2026-11-28T19:00:00+09:00"},
+            "end": {"dateTime": "2026-11-28T20:00:00+09:00"},
+            "htmlLink": "https://calendar.google.com/event?eid=vocal",
+        }
+        mock_events.insert.return_value = mock_insert
+        mock_service.events.return_value = mock_events
+
+        with patch.object(self.mgr, "get_service", return_value=mock_service):
+            # end_time 생략 시 1시간 자동 계산 확인
+            res = self.mgr.create_event(
+                summary="보컬레슨",
+                start_time="2026-11-28 19:00",
+                end_time=None,
+            )
+            self.assertEqual(res["id"], "event_vocal")
+            self.assertEqual(res["summary"], "보컬레슨")
+            # insert 호출 인자 확인
+            call_kwargs = mock_events.insert.call_args[1]
+            body = call_kwargs["body"]
+            self.assertIn("2026-11-28T19:00:00", body["start"]["dateTime"])
+            self.assertIn("2026-11-28T20:00:00", body["end"]["dateTime"])
+
+    def test_sync_vault_now(self):
+        self.assertFalse(os.path.exists(self.trigger_file))
+        # sync_vault_now 호출 시 트리거 파일 생성 및 정상 반환
+        res = self.mgr.sync_vault_now()
+        self.assertTrue(os.path.exists(self.trigger_file))
 
     def test_unauthenticated_error(self):
         with self.assertRaises(PermissionError):
