@@ -84,6 +84,82 @@ class TestStreamWatchTailLoop(unittest.IsolatedAsyncioTestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    async def test_transcript_planner_response_skipped_if_deltas_streamed(self):
+        """실시간 text_delta 스트리밍이 이미 이뤄졌다면 transcript 의 PLANNER_RESPONSE 중복 브로드캐스트를 스킵하는지 검증."""
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8", delete=False) as f:
+            temp_out_path = f.name
+
+        t_dir = tempfile.mkdtemp()
+        t_file = os.path.join(t_dir, "transcript.jsonl")
+
+        try:
+            tail_stop_event = asyncio.Event()
+            broadcast_mock = AsyncMock()
+            chat_db_mock = MagicMock()
+            collected_steps = []
+            live_snapshot = {"streamText": "", "feed": ""}
+
+            # mock expanduser so transcript points to t_file
+            import unittest.mock as mock
+            with mock.patch("os.path.expanduser", return_value=t_file):
+                loop_task = asyncio.create_task(
+                    _run_stream_tail_loop(
+                        out_file_path=temp_out_path,
+                        tail_stop_event=tail_stop_event,
+                        room_key="room_test",
+                        room_id="room_test",
+                        job_id="job_test",
+                        asst_msg_id=None,
+                        start_timestamp=0.0,
+                        collected_steps=collected_steps,
+                        live_snapshot=live_snapshot,
+                        agy_conv_id="conv-123",
+                        current_broadcast=broadcast_mock,
+                        current_chat_db=chat_db_mock,
+                    )
+                )
+
+                # out_file 에 델타 출력
+                delta_line = json.dumps({
+                    "event": "step_update",
+                    "step_update": {
+                        "step_type": "agent_response",
+                        "state": "ACTIVE",
+                        "text_delta": "실시간 델타 텍스트입니다.",
+                    },
+                }) + "\n"
+                with open(temp_out_path, "a", encoding="utf-8") as f:
+                    f.write(delta_line)
+                    f.flush()
+
+                await asyncio.sleep(0.08)
+
+                # transcript 에 PLANNER_RESPONSE 기록
+                t_line = json.dumps({
+                    "type": "PLANNER_RESPONSE",
+                    "source": "MODEL",
+                    "content": "실시간 델타 텍스트입니다. 최종본",
+                }) + "\n"
+                with open(t_file, "a", encoding="utf-8") as f:
+                    f.write(t_line)
+                    f.flush()
+
+                await asyncio.sleep(0.08)
+                tail_stop_event.set()
+                await loop_task
+
+                # stream_chunk 가 중복 호출되지 않았는지 검증
+                chunk_calls = [call.args[0] for call in broadcast_mock.call_args_list if call.args[0].get("type") == "stream_chunk"]
+                self.assertEqual(len(chunk_calls), 0)
+
+        finally:
+            if os.path.exists(temp_out_path):
+                os.remove(temp_out_path)
+            if os.path.exists(t_file):
+                os.remove(t_file)
+            if os.path.exists(t_dir):
+                os.rmdir(t_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -168,15 +168,18 @@ function _runSmoothStreamTick() {
   }
 
   // 적응형 글자 수 계산 (Adaptive Easing):
-  // 60fps 기준 부드러운 타이핑 느낌을 주되, 버퍼가 쌓이면 신속히 캐치업
+  // 60fps/120fps 디스플레이에서 타이핑되듯 흐르는 자연스러운 애니메이션 유지
+  // 버퍼가 급증해도 지연 없이 신속하게 캐치업
   let step = 1;
-  if (remaining > 60) {
+  if (remaining > 150) {
+    step = Math.min(48, Math.ceil(remaining / 3));
+  } else if (remaining > 60) {
     step = Math.min(24, Math.ceil(remaining / 4));
   } else if (remaining > 25) {
-    step = Math.min(8, Math.ceil(remaining / 5));
-  } else if (remaining > 8) {
-    step = 3;
-  } else if (remaining > 3) {
+    step = Math.min(10, Math.ceil(remaining / 5));
+  } else if (remaining > 10) {
+    step = 4;
+  } else if (remaining > 4) {
     step = 2;
   } else {
     step = 1;

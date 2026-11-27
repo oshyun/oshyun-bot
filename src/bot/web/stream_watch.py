@@ -467,15 +467,18 @@ async def _run_stream_tail_loop(
                             if t_obj.get("source") == "MODEL" and t_obj.get("type") == "PLANNER_RESPONSE":
                                 c_txt = t_obj.get("content") or ""
                                 if isinstance(c_txt, str) and c_txt.strip() and "<SYSTEM_MESSAGE>" not in c_txt:
+                                    prev_stream = (live_snapshot.get("streamText") or "").strip()
                                     live_snapshot["streamText"] = c_txt
                                     _room_live_feeds[room_key] = "답변 작성 중…"
-                                    await current_broadcast({
-                                        "type": "stream_chunk",
-                                        "jobId": job_id,
-                                        "roomId": room_id,
-                                        "text": c_txt,
-                                        "isCumulative": True,
-                                    })
+                                    # out_file의 text_delta 스트리밍이 전혀 없었던 경우(비동기 지연 등)에만 transcript 최종 텍스트로 보완 브로드캐스트
+                                    if not prev_stream:
+                                        await current_broadcast({
+                                            "type": "stream_chunk",
+                                            "jobId": job_id,
+                                            "roomId": room_id,
+                                            "text": c_txt,
+                                            "isCumulative": True,
+                                        })
 
                             if t_obj.get("source") == "MODEL":
                                 thinking_str = str(t_obj.get("thinking") or "")
