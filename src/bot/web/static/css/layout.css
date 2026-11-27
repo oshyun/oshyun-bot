@@ -975,23 +975,27 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   z-index: 20;
+  touch-action: pan-x;
 }
 .topbar.bordered { border-bottom-color: var(--border); }
 .menu-btn { display: none; position: relative; }
 .topbar-title {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0; min-width: 0;
+  display: inline-flex; align-items: center; gap: 6px;
   font-size: calc(15px * var(--ui-scale, 1)); font-weight: 650;
 }
 .topbar-title-btn {
   display: inline-flex; align-items: center; gap: 6px;
   max-width: 100%; min-width: 0;
-  padding: 4px 8px; margin-left: -8px;
+  padding: 4px 6px; margin-left: 0;
   border-radius: 8px;
   transition: background .14s;
 }
 .topbar-title-btn:hover { background: var(--bg-hover); }
-.topbar-title-btn span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-title-btn span.t {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 16ch;
+}
 .topbar-title-btn .edit-hint { width: 13px; height: 13px; color: var(--text-3); opacity: 0; transition: opacity .14s; flex-shrink: 0; }
 .topbar-title-btn:hover .edit-hint { opacity: 1; }
 .state-dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; flex-shrink: 0; transition: background .2s, box-shadow .2s; }
@@ -1013,7 +1017,7 @@
   align-items: center;
   position: relative;
   touch-action: pan-x;
-  margin-left: auto;
+  overscroll-behavior-x: contain;
   padding: 2px 0;
 }
 .topbar-actions-scroll::-webkit-scrollbar {
@@ -1037,9 +1041,8 @@
 .topbar-actions {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
-  margin-left: auto;
 }
 .topbar-actions > * {
   flex-shrink: 0;

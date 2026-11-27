@@ -25,8 +25,8 @@ function initMobileSwipeGestures() {
     }
 
     const target = e.target;
-    // 텍스트 입력창, 슬라이더, 코드 블록, 대화방 스와이프 삭제 영역에서는 드로어 스와이프 배제
-    if (target && target.closest && target.closest('textarea, input, select, pre, code, .chat-input, [contenteditable="true"], .horizontal-scroll, .room-item-wrap, [data-no-swipe]')) {
+    // 텍스트 입력창, 슬라이더, 코드 블록, 대화방 스와이프 삭제 영역 및 상단 헤더 영역(가로 슬라이드 간섭 방지)에서는 드로어 스와이프 배제
+    if (target && target.closest && target.closest('textarea, input, select, pre, code, .chat-input, [contenteditable="true"], .horizontal-scroll, .room-item-wrap, [data-no-swipe], .topbar, #topbar, .topbar-actions-scroll')) {
       isEligible = false;
       return;
     }

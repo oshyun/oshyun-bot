@@ -12,13 +12,20 @@ class TestTopbarCustomizer(unittest.TestCase):
         self.index_html_path = os.path.join(self.base_dir, "index.html")
         self.layout_css_path = os.path.join(self.base_dir, "css", "layout.css")
         self.rooms_ui_js_path = os.path.join(self.base_dir, "js", "rooms-ui.js")
+        self.master_memory_js_path = os.path.join(self.base_dir, "js", "master-memory.js")
+        self.gestures_js_path = os.path.join(self.base_dir, "js", "gestures.js")
 
         with open(self.index_html_path, "r", encoding="utf-8") as f:
             self.html = f.read()
         with open(self.layout_css_path, "r", encoding="utf-8") as f:
             self.css = f.read()
         with open(self.rooms_ui_js_path, "r", encoding="utf-8") as f:
-            self.js = f.read()
+            self.rooms_js = f.read()
+        with open(self.master_memory_js_path, "r", encoding="utf-8") as f:
+            self.memory_js = f.read()
+        with open(self.gestures_js_path, "r", encoding="utf-8") as f:
+            self.gestures_js = f.read()
+        self.js = self.rooms_js
 
     def test_index_html_has_scroll_container_and_customizer(self):
         """index.html에 가로 스크롤 컨테이너 및 최우측 커스텀 드롭다운 요소가 존재하는지 확인."""
@@ -78,6 +85,32 @@ class TestTopbarCustomizer(unittest.TestCase):
         self.assertIn("applyTopbarVisibility", self.js)
         self.assertIn("toggleTopbarCustomizer", self.js)
         self.assertIn("initTopbarSwipeAndScroll", self.js)
+
+    def test_title_included_inside_scroll_track(self):
+        """방 이름(data-action-id='title')이 topbar-actions-scroll 내부 chat-actions 트랙에 포함되어 있는지 확인."""
+        scroll_idx = self.html.find('id="topbar-actions-scroll"')
+        actions_idx = self.html.find('id="chat-actions"', scroll_idx)
+        title_idx = self.html.find('data-action-id="title"', actions_idx)
+        self.assertNotEqual(scroll_idx, -1)
+        self.assertNotEqual(actions_idx, -1)
+        self.assertNotEqual(title_idx, -1)
+        self.assertTrue(scroll_idx < actions_idx < title_idx)
+
+    def test_master_memory_title_truncation_logic(self):
+        """방 이름 10자 초과 시 말줄임 로직(formatRoomTitleDisplay) 검증."""
+        self.assertIn("formatRoomTitleDisplay", self.memory_js)
+        self.assertIn("Array.from", self.memory_js)
+        self.assertIn("formatRoomTitleDisplay(rawTitle, 10)", self.memory_js)
+
+    def test_gestures_js_blocks_topbar_horizontal_swipe(self):
+        """헤더 영역에서 가로 슬라이드 시 좌우 사이드패널 스와이프 제스처 간섭이 차단되는지 확인."""
+        self.assertIn(".topbar", self.gestures_js)
+        self.assertIn(".topbar-actions-scroll", self.gestures_js)
+
+    def test_layout_css_touch_action_and_overscroll(self):
+        """CSS에 touch-action 및 overscroll-behavior-x 가 올바르게 선언되어 있는지 확인."""
+        self.assertIn("overscroll-behavior-x: contain", self.css)
+        self.assertIn("touch-action: pan-x", self.css)
 
 
 if __name__ == "__main__":
