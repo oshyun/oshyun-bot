@@ -5,6 +5,9 @@
   "id": "/",
   "scope": "/",
   "display": "standalone",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",
   "description": "Obsidian 볼트 연동 실시간 음성 및 세컨브레인 AI 비서",

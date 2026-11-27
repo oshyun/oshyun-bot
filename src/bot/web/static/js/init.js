@@ -205,15 +205,28 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // 창 포커스 이탈(파일 선택기/사진첩 열기 등) 시에는 현재 대화방 컨텍스트를 완벽 보존하고, 복귀 시에만 다른 비활성 빈 방을 정리
+    function checkUrlRoomAndNavigate() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlRoom = urlParams.get('room');
+        if (urlRoom && urlRoom !== currentRoomId && typeof selectRoom === 'function') {
+          selectRoom(urlRoom, { historyMode: 'replace' });
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    // 창 포커스 복귀(홈 화면 바로가기 재진입/앱 복원 등) 시 URL 딥링크 최우선 반영
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
+        const navigated = checkUrlRoomAndNavigate();
         const preservedRoomId = currentRoomId;
         if (!isFilePickerActive) {
           cleanUnusedEmptyRooms(preservedRoomId);
         }
         loadChatRoomsFromServer(false).then(() => {
-          if (preservedRoomId && currentRoomId !== preservedRoomId) {
+          if (!navigated && preservedRoomId && currentRoomId !== preservedRoomId) {
             currentRoomId = preservedRoomId;
             renderRoomList();
             renderMessagesForCurrentRoom(true);
@@ -222,6 +235,13 @@ window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => { isFilePickerActive = false; }, 300);
           }
         });
+      }
+    });
+
+    // iOS BFCache 복원 대응 (pageshow)
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) {
+        checkUrlRoomAndNavigate();
       }
     });
 
@@ -353,3 +373,30 @@ window.addEventListener('load', () => {
     scrollToBottom(false);
   }
 });
+
+// ─── PWA 실행 인스턴스 딥링크 수신 (Launch Handler API & SW Message) ───
+if ('launchQueue' in window && 'setConsumer' in window.launchQueue) {
+  window.launchQueue.setConsumer((launchParams) => {
+    if (!launchParams || !launchParams.targetURL) return;
+    try {
+      const url = new URL(launchParams.targetURL);
+      const targetRoom = url.searchParams.get('room');
+      if (targetRoom && typeof selectRoom === 'function') {
+        selectRoom(targetRoom, { historyMode: 'replace' });
+      }
+    } catch (err) {
+      console.warn('launchQueue 라우팅 처리 실패:', err);
+    }
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'NAVIGATE_ROOM') {
+      const targetRoom = event.data.roomId;
+      if (targetRoom && typeof selectRoom === 'function') {
+        selectRoom(targetRoom, { historyMode: 'replace' });
+      }
+    }
+  });
+}

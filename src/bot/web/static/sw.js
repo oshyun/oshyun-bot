@@ -1,5 +1,5 @@
 // oshyun-bot PWA Service Worker
-const CACHE_NAME = 'oshyun-hub-v22';
+const CACHE_NAME = 'oshyun-hub-v23';
 const CORE_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
@@ -39,6 +39,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  // 탐색 요청(Navigation)이면서 특정 룸 파라미터가 있는 경우: 이미 열린 앱 창이 있으면 포커스 및 방 이동 메시지 전달
+  if (event.request.mode === 'navigate' && url.searchParams.has('room')) {
+    const targetRoomId = url.searchParams.get('room');
+    event.respondWith(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        const existingClient = clientList.find((c) => 'focus' in c);
+        if (existingClient) {
+          existingClient.focus();
+          existingClient.postMessage({
+            type: 'NAVIGATE_ROOM',
+            roomId: targetRoomId,
+            timestamp: Date.now()
+          });
+        }
+        return fetch(event.request);
+      }).catch(() => fetch(event.request))
+    );
+    return;
+  }
 
   // WebSocket(/ws), API(/api/*), 인증(/login, /logout), 루트 HTML(/), JS/CSS 코드는 캐시하지 않고 항상 네트워크 직접 전달
   if (

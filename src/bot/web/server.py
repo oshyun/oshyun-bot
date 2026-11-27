@@ -679,11 +679,15 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
                     "id": "/",
                     "scope": "/",
                     "display": "standalone",
+                    "launch_handler": {
+                        "client_mode": "focus-existing"
+                    },
                     "background_color": "#FFFFFF",
                     "theme_color": "#FFFFFF",
                 }
 
             manifest_data = dict(base_manifest)
+            manifest_data.setdefault("launch_handler", {"client_mode": "focus-existing"})
             if room_id:
                 meta = _resolve_room_meta_for_pwa(room_id)
                 manifest_data["name"] = f"{meta['title']} - second-bot"

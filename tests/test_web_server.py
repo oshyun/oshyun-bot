@@ -995,6 +995,7 @@ class TestPwaSupport(AioHTTPTestCase):
         self.assertEqual(data.get("start_url"), "/?room=room_pwa_trip_99")
         self.assertEqual(data.get("id"), "/?room=room_pwa_trip_99")
         self.assertEqual(data.get("background_color"), "#FFFFFF")
+        self.assertEqual(data.get("launch_handler", {}).get("client_mode"), "focus-existing")
 
         # /api/manifest 엔드포인트도 동일 동작 보장
         api_res = await self.client.request("GET", "/api/manifest?room=room_pwa_trip_99")
