@@ -1550,6 +1550,161 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
   return row;
 }
 
+// ─── 턴 아코디언 컨테이너 상태 관리 ───
+window._roomTurnCollapsedMap = window._roomTurnCollapsedMap || {};
+
+function isTurnCollapsed(roomId, turnId) {
+  if (!roomId || !turnId) return false;
+  const key = `${roomId}__${turnId}`;
+  return Boolean(window._roomTurnCollapsedMap[key]);
+}
+
+function setTurnCollapsed(roomId, turnId, collapsed) {
+  if (!roomId || !turnId) return;
+  const key = `${roomId}__${turnId}`;
+  window._roomTurnCollapsedMap[key] = Boolean(collapsed);
+}
+
+function toggleTurnAccordion(roomId, turnId) {
+  if (!roomId || !turnId) return;
+  const next = !isTurnCollapsed(roomId, turnId);
+  setTurnCollapsed(roomId, turnId, next);
+  const turnEl = document.getElementById(`turn-${turnId}`);
+  if (turnEl) {
+    turnEl.classList.toggle('is-collapsed', next);
+    const body = turnEl.querySelector('.turn-body');
+    if (body) {
+      body.style.display = next ? 'none' : '';
+    }
+    const summary = turnEl.querySelector('.turn-collapsed-summary');
+    if (summary) {
+      summary.style.display = next ? 'flex' : 'none';
+    }
+    const btn = turnEl.querySelector('.btn-turn-accordion-toggle');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!next));
+      btn.setAttribute('aria-label', next ? '대화 펼치기' : '대화 접기');
+      const chevIcon = next ? (ICONS.chevDown || '▼') : (ICONS.chevUp || '▲');
+      btn.innerHTML = `${chevIcon}<span class="turn-toggle-text">${next ? '펼치기' : '접기'}</span>`;
+    }
+  }
+}
+
+function toggleAllTurnsInCurrentRoom(collapseAll) {
+  const room = getCurrentRoom();
+  if (!room) return;
+  const container = document.getElementById('messages-container');
+  if (!container) return;
+  const turnEls = container.querySelectorAll('.chat-turn-container');
+  turnEls.forEach(turnEl => {
+    const turnId = turnEl.getAttribute('data-turn-id');
+    if (!turnId) return;
+    setTurnCollapsed(room.id, turnId, collapseAll);
+    turnEl.classList.toggle('is-collapsed', collapseAll);
+    const body = turnEl.querySelector('.turn-body');
+    if (body) {
+      body.style.display = collapseAll ? 'none' : '';
+    }
+    const summary = turnEl.querySelector('.turn-collapsed-summary');
+    if (summary) {
+      summary.style.display = collapseAll ? 'flex' : 'none';
+    }
+    const btn = turnEl.querySelector('.btn-turn-accordion-toggle');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!collapseAll));
+      btn.setAttribute('aria-label', collapseAll ? '대화 펼치기' : '대화 접기');
+      const chevIcon = collapseAll ? (ICONS.chevDown || '▼') : (ICONS.chevUp || '▲');
+      btn.innerHTML = `${chevIcon}<span class="turn-toggle-text">${collapseAll ? '펼치기' : '접기'}</span>`;
+    }
+  });
+}
+
+function groupEntriesIntoTurns(activeEntries) {
+  const turns = [];
+  let currentTurn = null;
+
+  activeEntries.forEach((entry, idx) => {
+    const { m } = entry;
+    if (!m) return;
+    const role = m.sender || m.role || 'assistant';
+    const isUser = (role === 'user');
+
+    if (isUser || !currentTurn) {
+      const turnId = isUser
+        ? (m.id ? `turn_u_${m.id}` : `turn_u_${idx}`)
+        : (m.id ? `turn_a_${m.id}` : `turn_init_${idx}`);
+      currentTurn = {
+        turnId,
+        userEntry: isUser ? entry : null,
+        entries: [entry],
+        subAgentSlots: isSubAgentSlotMessage(m) ? [entry] : [],
+        hasError: Boolean(m.isError),
+        createdAt: m.createdAt || Date.now()
+      };
+      turns.push(currentTurn);
+    } else {
+      currentTurn.entries.push(entry);
+      if (isSubAgentSlotMessage(m)) {
+        currentTurn.subAgentSlots.push(entry);
+      }
+      if (m.isError) {
+        currentTurn.hasError = true;
+      }
+    }
+  });
+
+  return turns;
+}
+
+function buildLiveRowDom(liveState, room, queuedEntries) {
+  const prevDetails = document.getElementById('live-steps-details');
+  const wasStepsOpen = prevDetails ? prevDetails.hasAttribute('open') : false;
+  const openStepIndices = new Set();
+  const prevStepEls = document.querySelectorAll('#live-steps-list > details.step');
+  prevStepEls.forEach((el, idx) => {
+    if (el.hasAttribute('open')) openStepIndices.add(idx);
+  });
+  const liveRow = document.createElement('div');
+  liveRow.className = 'msg assistant live-generating';
+  const stepsArr = filterToolSteps(liveState.steps);
+  const queueBadgeHtml = `<span class="live-queue-badge" id="live-queue-badge" style="display:none"></span>`;
+  const liveEffort = liveState.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
+  const liveModelName = liveState.model || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.model) || '';
+  const liveTagText = liveModelName ? `${liveModelName}${liveEffort ? ` (${liveEffort})` : ''}` : '';
+  const modelBadgeHtml = liveTagText ? `<span class="model-tag">${escapeHtml(liveTagText)}</span>` : '';
+  const elapsedSec = liveState.startedAt ? Math.max(0, Math.floor((Date.now() - liveState.startedAt) / 1000)) : 0;
+  const elapsedText = elapsedSec >= 1 ? `${elapsedSec}s` : '';
+  const streamHtml = liveState.streamText ? formatMarkdown(liveState.streamText) : '';
+  const liveAgentInfo = getAssistantDisplayInfo(room, null);
+  liveRow.innerHTML = `
+    <div class="assistant-head">
+      <span class="assistant-avatar ${liveAgentInfo.avatarCls}">${liveAgentInfo.avatarIcon}</span>
+      <span class="assistant-name" title="${escapeHtml(liveAgentInfo.fullName)}">${escapeHtml(liveAgentInfo.name)}</span>
+      ${liveAgentInfo.roleBadgeHtml}
+      ${modelBadgeHtml}
+      ${queueBadgeHtml}
+      ${buildMsgTimeHtml(liveState.startedAt)}
+    </div>
+    <details class="steps" id="live-steps-details" ${wasStepsOpen ? 'open' : ''} ${stepsArr.length > 0 ? '' : 'style="display:none"'}>
+      <summary><span class="steps-icon">${ICONS.tool}</span>${ICONS.chevRight}<span id="live-steps-count">${formatLiveStepsSummaryLabel(stepsArr)}</span></summary>
+      <div class="steps-list" id="live-steps-list">${stepsArr.map((s, sIdx) => `<details class="step" ${openStepIndices.has(sIdx) ? 'open' : ''}>${buildStepItemHtml(s, false)}</details>`).join('')}</div>
+    </details>
+    <div class="md live-stream-md" id="live-stream-md" ${streamHtml ? '' : 'style="display:none"'}>${streamHtml}</div>
+    <div class="thinking-line">
+      <span class="spinner"></span>
+      <span class="feed shimmer" id="live-feed-text">${escapeHtml(liveState.feed || '생각하는 중…')}</span>
+      <span class="live-elapsed" id="live-elapsed-timer">${elapsedSec >= 1800 ? `${elapsedText} ⚠️` : elapsedText}</span>
+    </div>
+    ${elapsedSec >= 1800 ? `
+      <div class="timeout-warning-banner" style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span>⚠️ 30분 이상 경과되었습니다. 프로세스가 중단되었거나 비정상 종료되었을 수 있습니다.</span>
+        <button type="button" class="btn-abort-inline" style="padding:4px 8px;border-radius:6px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:12px;" onclick="handleAbortButtonClick(event)">중단하기</button>
+      </div>
+    ` : ''}
+  `;
+  return liveRow;
+}
+
 function renderMessagesSkeleton() {
   return `
     <div class="thread chat-skeleton-thread" id="chat-loading-skeleton" aria-hidden="true">
@@ -1733,63 +1888,164 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     }
   };
 
-  activeEntries.forEach(({ m, idx }) => {
-    appendDateDividerIfNeeded(m.createdAt);
-    const row = buildMessageRowDom(m, idx, 0);
-    if (row) thread.appendChild(row);
+  const turns = groupEntriesIntoTurns(activeEntries);
+
+  // 대화 세트가 2개 이상일 때 상단에 글로벌 컨트롤(모두 접기/모두 펼치기) 추가
+  if (turns.length >= 2) {
+    const globalBar = document.createElement('div');
+    globalBar.className = 'turns-global-bar';
+    globalBar.innerHTML = `
+      <div class="turns-global-meta">
+        <span class="turns-global-dot"></span>
+        <span class="turns-global-count">대화 세트 ${turns.length}개</span>
+      </div>
+      <div class="turns-global-actions">
+        <button type="button" class="btn sm ghost btn-turns-ctrl" onclick="toggleAllTurnsInCurrentRoom(true)" title="모든 대화 세트 접기">
+          ${ICONS.chevDown || '▼'}<span>모두 접기</span>
+        </button>
+        <button type="button" class="btn sm ghost btn-turns-ctrl" onclick="toggleAllTurnsInCurrentRoom(false)" title="모든 대화 세트 펼치기">
+          ${ICONS.chevUp || '▲'}<span>모두 펼치기</span>
+        </button>
+      </div>
+    `;
+    thread.appendChild(globalBar);
+  }
+
+  turns.forEach((turn, turnIdx) => {
+    appendDateDividerIfNeeded(turn.createdAt);
+
+    const isLastTurn = (turnIdx === turns.length - 1);
+    const turnId = turn.turnId;
+    let isCollapsed = isTurnCollapsed(room.id, turnId);
+    // 현재 답변 생성 중인 마지막 턴은 접지 않고 강제 펼침
+    if (isLastTurn && liveState.isRunning) {
+      isCollapsed = false;
+    }
+
+    const turnContainer = document.createElement('div');
+    turnContainer.className = 'chat-turn-container' + (isCollapsed ? ' is-collapsed' : '');
+    turnContainer.id = `turn-${turnId}`;
+    turnContainer.setAttribute('data-turn-id', turnId);
+
+    // 1. 헤더 요약 텍스트
+    const userMsgText = turn.userEntry && turn.userEntry.m ? String(turn.userEntry.m.text || '').trim() : '';
+    const userPreview = userMsgText
+      ? (userMsgText.length > 45 ? userMsgText.slice(0, 45) + '…' : userMsgText)
+      : (turnIdx === 0 ? '시작 대화' : `대화 #${turnIdx + 1}`);
+
+    // 하위 보고 뱃지
+    const subAgentCount = turn.subAgentSlots.length;
+    let subAgentBadgeHtml = '';
+    if (subAgentCount > 0) {
+      const allDone = turn.subAgentSlots.every(s => !s.m || !s.m.isSlotPlaceholder);
+      subAgentBadgeHtml = `
+        <span class="turn-subagent-badge ${allDone ? 'is-done' : 'is-running'}" title="이 질문에서 생성된 하위 작업 ${subAgentCount}건">
+          <span class="subagent-dot"></span>
+          <span>하위 보고 ${subAgentCount}건</span>
+        </span>
+      `;
+    }
+
+    // 턴 진행 뱃지
+    let turnStatusBadgeHtml = '';
+    if (isLastTurn && liveState.isRunning) {
+      turnStatusBadgeHtml = `<span class="turn-live-badge"><span class="slot-spin-dot"></span><span>답변 생성 중</span></span>`;
+    }
+
+    // 답변 요약 텍스트 (접혔을 때 노출할 텍스트)
+    let responseSummary = '';
+    for (let i = turn.entries.length - 1; i >= 0; i--) {
+      const em = turn.entries[i].m;
+      if (em && (em.sender === 'assistant' || em.role === 'assistant') && em.text) {
+        const clean = String(em.text).replace(/^[#\s\-*`>]+/gm, '').trim();
+        if (clean && !clean.startsWith('(')) {
+          responseSummary = clean.length > 70 ? clean.slice(0, 70) + '…' : clean;
+          break;
+        }
+      }
+    }
+    if (!responseSummary && subAgentCount > 0) {
+      responseSummary = `${subAgentCount}건의 하위 작업 보고 완료`;
+    } else if (!responseSummary) {
+      responseSummary = '응답 완료';
+    }
+
+    const headerBar = document.createElement('div');
+    headerBar.className = 'turn-header-bar';
+    headerBar.setAttribute('onclick', `toggleTurnAccordion('${escapeHtml(room.id)}', '${escapeHtml(turnId)}')`);
+    headerBar.setAttribute('title', '클릭하여 질문-응답-하위 보고 세트 접기/펼치기');
+    const chevIcon = isCollapsed ? (ICONS.chevDown || '▼') : (ICONS.chevUp || '▲');
+    headerBar.innerHTML = `
+      <div class="turn-header-left">
+        <span class="turn-seq-badge">#${turnIdx + 1}</span>
+        <span class="turn-query-preview">${escapeHtml(userPreview)}</span>
+      </div>
+      <div class="turn-header-right">
+        ${subAgentBadgeHtml}
+        ${turnStatusBadgeHtml}
+        <button type="button" class="btn sm ghost btn-turn-accordion-toggle" aria-expanded="${!isCollapsed}" aria-label="${isCollapsed ? '대화 펼치기' : '대화 접기'}" onclick="event.stopPropagation(); toggleTurnAccordion('${escapeHtml(room.id)}', '${escapeHtml(turnId)}')">
+          ${chevIcon}
+          <span class="turn-toggle-text">${isCollapsed ? '펼치기' : '접기'}</span>
+        </button>
+      </div>
+    `;
+
+    const collapsedSummary = document.createElement('div');
+    collapsedSummary.className = 'turn-collapsed-summary';
+    collapsedSummary.style.display = isCollapsed ? 'flex' : 'none';
+    collapsedSummary.setAttribute('onclick', `toggleTurnAccordion('${escapeHtml(room.id)}', '${escapeHtml(turnId)}')`);
+    collapsedSummary.innerHTML = `
+      <div class="turn-summary-content">
+        <span class="turn-summary-pill">답변 요약</span>
+        <span class="turn-summary-text">${escapeHtml(responseSummary)}</span>
+      </div>
+      <span class="turn-summary-hint">클릭하여 전체 보기 ↗</span>
+    `;
+
+    const turnBody = document.createElement('div');
+    turnBody.className = 'turn-body';
+    if (isCollapsed) turnBody.style.display = 'none';
+
+    turn.entries.forEach(({ m, idx }) => {
+      const row = buildMessageRowDom(m, idx, 0);
+      if (row) turnBody.appendChild(row);
+    });
+
+    if (isLastTurn && liveState.isRunning) {
+      const liveRow = buildLiveRowDom(liveState, room, queuedEntries);
+      if (liveRow) turnBody.appendChild(liveRow);
+    }
+
+    turnContainer.appendChild(headerBar);
+    turnContainer.appendChild(collapsedSummary);
+    turnContainer.appendChild(turnBody);
+    thread.appendChild(turnContainer);
   });
 
-  // 2. 답변 생성 중 말풍선 (liveRow) — 반드시 대기열(queued) 메시지보다 위에 렌더링!
-  if (liveState.isRunning) {
+  // 특수 케이스: 대화 항목이 전혀 없는데 liveState.isRunning 만 있는 경우
+  if (turns.length === 0 && liveState.isRunning) {
     appendDateDividerIfNeeded(liveState.startedAt || Date.now());
-    const prevDetails = document.getElementById('live-steps-details');
-    const wasStepsOpen = prevDetails ? prevDetails.hasAttribute('open') : false;
-    const openStepIndices = new Set();
-    const prevStepEls = document.querySelectorAll('#live-steps-list > details.step');
-    prevStepEls.forEach((el, idx) => {
-      if (el.hasAttribute('open')) openStepIndices.add(idx);
-    });
-    const liveRow = document.createElement('div');
-    liveRow.className = 'msg assistant live-generating';
-    const stepsArr = filterToolSteps(liveState.steps);
-    const qCount = queuedEntries.length;
-    const queueBadgeHtml = `<span class="live-queue-badge" id="live-queue-badge" style="display:none"></span>`;
-    const liveEffort = liveState.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
-    const liveModelName = liveState.model || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.model) || '';
-    const liveTagText = liveModelName ? `${liveModelName}${liveEffort ? ` (${liveEffort})` : ''}` : '';
-    const modelBadgeHtml = liveTagText ? `<span class="model-tag">${escapeHtml(liveTagText)}</span>` : '';
-    const elapsedSec = liveState.startedAt ? Math.max(0, Math.floor((Date.now() - liveState.startedAt) / 1000)) : 0;
-    const elapsedText = elapsedSec >= 1 ? `${elapsedSec}s` : '';
-    const streamHtml = liveState.streamText ? formatMarkdown(liveState.streamText) : '';
-    const liveAgentInfo = getAssistantDisplayInfo(room, null);
-    liveRow.innerHTML = `
-      <div class="assistant-head">
-        <span class="assistant-avatar ${liveAgentInfo.avatarCls}">${liveAgentInfo.avatarIcon}</span>
-        <span class="assistant-name" title="${escapeHtml(liveAgentInfo.fullName)}">${escapeHtml(liveAgentInfo.name)}</span>
-        ${liveAgentInfo.roleBadgeHtml}
-        ${modelBadgeHtml}
-        ${queueBadgeHtml}
-        ${buildMsgTimeHtml(liveState.startedAt)}
+    const liveTurnContainer = document.createElement('div');
+    liveTurnContainer.className = 'chat-turn-container';
+    liveTurnContainer.id = 'turn-live-initial';
+    const headerBar = document.createElement('div');
+    headerBar.className = 'turn-header-bar';
+    headerBar.innerHTML = `
+      <div class="turn-header-left">
+        <span class="turn-seq-badge">#1</span>
+        <span class="turn-query-preview">질문 처리 중…</span>
       </div>
-      <details class="steps" id="live-steps-details" ${wasStepsOpen ? 'open' : ''} ${stepsArr.length > 0 ? '' : 'style="display:none"'}>
-        <summary><span class="steps-icon">${ICONS.tool}</span>${ICONS.chevRight}<span id="live-steps-count">${formatLiveStepsSummaryLabel(stepsArr)}</span></summary>
-        <div class="steps-list" id="live-steps-list">${stepsArr.map((s, sIdx) => `<details class="step" ${openStepIndices.has(sIdx) ? 'open' : ''}>${buildStepItemHtml(s, false)}</details>`).join('')}</div>
-      </details>
-      <div class="md live-stream-md" id="live-stream-md" ${streamHtml ? '' : 'style="display:none"'}>${streamHtml}</div>
-      <div class="thinking-line">
-        <span class="spinner"></span>
-        <span class="feed shimmer" id="live-feed-text">${escapeHtml(liveState.feed || '생각하는 중…')}</span>
-        <span class="live-elapsed" id="live-elapsed-timer">${elapsedSec >= 1800 ? `${elapsedText} ⚠️` : elapsedText}</span>
+      <div class="turn-header-right">
+        <span class="turn-live-badge"><span class="slot-spin-dot"></span><span>답변 생성 중</span></span>
       </div>
-      ${elapsedSec >= 1800 ? `
-        <div class="timeout-warning-banner" style="margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <span>⚠️ 30분 이상 경과되었습니다. 프로세스가 중단되었거나 비정상 종료되었을 수 있습니다.</span>
-          <button type="button" class="btn-abort-inline" style="padding:4px 8px;border-radius:6px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:12px;" onclick="handleAbortButtonClick(event)">중단하기</button>
-        </div>
-      ` : ''}
     `;
-    // 실행 중인 메시지 하단에 별도로 표시되던 하위 채팅 영역 제거 (본문 내 채팅 링크 칩으로 상태 통합)
-    thread.appendChild(liveRow);
+    const turnBody = document.createElement('div');
+    turnBody.className = 'turn-body';
+    const liveRow = buildLiveRowDom(liveState, room, queuedEntries);
+    if (liveRow) turnBody.appendChild(liveRow);
+    liveTurnContainer.appendChild(headerBar);
+    liveTurnContainer.appendChild(turnBody);
+    thread.appendChild(liveTurnContainer);
   }
 
   // 3. 대기열(Queued)에 등록된 새 질문들은 답변 생성 중 말풍선 아래쪽에 렌더링!
