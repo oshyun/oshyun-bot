@@ -329,6 +329,7 @@ def create_task(
     task_id: str | None = None,
     origin_room_id: str | None = None,
     parent_agent_id: str | None = None,
+    slot_msg_id: int | None = None,
 ) -> dict:
     """새 위임 작업을 원장에 등록하고, 하위 채팅 요약본(`room_summaries`)을 함께 갱신한다."""
     now = _now()
@@ -342,6 +343,7 @@ def create_task(
         "origin": origin,
         "originRoomId": origin_room_id,
         "parentAgentId": parent_agent_id,
+        "slotMsgId": int(slot_msg_id) if (slot_msg_id is not None and int(slot_msg_id) > 0) else None,
         "wait": bool(wait),
         "status": "queued",
         "createdAt": now,

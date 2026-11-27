@@ -776,6 +776,23 @@ function updateSubAgentChipsStatus(roomId, newStatus, reasonText = '', roomTitle
     }
   });
 
+  // 1-B. DOM Fast-Path: 패턴 E 사전 예약 슬롯 카드(.msg-slot-placeholder)의 실시간 피드 및 상태 태그 갱신
+  if (roomId) {
+    document.querySelectorAll(`.msg-slot-placeholder[data-child-room-id="${roomId}"]`).forEach(slotCard => {
+      const feedEl = slotCard.querySelector('.slot-live-feed-text');
+      if (feedEl && finalReason) {
+        feedEl.textContent = finalReason;
+      }
+      const badgeEl = slotCard.querySelector('.slot-status-pill');
+      if (badgeEl) {
+        badgeEl.classList.remove('is-running', 'is-queued', 'is-done', 'is-error');
+        badgeEl.classList.add(`is-${normStatus}`);
+        const labelEl = badgeEl.querySelector('.slot-status-label');
+        if (labelEl) labelEl.textContent = statusLabel;
+      }
+    });
+  }
+
   // 2. State SSOT: 현재 열려 있는 방 및 chatRooms 내 메시지들의 delegated_rooms / delegatedRooms 상태 동기화
   let stateUpdated = false;
   const curRoom = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
@@ -1059,6 +1076,56 @@ function getAssistantDisplayInfo(targetRoom = null, m = null) {
   };
 }
 
+function isSubAgentSlotMessage(m) {
+  if (!m || typeof m !== 'object') return false;
+  return Boolean(
+    m.channel === 'thread_bypass' ||
+    m.isSlotPlaceholder ||
+    m.bypassedFromRoomId ||
+    (Array.isArray(m.steps) && m.steps.some(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass')))
+  );
+}
+
+function populateCollapsibleSubAgentMarkdownDom(mdEl, m, rawMarkdown) {
+  const text = String(rawMarkdown || '').trim();
+  const bodyLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (bodyLines.length > 4 || text.length > 260) {
+    const previewText = bodyLines.slice(0, 2).join('\n');
+    const shortPreview = previewText.length > 200 ? `${previewText.slice(0, 200)}…` : previewText;
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'sub-agent-preview';
+    previewDiv.innerHTML = formatMarkdown(shortPreview);
+    mdEl.appendChild(previewDiv);
+
+    const details = document.createElement('details');
+    details.className = 'sub-agent-details';
+    const summaryEl = document.createElement('summary');
+    const detailsBody = document.createElement('div');
+    detailsBody.className = 'sub-agent-details-body';
+    detailsBody.innerHTML = formatMarkdown(text);
+
+    const isExpanded = Boolean(m && m._expanded);
+    details.open = isExpanded;
+    mdEl.classList.toggle('is-expanded', isExpanded);
+    previewDiv.style.display = isExpanded ? 'none' : '';
+    summaryEl.textContent = isExpanded ? '전체 보고 접기 ▴' : '전체 보고 보기 ▾';
+
+    details.addEventListener('toggle', () => {
+      const isOpen = details.open;
+      if (m) m._expanded = isOpen;
+      mdEl.classList.toggle('is-expanded', isOpen);
+      previewDiv.style.display = isOpen ? 'none' : '';
+      summaryEl.textContent = isOpen ? '전체 보고 접기 ▴' : '전체 보고 보기 ▾';
+    });
+
+    details.appendChild(summaryEl);
+    details.appendChild(detailsBody);
+    mdEl.appendChild(details);
+  } else {
+    mdEl.innerHTML = formatMarkdown(text);
+  }
+}
+
 function buildMessageRowDom(m, idx, qOrder = 0) {
   if (m.isHtml && typeof m.text === 'string' && m.text.includes('welcome-box')) return null;
   const sender = m.sender || m.role || 'assistant';
@@ -1111,49 +1178,7 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     if (childRoomId) {
       md.setAttribute('title', `클릭 시 [${displaySubTitle}] 채팅방으로 이동`);
     }
-    const bodyLines = parsed.bodyMarkdown.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (bodyLines.length > 4 || parsed.bodyMarkdown.length > 260) {
-      const previewText = bodyLines.slice(0, 2).join('\n');
-      const shortPreview = previewText.length > 200 ? `${previewText.slice(0, 200)}…` : previewText;
-      const previewDiv = document.createElement('div');
-      previewDiv.className = 'sub-agent-preview';
-      previewDiv.innerHTML = formatMarkdown(shortPreview);
-      md.appendChild(previewDiv);
-
-      const details = document.createElement('details');
-      details.className = 'sub-agent-details';
-      const summaryEl = document.createElement('summary');
-      const detailsBody = document.createElement('div');
-      detailsBody.className = 'sub-agent-details-body';
-      detailsBody.innerHTML = formatMarkdown(parsed.bodyMarkdown);
-
-      const isExpanded = Boolean(m._expanded);
-      if (isExpanded) {
-        details.open = true;
-        md.classList.add('is-expanded');
-        previewDiv.style.display = 'none';
-        summaryEl.textContent = '전체 보고 접기 ▴';
-      } else {
-        details.open = false;
-        md.classList.remove('is-expanded');
-        previewDiv.style.display = '';
-        summaryEl.textContent = '전체 보고 보기 ▾';
-      }
-
-      details.addEventListener('toggle', () => {
-        const isOpen = details.open;
-        m._expanded = isOpen;
-        md.classList.toggle('is-expanded', isOpen);
-        previewDiv.style.display = isOpen ? 'none' : '';
-        summaryEl.textContent = isOpen ? '전체 보고 접기 ▴' : '전체 보고 보기 ▾';
-      });
-
-      details.appendChild(summaryEl);
-      details.appendChild(detailsBody);
-      md.appendChild(details);
-    } else {
-      md.innerHTML = formatMarkdown(parsed.bodyMarkdown);
-    }
+    populateCollapsibleSubAgentMarkdownDom(md, m, parsed.bodyMarkdown);
     row.appendChild(md);
 
     const actions = document.createElement('div');
@@ -1303,14 +1328,35 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);
 
     let targetThreadRoomId = m.bypassedFromRoomId || '';
-    let targetThreadTaskId = null;
-    let targetThreadTitle = '';
-    if (!targetThreadRoomId && Array.isArray(m.steps)) {
+    let targetThreadTaskId = m.slotTaskId || null;
+    let targetThreadTitle = m.subagentTitle || '';
+    let bypassStepObj = null;
+    if (Array.isArray(m.steps)) {
       const bStep = m.steps.find(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass'));
       if (bStep) {
-        targetThreadRoomId = bStep.roomId || bStep.bypassedFromRoomId || '';
-        targetThreadTaskId = bStep.taskId || null;
-        targetThreadTitle = bStep.title || '';
+        bypassStepObj = bStep;
+        if (!targetThreadRoomId) targetThreadRoomId = bStep.roomId || bStep.bypassedFromRoomId || '';
+        if (!targetThreadTaskId) targetThreadTaskId = bStep.taskId || null;
+        if (!targetThreadTitle) targetThreadTitle = bStep.title || '';
+      }
+    }
+    const isBypassOrSlot = Boolean(
+      m.channel === 'thread_bypass' ||
+      m.isSlotPlaceholder ||
+      bypassStepObj ||
+      m.bypassedFromRoomId
+    );
+    const slotOrderNum = (typeof m._slotOrder === 'number' && m._slotOrder > 0) ? m._slotOrder : 0;
+    const slotOrderBadgeHtml = slotOrderNum > 0
+      ? `<span class="slot-order-badge" title="발주 순서 #${slotOrderNum}">#${slotOrderNum}</span>`
+      : '';
+    if (isBypassOrSlot) {
+      row.classList.add('sub-agent-slot-row');
+      if (slotOrderNum > 0) {
+        row.setAttribute('data-slot-order', String(slotOrderNum));
+      }
+      if (targetThreadTaskId) {
+        row.setAttribute('data-task-id', String(targetThreadTaskId));
       }
     }
     const threadBtnHtml = targetThreadRoomId
@@ -1325,7 +1371,30 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       childBadgeHtml = `<button type="button" class="child-room-badge" onclick="event.stopPropagation(); selectRoom('${escapeHtml(childRoomId)}');" title="클릭 시 [${escapeHtml(subRoomTitle)}] 채팅방으로 이동"><span class="child-room-badge-text">${escapeHtml(subRoomTitle)}</span><span class="child-nav-hint">↗</span></button>`;
     }
 
-    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${childBadgeHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
+    let slotStatusPillHtml = '';
+    if (isBypassOrSlot) {
+      const childLive = childRoomId && typeof roomLiveStates !== 'undefined' ? roomLiveStates[childRoomId] : null;
+      const isSlotPending = !String(m.text || '').trim() && (
+        Boolean(m.isSlotPlaceholder) ||
+        (bypassStepObj && (bypassStepObj.isSlotPlaceholder || bypassStepObj.status === 'running' || bypassStepObj.status === 'queued')) ||
+        Boolean(childLive && childLive.isRunning)
+      );
+      const isErr = Boolean(
+        m.isError ||
+        (bypassStepObj && (bypassStepObj.status === 'error' || bypassStepObj.status === 'failed' || bypassStepObj.status === 'cancelled')) ||
+        (typeof m.text === 'string' && (m.text.startsWith('⚠️') || m.text.startsWith('🛑')))
+      );
+      if (isSlotPending) {
+        const isQ = bypassStepObj && bypassStepObj.status === 'queued' && !(childLive && childLive.isRunning);
+        slotStatusPillHtml = `<span class="model-tag slot-status-pill ${isQ ? 'is-queued' : 'is-running'}"><span class="slot-spin-dot"></span><span class="slot-status-label">${isQ ? '대기 중' : '실행 중'}</span></span>`;
+      } else if (isErr) {
+        slotStatusPillHtml = `<span class="model-tag slot-status-pill is-error"><span class="slot-status-label">중단/오류</span></span>`;
+      } else {
+        slotStatusPillHtml = `<span class="model-tag slot-status-pill is-done"><span class="slot-status-label">완료</span></span>`;
+      }
+    }
+
+    head.innerHTML = `${slotOrderBadgeHtml}<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${childBadgeHtml}${slotStatusPillHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
     row.appendChild(head);
 
     const toolSteps = filterToolSteps(m.steps);
@@ -1358,13 +1427,17 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
 
     if (displayBody && !isErrorMsg) {
       const md = document.createElement('div');
-      md.className = 'md' + (childRoomId ? ' is-child-clickable' : '');
+      md.className = 'md' + (isBypassOrSlot ? ' sub-agent-md' : '') + (childRoomId ? ' is-child-clickable' : '');
       if (childRoomId) {
         const subRoom = getRoomById(childRoomId);
         const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId);
         md.setAttribute('title', `클릭 시 [${subRoomTitle}] 채팅방으로 이동`);
       }
-      md.innerHTML = m.isHtml ? displayBody : formatMarkdown(displayBody);
+      if (isBypassOrSlot && !m.isHtml) {
+        populateCollapsibleSubAgentMarkdownDom(md, m, displayBody);
+      } else {
+        md.innerHTML = m.isHtml ? displayBody : formatMarkdown(displayBody);
+      }
       row.appendChild(md);
     } else if (isErrorMsg) {
       const errCard = document.createElement('div');
@@ -1402,6 +1475,31 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
         </details>
       `;
       row.appendChild(errCard);
+    } else if (!displayBody && isBypassOrSlot) {
+      const childLive = childRoomId && typeof roomLiveStates !== 'undefined' ? roomLiveStates[childRoomId] : null;
+      const liveFeed = (childLive && childLive.isRunning && childLive.feed)
+        ? childLive.feed
+        : ((bypassStepObj && bypassStepObj.reason) || '하위 에이전트가 작업을 실행하고 있습니다…');
+      const instPreview = (bypassStepObj && bypassStepObj.instructionPreview) ? String(bypassStepObj.instructionPreview).trim() : '';
+      const isReusedSlot = Boolean(bypassStepObj && bypassStepObj.reused);
+      const slotCard = document.createElement('div');
+      slotCard.className = 'msg-slot-placeholder' + (childRoomId ? ' is-child-clickable' : '');
+      if (childRoomId) {
+        slotCard.setAttribute('data-child-room-id', childRoomId);
+      }
+      slotCard.innerHTML = `
+        <div class="slot-placeholder-top">
+          <span class="spinner sm"></span>
+          <span class="slot-live-feed-text shimmer">${escapeHtml(liveFeed)}</span>
+          ${isReusedSlot ? `<span class="slot-reused-tag" title="기존 하위 대화방 맥락을 이어받아 실행 중">기존 맥락 이어하기</span>` : ''}
+        </div>
+        ${instPreview ? `<div class="slot-instruction-preview">${escapeHtml(instPreview)}</div>` : ''}
+        <div class="slot-skeleton-bars" aria-hidden="true">
+          <div class="skeleton-shimmer skeleton-line" style="width: 88%; height: 12px;"></div>
+          <div class="skeleton-shimmer skeleton-line" style="width: 62%; height: 12px;"></div>
+        </div>
+      `;
+      row.appendChild(slotCard);
     } else if (!displayBody) {
       const emptyCard = document.createElement('div');
       emptyCard.className = 'msg-empty-card';
@@ -1590,19 +1688,35 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
   });
 
   // 1. 현재 진행 중이거나 완료된 메시지 먼저 렌더링
-  // 단, 현재 liveState.isRunning 중인데 마지막 메시지가 텍스트 없는 어시스턴트 플레이스홀더라면
-  // liveRow 와 중복되므로 렌더링에서 제외 (새로고침 시 2개 찍힘 방지)
+  // 단, 현재 liveState.isRunning 중인데 마지막 메시지가 텍스트 없는 일반 어시스턴트 플레이스홀더라면
+  // liveRow 와 중복되므로 렌더링에서 제외 (단, 하위 에이전트 사전 예약 슬롯은 절대 제거하지 않고 유지!)
   if (liveState.isRunning && activeEntries.length > 0) {
     const lastEntry = activeEntries[activeEntries.length - 1];
-    const lastSender = lastEntry.m.sender || lastEntry.m.role || '';
+    const lastM = lastEntry.m;
+    const lastSender = lastM.sender || lastM.role || '';
     if (lastSender === 'assistant') {
-      const isPlaceholder = !String(lastEntry.m.text || '').trim();
-      const isMatchingAsst = Boolean(liveState.asstMsgId && lastEntry.m.id === liveState.asstMsgId);
+      const isPlaceholder = !String(lastM.text || '').trim() && !isSubAgentSlotMessage(lastM);
+      const isMatchingAsst = Boolean(liveState.asstMsgId && lastM.id === liveState.asstMsgId);
       if (isPlaceholder || isMatchingAsst) {
         activeEntries.pop();
       }
     }
   }
+
+  // 패턴 E: 동일 사용자 질문(턴) 산하에 연속 생성된 하위 작업 슬롯에 발주 순서(#1, #2, #3...) 번호 부여
+  let currentTurnSlotSeq = 0;
+  activeEntries.forEach(({ m }) => {
+    if (!m || typeof m !== 'object') return;
+    const role = m.sender || m.role || 'assistant';
+    if (role === 'user') {
+      currentTurnSlotSeq = 0;
+      return;
+    }
+    if (isSubAgentSlotMessage(m)) {
+      currentTurnSlotSeq += 1;
+      m._slotOrder = currentTurnSlotSeq;
+    }
+  });
 
   let lastDateKey = '';
   const appendDateDividerIfNeeded = (ts) => {

@@ -100,6 +100,29 @@ async def _finalize_orchestrator_completion(
             is_user_aborted = True
         _now_done = time.time()
         if is_user_aborted:
+            _slot_id = _rec.get("slotMsgId")
+            if isinstance(_slot_id, int) and _slot_id > 0:
+                try:
+                    current_chat_db = _get_mod_attr("chat_db", chat_db)
+                    if current_chat_db and hasattr(current_chat_db, "update_message"):
+                        _cancel_steps = [{
+                            "kind": "subagent_bypass",
+                            "tool": "bypass",
+                            "title": str(_rec.get("title") or room_id),
+                            "roomId": room_id,
+                            "taskId": task_id,
+                            "status": "cancelled",
+                            "reason": "사용자 취소됨",
+                            "bypassedFromRoomId": room_id,
+                        }]
+                        current_chat_db.update_message(
+                            _slot_id,
+                            text=f"🛑 **[{_rec.get('title') or room_id}]** 하위 작업이 사용자에 의해 취소되었습니다.",
+                            steps=_cancel_steps,
+                            update_preview=False,
+                        )
+                except Exception:
+                    pass
             master_tasks.update_task(
                 task_id,
                 status="cancelled",
@@ -213,13 +236,17 @@ async def _notify_master_agent(
     if not _is_orchestrator_room_id(target_parent_id):
         target_parent_id = CORE_ORCHESTRATOR_ROOM_ID
 
-    # 발주처(origin_room_id) 해석: 태스크 레코드 우선 -> 방 레코드
+    # 발주처(origin_room_id) 및 사전 예약 슬롯(slot_msg_id) 해석: 태스크 레코드 우선 -> 방 레코드
     origin_room_id: str | None = None
+    slot_msg_id: int | None = None
     if task_id:
         task_rec = master_tasks.get_task(task_id) or {}
         raw_orig = task_rec.get("originRoomId")
         if isinstance(raw_orig, str) and raw_orig.strip():
             origin_room_id = raw_orig.strip()
+        raw_slot_id = task_rec.get("slotMsgId")
+        if isinstance(raw_slot_id, int) and raw_slot_id > 0:
+            slot_msg_id = raw_slot_id
     if not origin_room_id and room_record:
         raw_orig = room_record.get("originRoomId")
         if isinstance(raw_orig, str) and raw_orig.strip():
@@ -324,20 +351,34 @@ async def _notify_master_agent(
     except Exception:
         pass
 
-    # 2. 발주처(또는 부모) 방에 어시스턴트 메시지로 직접 삽입 (Bypass)
+    # 2. 발주처(또는 부모) 방에 어시스턴트 메시지로 인플레이스 하이드레이션 또는 직접 삽입 (Bypass)
     msg_id = None
+    in_place_hydrated = False
     if current_chat_db:
         try:
-            msg_id = current_chat_db.add_message(
-                room_id=target_ui_room_id,
-                role="assistant",
-                text=msg_text,
-                channel="thread_bypass",
-                steps=steps,
-                model=model,
-                effort=effort,
-                created_at=time.time(),
-            )
+            if slot_msg_id and hasattr(current_chat_db, "update_message"):
+                updated = current_chat_db.update_message(
+                    slot_msg_id,
+                    text=msg_text,
+                    steps=steps,
+                    model=model,
+                    effort=effort,
+                    update_preview=True,
+                )
+                if updated:
+                    msg_id = slot_msg_id
+                    in_place_hydrated = True
+            if msg_id is None:
+                msg_id = current_chat_db.add_message(
+                    room_id=target_ui_room_id,
+                    role="assistant",
+                    text=msg_text,
+                    channel="thread_bypass",
+                    steps=steps,
+                    model=model,
+                    effort=effort,
+                    created_at=time.time(),
+                )
         except Exception as exc:
             logger.error("[web_jobs] 대상 방(%s) 바이패스 메시지 저장 실패: %s", target_ui_room_id, exc)
 
@@ -349,6 +390,9 @@ async def _notify_master_agent(
                 "type": "result",
                 "roomId": target_ui_room_id,
                 "msgId": msg_id,
+                "slotMsgId": slot_msg_id,
+                "taskId": task_id,
+                "inPlaceHydrated": in_place_hydrated,
                 "text": msg_text,
                 "steps": steps,
                 "agentName": subagent_name,

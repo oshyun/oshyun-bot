@@ -1000,6 +1000,64 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": f"지원하지 않는 action입니다: {action}"}, status=400)
 
     will_be_queued = is_room_busy(room_id)
+    allocated_task_id = f"mt-{uuid.uuid4().hex[:8]}"
+    target_ui_room_id = (
+        origin_room_id
+        if (origin_room_id and _is_orchestrator_room_id(origin_room_id))
+        else parent_agent_id
+    )
+    slot_msg_id: int | None = None
+    slot_status = "queued" if will_be_queued else "running"
+    slot_reason = "대기열 대기 중…" if will_be_queued else "백그라운드 실행 중…"
+    subagent_label = room_title
+    if parent_cfg and parent_cfg.get("name"):
+        subagent_label = f"{parent_cfg.get('name')} ({room_title})"
+
+    slot_steps = [{
+        "kind": "subagent_bypass",
+        "tool": "bypass",
+        "isSlotPlaceholder": True,
+        "title": room_title,
+        "roomId": room_id,
+        "taskId": allocated_task_id,
+        "agentName": subagent_label,
+        "status": slot_status,
+        "reason": slot_reason,
+        "instructionPreview": message[:160],
+        "reused": reused_existing,
+        "bypassedFromRoomId": room_id,
+    }]
+
+    if not wait_for_result and current_chat_db and target_ui_room_id:
+        try:
+            raw_slot_id = current_chat_db.add_message(
+                room_id=target_ui_room_id,
+                role="assistant",
+                text="",
+                channel="thread_bypass",
+                steps=slot_steps,
+                model=clean_model,
+                effort=clean_effort,
+                created_at=time.time(),
+            )
+            if isinstance(raw_slot_id, int) and raw_slot_id > 0:
+                slot_msg_id = raw_slot_id
+        except Exception as exc:
+            logger.warning("[orchestrator] 사전 슬롯 메시지 생성 실패 (%s): %s", target_ui_room_id, exc)
+
+    task_rec = master_tasks.create_task(
+        room_id=room_id,
+        instruction=message,
+        session_id=session_id,
+        title=room_title,
+        origin="dispatch",
+        wait=wait_for_result,
+        task_id=allocated_task_id,
+        origin_room_id=origin_room_id,
+        parent_agent_id=parent_agent_id,
+        slot_msg_id=slot_msg_id,
+    )
+    task_id = task_rec["id"]
 
     dispatch_event: dict[str, Any] = {
         "type": "orchestrator_dispatch",
@@ -1014,6 +1072,11 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
         "isOrchestratorChild": True,
         "parentAgentId": parent_agent_id,
         "originRoomId": origin_room_id,
+        "targetUiRoomId": target_ui_room_id,
+        "taskId": task_id,
+        "slotMsgId": slot_msg_id,
+        "slotSteps": slot_steps,
+        "slotStatus": slot_status,
         "model": clean_model,
         "effort": clean_effort,
         "wait": wait_for_result,
@@ -1022,18 +1085,6 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
     if matched_similarity is not None:
         dispatch_event["matchedSimilarity"] = matched_similarity
     await current_broadcast(dispatch_event)
-
-    task_rec = master_tasks.create_task(
-        room_id=room_id,
-        instruction=message,
-        session_id=session_id,
-        title=room_title,
-        origin="dispatch",
-        wait=wait_for_result,
-        origin_room_id=origin_room_id,
-        parent_agent_id=parent_agent_id,
-    )
-    task_id = task_rec["id"]
 
     try:
         dispatch_summary = master_memory.format_dispatch_memory(
@@ -1090,6 +1141,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             "action": action,
             "reused": reused_existing,
             "taskId": task_id,
+            "slotMsgId": slot_msg_id,
             "roomId": room_id,
             "sessionId": session_id,
             "parentAgentId": parent_agent_id,

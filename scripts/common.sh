@@ -4,8 +4,8 @@
 set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # 기본값 먼저 로드, .env 가 덮어씀.
-source "${PROJECT_ROOT}/.env.defaults" 2>/dev/null || true
-source "${PROJECT_ROOT}/.env" 2>/dev/null || true
+[ -f "${PROJECT_ROOT}/.env.defaults" ] && source "${PROJECT_ROOT}/.env.defaults" 2>/dev/null || true
+[ -f "${PROJECT_ROOT}/.env" ] && source "${PROJECT_ROOT}/.env" 2>/dev/null || true
 
 # 도메인 기반 환경변수(DOMAIN__KEY)와 레거시 환경변수(KEY) 간 양방향 동기화
 _sync_env_pair() {
@@ -77,7 +77,7 @@ done
 # macOS Python 환경에서 SSL 검증 실패([SSL: CERTIFICATE_VERIFY_FAILED])를 방지하기 위해
 # SSL_CERT_FILE 이 없으면 certifi 번들 또는 시스템 CA 를 자동 탐색해 설정
 if [ -z "${SSL_CERT_FILE:-}" ] || [ ! -f "${SSL_CERT_FILE}" ]; then
-  for _ca_cand in "${PROJECT_ROOT}"/.venv/lib/python*/site-packages/certifi/cacert.pem /etc/ssl/cert.pem /private/etc/ssl/cert.pem; do
+  for _ca_cand in "${PROJECT_ROOT}"/.venv/lib/python*/site-packages/certifi/cacert.pem /Users/user/repos/oshyun-bot/.venv/lib/python*/site-packages/certifi/cacert.pem /etc/ssl/cert.pem /private/etc/ssl/cert.pem; do
     if [ -f "$_ca_cand" ]; then
       export SSL_CERT_FILE="$_ca_cand"
       export REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$_ca_cand}"

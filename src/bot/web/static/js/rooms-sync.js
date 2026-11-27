@@ -421,14 +421,21 @@ function deduplicateMessagesList(msgs) {
         }
         continue;
       }
-      // 이전 메시지가 빈 텍스트 플레이스홀더 어시스턴트이고 현재 메시지가 내용 있는 어시스턴트이면 대체
-      if (prevRole === 'assistant' && role === 'assistant' && !prevText && text) {
+      const isSlotMsg = (msg) => Boolean(
+        msg && (
+          msg.channel === 'thread_bypass' ||
+          msg.isSlotPlaceholder ||
+          (Array.isArray(msg.steps) && msg.steps.some(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass')))
+        )
+      );
+      // 이전 메시지가 빈 텍스트 플레이스홀더 어시스턴트이고 현재 메시지가 내용 있는 어시스턴트이면 대체 (단, 독립된 하위 작업 슬롯은 제외)
+      if (!isSlotMsg(prev) && !isSlotMsg(m) && prevRole === 'assistant' && role === 'assistant' && !prevText && text) {
         out[out.length - 1] = m;
         if (hasId) seenIds.set(m.id, out.length - 1);
         continue;
       }
-      // 이전 메시지가 내용 있는 어시스턴트인데 현재 메시지가 빈 텍스트 플레이스홀더이면 무시
-      if (prevRole === 'assistant' && role === 'assistant' && prevText && !text) {
+      // 이전 메시지가 내용 있는 어시스턴트인데 현재 메시지가 빈 텍스트 플레이스홀더이면 무시 (단, 독립된 하위 작업 슬롯은 제외)
+      if (!isSlotMsg(prev) && !isSlotMsg(m) && prevRole === 'assistant' && role === 'assistant' && prevText && !text) {
         continue;
       }
     }
@@ -846,7 +853,12 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
         if (curLiveState && curLiveState.isRunning && serverMsgs.length > 0) {
           const lastSm = serverMsgs[serverMsgs.length - 1];
           if (lastSm && (lastSm.sender === 'assistant' || lastSm.role === 'assistant')) {
-            const isPlaceholder = !String(lastSm.text || '').trim();
+            const isSlot = Boolean(
+              lastSm.channel === 'thread_bypass' ||
+              lastSm.isSlotPlaceholder ||
+              (Array.isArray(lastSm.steps) && lastSm.steps.some(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass')))
+            );
+            const isPlaceholder = !String(lastSm.text || '').trim() && !isSlot;
             const isMatchingAsst = Boolean(curLiveState.asstMsgId && lastSm.id === curLiveState.asstMsgId);
             if (isPlaceholder || isMatchingAsst) {
               serverMsgs.pop();

@@ -127,6 +127,14 @@ function upsertRoomMessage(room, msgObj, options = {}) {
     if (msgObj.effort !== undefined && msgObj.effort !== null) existing.effort = msgObj.effort;
     if (msgObj.elapsedSeconds !== undefined) existing.elapsedSeconds = msgObj.elapsedSeconds;
     if (msgObj.isError !== undefined) existing.isError = msgObj.isError;
+    if (msgObj.isSlotPlaceholder !== undefined) existing.isSlotPlaceholder = msgObj.isSlotPlaceholder;
+    if (msgObj.slotTaskId) existing.slotTaskId = msgObj.slotTaskId;
+    if (msgObj.bypassedFromRoomId) existing.bypassedFromRoomId = msgObj.bypassedFromRoomId;
+    if (msgObj.agentName) existing.agentName = msgObj.agentName;
+    if (msgObj.subagentTitle) existing.subagentTitle = msgObj.subagentTitle;
+    if (Array.isArray(msgObj.delegatedRooms) && msgObj.delegatedRooms.length > 0) {
+      existing.delegatedRooms = msgObj.delegatedRooms;
+    }
     if (msgObj.createdAt && (!existing.createdAt || options.updateTimestamp)) {
       existing.createdAt = msgObj.createdAt;
     }
@@ -1123,6 +1131,51 @@ function handleWsEvent(data) {
         updateSendButtonState();
       }
     }
+
+    // 발주처(마스터/전문가) 방 타임라인 하단에 사전 예약 슬롯(slotMsgId)을 즉시 마운트 (패턴 E: 발주 순서 고정 및 기존 방 재사용 시 묻힘 방지)
+    const uiRoomId = String(data.targetUiRoomId || data.originRoomId || dispatchParent || '').trim();
+    const slotMsgId = (typeof data.slotMsgId === 'number' && data.slotMsgId > 0) ? data.slotMsgId : null;
+    if (!data.wait && uiRoomId && slotMsgId) {
+      const uiRoom = getRoomById(uiRoomId);
+      if (uiRoom) {
+        const slotStatus = data.slotStatus || (data.queued ? 'queued' : 'running');
+        const slotSteps = Array.isArray(data.slotSteps) && data.slotSteps.length > 0
+          ? data.slotSteps
+          : [{
+              kind: 'subagent_bypass',
+              tool: 'bypass',
+              isSlotPlaceholder: true,
+              title: data.title || targetId,
+              roomId: targetId,
+              taskId: data.taskId || '',
+              status: slotStatus,
+              reason: slotStatus === 'queued' ? '대기열 대기 중…' : '백그라운드 실행 중…',
+              reused: Boolean(data.reused),
+              bypassedFromRoomId: targetId
+            }];
+        upsertRoomMessage(uiRoom, {
+          id: slotMsgId,
+          role: 'assistant',
+          sender: 'assistant',
+          channel: 'thread_bypass',
+          text: '',
+          steps: slotSteps,
+          isSlotPlaceholder: true,
+          slotTaskId: data.taskId || '',
+          bypassedFromRoomId: targetId,
+          subagentTitle: data.title || targetId,
+          model: data.model || null,
+          effort: data.effort || null,
+          createdAt: Date.now()
+        }, { beforeQueued: true });
+        uiRoom.messageCount = uiRoom.messages.length;
+        uiRoom.updatedAt = Date.now();
+        saveChatRoomsToStorage();
+        if (uiRoom.id === currentRoomId) {
+          renderMessagesForCurrentRoom();
+        }
+      }
+    }
     return;
   }
   const targetRoom = resolveEventRoom(data);
@@ -1271,6 +1324,9 @@ function handleWsEvent(data) {
     const isThinking = (stepObj.kind === 'thinking');
     liveState.feed = stepObj.title || (isThinking ? '생각하는 중…' : (stepObj.tool || '도구 실행 중…'));
     setAgentAvatarStatus(isThinking ? 'thinking' : 'working', liveState.feed);
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed, targetRoom.title);
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed);
       appendLiveAgentStepToDom(stepObj);
@@ -1289,6 +1345,9 @@ function handleWsEvent(data) {
       liveState.feed = '내용 분석 및 답변 정리 중…';
     }
     setAgentAvatarStatus('working', liveState.feed);
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed, targetRoom.title);
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed);
       updateLiveAgentStepInDom(sIdx, stepObj, liveState.steps);
@@ -1304,6 +1363,9 @@ function handleWsEvent(data) {
     liveState.streamText = (liveState.streamText || '') + delta;
     liveState.feed = '답변 작성 중…';
     setAgentAvatarStatus('working', liveState.feed);
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed, targetRoom.title);
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed);
       updateLiveStreamMarkdownDom(liveState.streamText);
@@ -1319,6 +1381,9 @@ function handleWsEvent(data) {
     liveState.streamText = chunkText;
     liveState.feed = '답변 작성 중…';
     setAgentAvatarStatus('working', liveState.feed);
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed, targetRoom.title);
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed);
       updateLiveStreamMarkdownDom(liveState.streamText);
@@ -1334,6 +1399,9 @@ function handleWsEvent(data) {
       liveState.feed = nextFeed;
     }
     setAgentAvatarStatus('working', liveState.feed || '실행 중…');
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      updateSubAgentChipsStatus(targetRoom.id, 'running', liveState.feed || '실행 중…', targetRoom.title);
+    }
     if (isCurrentRoom) {
       setOrbState('thinking', liveState.feed || '실행 중…');
       updateLiveFeedDom(liveState.feed);
@@ -1457,22 +1525,44 @@ function handleWsEvent(data) {
       const lastIdx = targetRoom.messages.length - 1;
       const lastMsg = targetRoom.messages[lastIdx];
       const lastRole = lastMsg ? (lastMsg.sender || lastMsg.role || '') : '';
-      if (lastRole === 'assistant' && !String(lastMsg.text || '').trim()) {
+      const isLastSlot = Boolean(
+        lastMsg && (
+          lastMsg.channel === 'thread_bypass' ||
+          lastMsg.isSlotPlaceholder ||
+          (Array.isArray(lastMsg.steps) && lastMsg.steps.some(s => s && (s.kind === 'subagent_bypass' || s.tool === 'bypass')))
+        )
+      );
+      if (lastRole === 'assistant' && !String(lastMsg.text || '').trim() && !isLastSlot) {
         targetRoom.messages.pop();
       }
     }
 
+    const resolvedMsgId = data.msgId || data.slotMsgId || undefined;
+    if (!resolvedMsgId && data.taskId && Array.isArray(targetRoom.messages)) {
+      const slotByTask = targetRoom.messages.find(m => m && (m.slotTaskId === data.taskId || (Array.isArray(m.steps) && m.steps.some(s => s && s.taskId === data.taskId))));
+      if (slotByTask && slotByTask.id) {
+        data.msgId = slotByTask.id;
+      }
+    }
+
     upsertRoomMessage(targetRoom, {
-      id: data.msgId || undefined,
+      id: data.msgId || data.slotMsgId || undefined,
       role: 'assistant',
       sender: 'assistant',
+      channel: data.turnType === 'delegation_result' ? 'thread_bypass' : (data.channel || undefined),
       text: replyText,
       steps: finalSteps,
+      isSlotPlaceholder: false,
+      slotTaskId: data.taskId || undefined,
+      bypassedFromRoomId: data.bypassedFromRoomId || undefined,
+      agentName: data.agentName || undefined,
+      subagentTitle: data.subagentTitle || undefined,
+      delegatedRooms: Array.isArray(data.delegatedRooms) ? data.delegatedRooms : undefined,
       model: data.model,
       effort: data.effort,
       elapsedSeconds: data.elapsedSeconds,
       createdAt: data.createdAt || Date.now()
-    }, { beforeQueued: true, updateTimestamp: true });
+    }, { beforeQueued: true, updateTimestamp: !data.inPlaceHydrated });
     targetRoom.messageCount = targetRoom.messages.length;
     targetRoom.updatedAt = Date.now();
     if (targetRoom.id === currentRoomId) {

@@ -1205,3 +1205,138 @@ body.app-ready #sb-initial-skeleton {
   flex-shrink: 0;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   패턴 E: 다중 비동기 작업 사전 예약 슬롯 & 인플레이스 하이드레이션 카드
+   (모던 클린 라이트 테마 토큰 SSOT 준수)
+   ═══════════════════════════════════════════════════════════════ */
+.slot-order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  flex-shrink: 0;
+}
+
+.model-tag.slot-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.model-tag.slot-status-pill.is-running {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.model-tag.slot-status-pill.is-queued {
+  color: var(--text-2);
+  background: var(--bg-subtle);
+  border: 1px dashed var(--border-strong);
+}
+
+.model-tag.slot-status-pill.is-done {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.model-tag.slot-status-pill.is-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: rgba(229, 72, 77, 0.32);
+}
+
+.slot-spin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(16, 185, 129, 0.28);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.msg-slot-placeholder {
+  background: var(--bg-subtle);
+  border: 1px dashed var(--accent);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 12px 12px 12px;
+  padding: 10px 14px;
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.msg-slot-placeholder:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-strong);
+}
+
+.slot-placeholder-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(13px * var(--ui-scale, 1));
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.slot-live-feed-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-reused-tag {
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.slot-instruction-preview {
+  font-size: calc(12px * var(--ui-scale, 1));
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-skeleton-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.msg.sub-agent-slot-row .sub-agent-md {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 12px 12px 12px;
+  padding: 10px 14px;
+  font-size: calc(var(--chat-font-size, 15px) * 0.94);
+  line-height: 1.55;
+}
+
+

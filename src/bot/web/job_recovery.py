@@ -388,6 +388,15 @@ async def _recover_startup_placeholders() -> int:
                 continue
             last_msg = msgs[-1]
             if last_msg.get("role") in ("assistant", "agent") and not str(last_msg.get("text") or "").strip():
+                if last_msg.get("channel") == "thread_bypass":
+                    last_steps = last_msg.get("steps") or []
+                    slot_step = next(
+                        (s for s in last_steps if isinstance(s, dict) and s.get("kind") == "subagent_bypass"),
+                        None,
+                    )
+                    child_rid = str((slot_step or {}).get("roomId") or "").strip()
+                    if child_rid and child_rid in active_room_ids:
+                        continue
                 msg_id = last_msg.get("id")
                 if msg_id:
                     current_chat_db.update_message(
