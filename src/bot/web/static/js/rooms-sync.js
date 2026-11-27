@@ -463,7 +463,8 @@ function loadChatRoomsFromStorage() {
 
 async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync = false) {
   try {
-    const res = await fetch('/api/chat/rooms');
+    const fetchFn = typeof fetchWithTimeout === 'function' ? fetchWithTimeout : fetch;
+    const res = await fetchFn('/api/chat/rooms', {}, 2500);
     const data = await res.json();
     if (data.ok && Array.isArray(data.rooms)) {
       // 1. 사용자가 직접 '새 대화' 버튼을 눌러 생성한 임시 빈 방, 현재 활성 미전송 방 및 마스터가 생성한 신규 방 보존
@@ -611,10 +612,42 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
         await loadChatHistoryFromServer(cur.id, cur.sessionId);
       }
       focusChatInput();
+    } else {
+      throw new Error((data && data.error) || '대화방 목록 응답 형식 비정상');
     }
-  } catch (_) {
+  } catch (err) {
+    console.warn('[RoomsSync] 대화방 목록 로드 실패, 안전망 폴백 가동:', err);
+    ensureCoreRoom();
+    if (!chatRooms.some(r => r && !ORCHESTRATOR_ROOM_IDS.includes(r.id))) {
+      const defaultId = 'room-' + Date.now();
+      chatRooms.push({
+        id: defaultId,
+        roomId: defaultId,
+        title: '새 대화',
+        preview: '',
+        messageCount: 0,
+        messages: [],
+        isNewSession: true,
+        userCreatedEmpty: true,
+        sessionId: null,
+        updatedAt: Date.now()
+      });
+    }
+    if (!currentRoomId || !chatRooms.some(r => r && (r.id === currentRoomId || r.sessionId === currentRoomId))) {
+      currentRoomId = chatRooms[0].id;
+    }
+    renderRoomList();
+    updateSessionBar({ skipMasterUi: true });
+    syncMasterModeUi({ loadData: false });
+    const cur = getCurrentRoom();
+    if (cur) cur.historyLoaded = true;
+    renderMessagesForCurrentRoom(true);
+    focusChatInput();
   } finally {
     isInitialRoomsLoading = false;
+    if (typeof markAppReady === 'function') {
+      markAppReady();
+    }
   }
 }
 
@@ -715,7 +748,8 @@ async function loadChatHistoryFromServer(roomId, sessionId) {
   try {
     const url = '/api/chat/history?roomId=' + encodeURIComponent(roomId || '') +
                 '&sessionId=' + encodeURIComponent(sessionId || '');
-    const res = await fetch(url);
+    const fetchFn = typeof fetchWithTimeout === 'function' ? fetchWithTimeout : fetch;
+    const res = await fetchFn(url, {}, 3000);
     const data = await res.json();
     if (_historyFetchSeq[targetId] !== reqSeq) return;
     let room = getRoomById(roomId) || getRoomById(sessionId);
@@ -1923,7 +1957,8 @@ function syncAgentConfigsState(agentsList, orchestratorIds = null) {
 
 async function loadAgentConfigsFromServer() {
   try {
-    const res = await fetch('/api/orchestrator/agents');
+    const fetchFn = typeof fetchWithTimeout === 'function' ? fetchWithTimeout : fetch;
+    const res = await fetchFn('/api/orchestrator/agents', {}, 2500);
     const data = await res.json();
     if (data && data.ok && Array.isArray(data.agents)) {
       syncAgentConfigsState(data.agents, data.orchestratorRoomIds);

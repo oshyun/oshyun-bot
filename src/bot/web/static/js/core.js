@@ -127,6 +127,33 @@ window.fetch = function(url, options = {}) {
   return _nativeFetch.call(this, url, options);
 };
 
+// ─── 네트워크 타임아웃 안전망 래퍼 (AbortSignal 기반) ───
+function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`Fetch timed out after ${timeoutMs}ms: ${url}`));
+  }, timeoutMs);
+
+  const originalSignal = options.signal;
+  if (originalSignal) {
+    if (originalSignal.aborted) {
+      clearTimeout(timer);
+      controller.abort(originalSignal.reason);
+    } else {
+      originalSignal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        controller.abort(originalSignal.reason);
+      }, { once: true });
+    }
+  }
+
+  const fetchOptions = { ...options, signal: controller.signal };
+  return fetch(url, fetchOptions).finally(() => {
+    clearTimeout(timer);
+  });
+}
+window.fetchWithTimeout = fetchWithTimeout;
+
 // ─── 브라우저 히스토리 API (?room=<roomId>) 연동 ───
 function buildRoomHistoryUrl(roomId) {
   try {

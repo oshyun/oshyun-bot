@@ -77,7 +77,8 @@ function applyStatusPayload(data) {
 
 async function loadStatusAndSettings() {
   try {
-    const res = await fetch('/api/status');
+    const fetchFn = typeof fetchWithTimeout === 'function' ? fetchWithTimeout : fetch;
+    const res = await fetchFn('/api/status', {}, 2500);
     applyStatusPayload(await res.json());
   } catch (_) {}
   if (typeof loadGoogleAuthStatus === 'function') {
