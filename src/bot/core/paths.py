@@ -23,6 +23,47 @@ load_dotenv(os.path.join(_ROOT_DIR, ".env"), override=True)
 from bot.core.env_compat import sync_domain_env
 sync_domain_env()
 
+
+def setup_ssl_certificates() -> str | None:
+    """macOS Python 환경에서 [SSL: CERTIFICATE_VERIFY_FAILED] 오류를 방지하기 위해
+    SSL_CERT_FILE 및 REQUESTS_CA_BUNDLE 환경변수가 비어있거나 무효하면
+    certifi 번들 또는 시스템 CA 경로를 자동으로 찾아 주입한다.
+    """
+    current_ssl_file = os.environ.get("SSL_CERT_FILE", "").strip()
+    if current_ssl_file and os.path.isfile(current_ssl_file):
+        return current_ssl_file
+
+    ca_candidates: list[str] = []
+    try:
+        import certifi
+        cp = certifi.where()
+        if cp and os.path.isfile(cp):
+            ca_candidates.append(cp)
+    except Exception:
+        pass
+
+    ca_candidates.extend([
+        "/etc/ssl/cert.pem",
+        "/private/etc/ssl/cert.pem",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/certs/ca-certificates.crt",
+    ])
+
+    for ca_path in ca_candidates:
+        if os.path.isfile(ca_path):
+            os.environ["SSL_CERT_FILE"] = ca_path
+            curr_req = os.environ.get("REQUESTS_CA_BUNDLE", "").strip()
+            if not curr_req or not os.path.isfile(curr_req):
+                os.environ["REQUESTS_CA_BUNDLE"] = ca_path
+            curr_curl = os.environ.get("CURL_CA_BUNDLE", "").strip()
+            if not curr_curl or not os.path.isfile(curr_curl):
+                os.environ["CURL_CA_BUNDLE"] = ca_path
+            return ca_path
+    return None
+
+
+setup_ssl_certificates()
+
 # 운영 산출물 디렉토리. DATA_DIR 로 다른 위치로 분리 가능(기본: <리포 루트>/data).
 DATA_DIR = os.path.abspath(
     os.path.expanduser(os.getenv("DATA_DIR", "").strip() or os.path.join(_ROOT_DIR, "data"))

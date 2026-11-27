@@ -74,6 +74,20 @@ for cert_var in SSL_CERT_FILE REQUESTS_CA_BUNDLE CURL_CA_BUNDLE AWS_CA_BUNDLE GI
   fi
 done
 
+# macOS Python 환경에서 SSL 검증 실패([SSL: CERTIFICATE_VERIFY_FAILED])를 방지하기 위해
+# SSL_CERT_FILE 이 없으면 certifi 번들 또는 시스템 CA 를 자동 탐색해 설정
+if [ -z "${SSL_CERT_FILE:-}" ] || [ ! -f "${SSL_CERT_FILE}" ]; then
+  for _ca_cand in "${PROJECT_ROOT}"/.venv/lib/python*/site-packages/certifi/cacert.pem /etc/ssl/cert.pem /private/etc/ssl/cert.pem; do
+    if [ -f "$_ca_cand" ]; then
+      export SSL_CERT_FILE="$_ca_cand"
+      export REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$_ca_cand}"
+      export CURL_CA_BUNDLE="${CURL_CA_BUNDLE:-$_ca_cand}"
+      break
+    fi
+  done
+  unset _ca_cand
+fi
+
 PY="${PROJECT_ROOT}/.venv/bin/python"
 # 패키지 루트(src)를 PYTHONPATH 에 포함 — python -m bot.web.server 기동용.
 PYTHONPATH="${PROJECT_ROOT}/src${PYTHONPATH:+:$PYTHONPATH}"

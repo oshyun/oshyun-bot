@@ -269,4 +269,6 @@ claude 는 단일 Mach-O 바이너리라 심링크 우회 위해 `realpath` 로 
 
 - 주석/문서는 한국어. 비밀(토큰)은 로그에 남기지 않는다(httpx 로깅 WARNING 으로 낮춤).
 - 사용자 응답·UI 문자열도 한국어.
+- **SSL 인증서 자동 로드**: macOS 환경에서 `[SSL: CERTIFICATE_VERIFY_FAILED]` 오류를 방지하기 위해 `paths.py`와 `common.sh`가 `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`에 certifi 번들을 자동 주입한다. 네트워크 요청 시 자체 SSL context나 환경변수를 임의로 unset하거나 차단하지 않는다.
+- **셸/서브프로세스 실행 안전 (command not found: start_url 등 방지)**: Python 서브프로세스 실행 시 `shell=True`를 절대 금지하고 반드시 인자 리스트(`["cmd", "arg1", ...]`)로 넘긴다. 불가피하게 셸 커맨드라인 문자열을 조합할 때는 `shlex.quote()`로 이스케이프하며, JSON/매니페스트 생성 시 셸 Heredoc 대신 전용 파일 도구 또는 `json.dump()`를 사용한다.
 - 작업 완료(merge/restart) 후에는 로컬 커밋을 원격에 동기화(`git push origin main`)한다.
