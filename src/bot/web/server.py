@@ -14,6 +14,8 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import gzip
+import html
+import json
 import os
 import re
 import ssl
@@ -615,9 +617,111 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     resolved_static_dir = static_dir if static_dir is not None else WEB_STATIC_DIR
     index_html_path = os.path.join(resolved_static_dir, "index.html")
     sw_js_path = os.path.join(resolved_static_dir, "sw.js")
+    manifest_json_path = os.path.join(resolved_static_dir, "manifest.json")
     if os.path.isdir(resolved_static_dir) and os.path.isfile(index_html_path):
 
         _index_gz_cache: dict[str, Any] = {"mtime": None, "data": b""}
+
+        def _resolve_room_meta_for_pwa(room_id: str) -> dict[str, str]:
+            """PWA 매니페스트 및 딥링크 SSR용 대화방 메타데이터 해석."""
+            clean_id = str(room_id or "").strip()
+            if not clean_id:
+                return {"id": "", "title": "second-bot", "short_title": "second-bot"}
+
+            special_titles = {
+                CORE_ROOM_ID: "마스터 오케스트레이터",
+                "__expert_general__": "일반 대화",
+                "__expert_vault__": "세컨브레인 볼트",
+                "__expert_coding__": "봇 개발",
+            }
+            if clean_id in special_titles:
+                t = special_titles[clean_id]
+                return {"id": clean_id, "title": t, "short_title": t[:12]}
+
+            try:
+                import bot.core.agent_configs as agent_configs
+                cfg = agent_configs.get_agent_config(clean_id)
+                if cfg and cfg.get("name"):
+                    t = str(cfg["name"]).strip()
+                    return {"id": clean_id, "title": t, "short_title": t[:12]}
+            except Exception:
+                pass
+
+            try:
+                r = chat_db.get_room(clean_id)
+                if r and r.get("title"):
+                    t = str(r["title"]).strip()
+                    return {"id": clean_id, "title": t, "short_title": t[:12]}
+            except Exception:
+                pass
+
+            return {"id": clean_id, "title": "대화방", "short_title": "대화방"}
+
+        async def serve_manifest(request: web.Request) -> web.Response:
+            """PWA Web App Manifest 동적 서빙.
+            
+            특정 room_id가 전달되면 해당 대화방 고유의 start_url, id, name, short_name을 주입하고,
+            최근 활성 대화방 바로가기(shortcuts)를 동적으로 제공한다.
+            """
+            room_id = request.query.get("room", "").strip()
+            base_manifest: dict[str, Any] = {}
+            if os.path.isfile(manifest_json_path):
+                try:
+                    with open(manifest_json_path, "r", encoding="utf-8") as f:
+                        base_manifest = json.load(f)
+                except Exception:
+                    pass
+            if not base_manifest:
+                base_manifest = {
+                    "name": "second-bot Hub",
+                    "short_name": "second-bot",
+                    "start_url": "/",
+                    "id": "/",
+                    "scope": "/",
+                    "display": "standalone",
+                    "background_color": "#FFFFFF",
+                    "theme_color": "#FFFFFF",
+                }
+
+            manifest_data = dict(base_manifest)
+            if room_id:
+                meta = _resolve_room_meta_for_pwa(room_id)
+                manifest_data["name"] = f"{meta['title']} - second-bot"
+                manifest_data["short_name"] = meta["short_title"]
+                manifest_data["start_url"] = f"/?room={room_id}"
+                manifest_data["id"] = f"/?room={room_id}"
+
+            # shortcuts 멤버: 최근 활성 대화방 최대 4개 동적 주입
+            try:
+                recent_rooms = chat_db.get_rooms(include_archived=False, limit=4)
+                if recent_rooms:
+                    shortcuts = []
+                    for r in recent_rooms:
+                        rid = r.get("id")
+                        rtitle = r.get("title") or "대화"
+                        if rid and rid != room_id:
+                            shortcuts.append({
+                                "name": rtitle[:15],
+                                "short_name": rtitle[:10],
+                                "url": f"/?room={rid}",
+                                "icons": [{
+                                    "src": "/icons/icon-192.png",
+                                    "sizes": "192x192",
+                                    "type": "image/png"
+                                }]
+                            })
+                    if shortcuts:
+                        manifest_data["shortcuts"] = shortcuts
+            except Exception:
+                pass
+
+            return web.json_response(
+                manifest_data,
+                content_type="application/manifest+json",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                },
+            )
 
         async def serve_index(request: web.Request) -> web.StreamResponse:
             no_cache_headers = {
@@ -626,7 +730,65 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
                 "Expires": "0",
                 "Vary": "Accept-Encoding",
             }
+            room_id = request.query.get("room", "").strip()
             accept_enc = request.headers.get("Accept-Encoding", "")
+
+            # room 파라미터가 있는 경우: SSR 동적 메타 태그 및 매니페스트 링크 주입 (iOS Safari / Chrome A2HS 최적화)
+            if room_id:
+                try:
+                    meta = _resolve_room_meta_for_pwa(room_id)
+                    with open(index_html_path, "r", encoding="utf-8") as f:
+                        raw_html = f.read()
+
+                    title_esc = html.escape(meta["title"])
+                    short_title_esc = html.escape(meta["short_title"])
+                    room_id_esc = html.escape(room_id)
+
+                    # 1. <title> 갱신
+                    raw_html = re.sub(
+                        r"<title>.*?</title>",
+                        f"<title>{title_esc} - second-bot</title>",
+                        raw_html,
+                        count=1,
+                        flags=re.IGNORECASE,
+                    )
+                    # 2. apple-mobile-web-app-title 갱신
+                    raw_html = re.sub(
+                        r'<meta\s+name=["\']apple-mobile-web-app-title["\']\s+content=["\'].*?["\']>',
+                        f'<meta name="apple-mobile-web-app-title" content="{short_title_esc}">',
+                        raw_html,
+                        count=1,
+                        flags=re.IGNORECASE,
+                    )
+                    # 3. manifest 링크 갱신
+                    raw_html = re.sub(
+                        r'<link\s+([^>]*?)rel=["\']manifest["\']([^>]*?)>',
+                        f'<link id="pwa-manifest-link" rel="manifest" href="/manifest.json?room={room_id_esc}">',
+                        raw_html,
+                        count=1,
+                        flags=re.IGNORECASE,
+                    )
+
+                    body_bytes = raw_html.encode("utf-8")
+                    if "gzip" in accept_enc.lower():
+                        return web.Response(
+                            body=gzip.compress(body_bytes, compresslevel=6),
+                            headers={
+                                **no_cache_headers,
+                                "Content-Type": "text/html; charset=utf-8",
+                                "Content-Encoding": "gzip",
+                            },
+                        )
+                    return web.Response(
+                        body=body_bytes,
+                        headers={
+                            **no_cache_headers,
+                            "Content-Type": "text/html; charset=utf-8",
+                        },
+                    )
+                except Exception as ex:
+                    logger.warning("PWA SSR index injection failed, falling back to static index: %s", ex)
+
             if "gzip" in accept_enc.lower():
                 try:
                     mtime = os.path.getmtime(index_html_path)
@@ -650,6 +812,9 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
             for k, v in no_cache_headers.items():
                 resp.headers[k] = v
             return resp
+
+        web_app.router.add_get("/manifest.json", serve_manifest)
+        web_app.router.add_get("/api/manifest", serve_manifest)
 
         if os.path.isfile(sw_js_path):
             async def serve_sw(_request: web.Request) -> web.FileResponse:

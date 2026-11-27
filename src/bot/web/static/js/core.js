@@ -21,7 +21,8 @@ const ICONS = {
   refresh: '<svg class="i" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
   brain: '<svg class="i" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>',
   spark: '<svg class="i" viewBox="0 0 16 16" stroke-width="1.5"><circle cx="8" cy="2" r="0.8"/><line x1="8" y1="2.9" x2="8" y2="5"/><rect x="2.5" y="5" width="11" height="8.5" rx="1.5"/><circle cx="6" cy="9" r="0.8"/><circle cx="10" cy="9" r="0.8"/><line x1="5.5" y1="13.5" x2="5.5" y2="15"/><line x1="10.5" y1="13.5" x2="10.5" y2="15"/></svg>',
-  chat: '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+  chat: '<svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  shortcut: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 8 12 5 15 8"/><line x1="12" y1="5" x2="12" y2="13"/></svg>'
 };
 
 const CORE_ROOM_ID = '__core__';
@@ -162,6 +163,48 @@ function syncRoomHistory(roomId, mode = 'push') {
     }
     window.history.pushState({ roomId }, '', targetUrl);
   } catch (_) {}
+}
+
+function updatePwaManifestForRoom(roomId) {
+  if (!roomId) return;
+  try {
+    let title = '새 대화';
+    if (typeof getRoomById === 'function') {
+      const r = getRoomById(roomId);
+      if (r && r.title) title = r.title;
+    }
+    if (roomId === CORE_ROOM_ID) title = '마스터 오케스트레이터';
+    else if (roomId === EXPERT_GENERAL_ROOM_ID) title = '일반 대화';
+    else if (roomId === EXPERT_VAULT_ROOM_ID) title = '세컨브레인 볼트';
+    else if (roomId === EXPERT_CODING_ROOM_ID) title = '봇 개발';
+    else if (typeof agentConfigs !== 'undefined' && Array.isArray(agentConfigs)) {
+      const cfg = agentConfigs.find(a => a && a.id === roomId);
+      if (cfg && cfg.name) title = cfg.name;
+    }
+
+    // 1. 브라우저 document.title 동적 갱신
+    document.title = `${title} - second-bot`;
+
+    // 2. iOS Safari 홈 화면 추가 시 타이틀 메타태그 갱신
+    const appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appleTitleMeta) {
+      appleTitleMeta.setAttribute('content', title.slice(0, 12));
+    }
+
+    // 3. PWA Web App Manifest 링크 동적 갱신 (?room=ID)
+    let manifestLink = document.getElementById('pwa-manifest-link');
+    if (!manifestLink) {
+      manifestLink = document.querySelector('link[rel="manifest"]');
+    }
+    if (manifestLink) {
+      const targetHref = `/manifest.json?room=${encodeURIComponent(roomId)}`;
+      if (manifestLink.getAttribute('href') !== targetHref) {
+        manifestLink.setAttribute('href', targetHref);
+      }
+    }
+  } catch (err) {
+    console.warn('PWA manifest 동적 갱신 실패:', err);
+  }
 }
 
 // ─── 유틸리티 헬퍼 ───

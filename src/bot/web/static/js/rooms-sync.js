@@ -1254,6 +1254,9 @@ async function submitRenameRoom() {
   if (isRoomSelectionMode) exitRoomSelectionMode();
   else renderRoomList();
   updateTopbarTitle();
+  if (typeof updatePwaManifestForRoom === 'function') {
+    updatePwaManifestForRoom(room.id);
+  }
 
   fetch('/api/chat/room/rename', {
     method: 'POST',

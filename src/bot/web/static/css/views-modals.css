@@ -617,3 +617,111 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   opacity: 1;
   background: rgba(255, 255, 255, 0.18);
 }
+
+/* ═══ 홈 화면 바로가기 (PWA 딥링크) 모달 스타일 ═══ */
+.shortcut-modal-card {
+  max-width: 440px;
+}
+.shortcut-room-info-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.shortcut-room-badge {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.shortcut-room-details {
+  min-width: 0;
+  flex: 1;
+}
+.shortcut-room-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shortcut-room-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+.shortcut-url-box {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.shortcut-url-input {
+  flex: 1;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  background: var(--bg);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.shortcut-guide-container {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.shortcut-guide-tabs {
+  display: flex;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-tab-btn {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all .15s ease;
+  text-align: center;
+}
+.shortcut-tab-btn:hover {
+  color: var(--text);
+}
+.shortcut-tab-btn.active {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--bg);
+  border-bottom: 2px solid var(--accent);
+}
+.shortcut-guide-content {
+  padding: 12px 14px;
+}
+.shortcut-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.shortcut-steps svg.inline {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  display: inline-block;
+  color: var(--text);
+}

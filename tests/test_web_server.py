@@ -977,6 +977,62 @@ class TestPwaSupport(AioHTTPTestCase):
         self.assertEqual(icon_res.status, 200)
         self.assertEqual(icon_res.headers.get("Content-Type"), "image/png")
 
+    async def test_pwa_dynamic_manifest_with_room(self):
+        """특정 대화방 ID 지정 시 PWA manifest에 해당 방의 제목, start_url, id가 동적 반영되는지 검증."""
+        chat_db.init_db(chat_db.CHAT_DB_FILE, migrate_legacy=False)
+        chat_db.get_or_create_room(
+            room_id="room_pwa_trip_99",
+            title="오사카 여행 계획",
+            db_path=chat_db.CHAT_DB_FILE,
+        )
+
+        res = await self.client.request("GET", "/manifest.json?room=room_pwa_trip_99")
+        self.assertEqual(res.status, 200)
+        self.assertIn("application/manifest+json", res.headers.get("Content-Type", ""))
+        data = await res.json()
+        self.assertIn("오사카 여행 계획 - second-bot", data.get("name", ""))
+        self.assertEqual(data.get("short_name"), "오사카 여행 계획")
+        self.assertEqual(data.get("start_url"), "/?room=room_pwa_trip_99")
+        self.assertEqual(data.get("id"), "/?room=room_pwa_trip_99")
+        self.assertEqual(data.get("background_color"), "#FFFFFF")
+
+        # /api/manifest 엔드포인트도 동일 동작 보장
+        api_res = await self.client.request("GET", "/api/manifest?room=room_pwa_trip_99")
+        self.assertEqual(api_res.status, 200)
+        api_data = await api_res.json()
+        self.assertEqual(api_data.get("start_url"), "/?room=room_pwa_trip_99")
+
+    async def test_pwa_ssr_index_with_room_and_ui_elements(self):
+        """대화방 딥링크(?room=ID)로 index.html 요청 시 iOS/Android A2HS 메타태그 주입 및 바로가기 UI 요소 검증."""
+        chat_db.init_db(chat_db.CHAT_DB_FILE, migrate_legacy=False)
+        chat_db.get_or_create_room(
+            room_id="room_pwa_study_77",
+            title="스마트 인공지능 연구",
+            db_path=chat_db.CHAT_DB_FILE,
+        )
+
+        # 1. 특정 방 딥링크 요청 시 SSR 주입 검증 (게이트웨이 인증 쿠키 전달)
+        cookie_val = web_auth._create_session_cookie_value()
+        res = await self.client.request(
+            "GET",
+            "/?room=room_pwa_study_77",
+            cookies={web_auth.AUTH_COOKIE_NAME: cookie_val},
+        )
+        self.assertEqual(res.status, 200)
+        html_text = await res.text()
+        self.assertIn("<title>스마트 인공지능 연구 - second-bot</title>", html_text)
+        self.assertIn('apple-mobile-web-app-title" content="스마트 인공지능 연구"', html_text)
+        self.assertIn('href="/manifest.json?room=room_pwa_study_77"', html_text)
+
+        # 2. 헤더의 바로가기 버튼 및 홈 화면 바로가기 모달 엘리먼트 존재 검증
+        self.assertIn('id="btn-topbar-shortcut"', html_text)
+        self.assertIn('id="modal-room-shortcut"', html_text)
+        self.assertIn('id="tab-guide-ios"', html_text)
+        self.assertIn('id="tab-guide-android"', html_text)
+        self.assertIn('id="tab-guide-desktop"', html_text)
+        self.assertIn('id="btn-shortcut-pwa-install"', html_text)
+        self.assertIn('id="btn-shortcut-copy-url"', html_text)
+
 
 class TestHubApi(AioHTTPTestCase):
     """ohbot 스타일 Goals, Ideas, Activity Audit 및 대화방 전용 영속화 API 검증."""

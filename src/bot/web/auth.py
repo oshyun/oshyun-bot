@@ -434,7 +434,7 @@ async def auth_middleware(request: web.Request, handler):
 
     # 2. 공개 허용 엔드포인트 (로그인, 정적 PWA 메타데이터, 로컬 루프백 래퍼 콜백)
     if (
-        request.path in ("/login", "/logout", "/favicon.ico", "/favicon.svg", "/manifest.json", "/sw.js")
+        request.path in ("/login", "/logout", "/favicon.ico", "/favicon.svg", "/manifest.json", "/api/manifest", "/sw.js")
         or request.path.startswith("/icons/")
         or _is_local_loopback_callback(request)
     ):

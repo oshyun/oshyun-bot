@@ -1022,6 +1022,9 @@ function updateTopbarTitle() {
   if (currentView === 'chat') {
     const cur = getCurrentRoom();
     titleEl.innerText = (cur && cur.title) ? cur.title : '새 대화';
+    if (typeof updatePwaManifestForRoom === 'function' && typeof currentRoomId !== 'undefined' && currentRoomId) {
+      updatePwaManifestForRoom(currentRoomId);
+    }
   } else {
     titleEl.innerText = VIEW_TITLES[currentView] || 'second-bot';
   }

@@ -299,6 +299,9 @@ window.addEventListener('DOMContentLoaded', () => {
         if (typeof syncRoomHistory === 'function') {
           syncRoomHistory(initialRoom, 'replace');
         }
+        if (typeof updatePwaManifestForRoom === 'function') {
+          updatePwaManifestForRoom(initialRoom);
+        }
         setTimeout(() => {
           if (typeof selectRoom === 'function') {
             selectRoom(initialRoom, { historyMode: 'replace' });
@@ -306,6 +309,9 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 100);
       } else if (currentRoomId && typeof syncRoomHistory === 'function') {
         syncRoomHistory(currentRoomId, 'replace');
+        if (typeof updatePwaManifestForRoom === 'function') {
+          updatePwaManifestForRoom(currentRoomId);
+        }
       }
       const isVoicePath = window.location.pathname === '/voice' || window.location.pathname === '/voice/';
       const isVoiceParam = urlParams.has('voice') && urlParams.get('voice') !== '0' && urlParams.get('voice') !== 'false';

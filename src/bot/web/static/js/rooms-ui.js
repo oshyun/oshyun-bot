@@ -511,6 +511,9 @@ async function selectRoom(roomId, options = {}) {
     const effectiveMode = (historyMode === 'push' && prevRoomId === roomId) ? 'replace' : historyMode;
     syncRoomHistory(roomId, effectiveMode);
   }
+  if (typeof updatePwaManifestForRoom === 'function') {
+    updatePwaManifestForRoom(roomId);
+  }
   saveChatRoomsToStorage();
   renderRoomList();
   updateSessionBar({ skipMasterUi: true });
@@ -1401,4 +1404,170 @@ function handleThreadInputKeyDown(e) {
     e.preventDefault();
     sendThreadMessage();
   }
+}
+
+// ─── PWA 홈 화면 바로가기 / 딥링크 모달 제어 ───
+let currentShortcutRoomId = null;
+
+function openRoomShortcutModal(roomId) {
+  const targetId = roomId || currentRoomId;
+  currentShortcutRoomId = targetId;
+
+  let title = '새 대화';
+  let badgeLabel = '대화';
+
+  if (targetId === CORE_ROOM_ID) {
+    title = '마스터 오케스트레이터';
+    badgeLabel = '마스터';
+  } else if (targetId === EXPERT_GENERAL_ROOM_ID) {
+    title = '일반 대화';
+    badgeLabel = '전문가';
+  } else if (targetId === EXPERT_VAULT_ROOM_ID) {
+    title = '세컨브레인 볼트';
+    badgeLabel = '전문가';
+  } else if (targetId === EXPERT_CODING_ROOM_ID) {
+    title = '봇 개발';
+    badgeLabel = '전문가';
+  } else {
+    const r = (typeof getRoomById === 'function') ? getRoomById(targetId) : null;
+    if (r) {
+      if (r.title) title = r.title;
+      badgeLabel = r.parentAgentId ? '하위태스크' : '대화';
+    } else if (typeof agentConfigs !== 'undefined' && Array.isArray(agentConfigs)) {
+      const cfg = agentConfigs.find(a => a && a.id === targetId);
+      if (cfg && cfg.name) {
+        title = cfg.name;
+        badgeLabel = '전문가';
+      }
+    }
+  }
+
+  const titleEl = document.getElementById('shortcut-modal-room-title');
+  if (titleEl) titleEl.innerText = title;
+
+  const badgeEl = document.getElementById('shortcut-room-badge');
+  if (badgeEl) badgeEl.innerText = badgeLabel;
+
+  const urlInput = document.getElementById('shortcut-modal-url');
+  if (urlInput) {
+    urlInput.value = (typeof buildRoomHistoryUrl === 'function')
+      ? buildRoomHistoryUrl(targetId)
+      : window.location.href;
+  }
+
+  // 플랫폼 감지 (iOS / Android / Desktop)
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(ua) && !window.MSStream;
+  const isAndroid = /android/.test(ua);
+  const platform = isIos ? 'ios' : (isAndroid ? 'android' : 'desktop');
+  switchShortcutGuide(platform);
+
+  // 액션 버튼 가시성 (PWA 설치 prompt / Web Share)
+  const btnInstall = document.getElementById('btn-shortcut-pwa-install');
+  if (btnInstall) {
+    if (typeof deferredPwaPrompt !== 'undefined' && deferredPwaPrompt) {
+      btnInstall.style.display = 'inline-flex';
+    } else {
+      btnInstall.style.display = 'none';
+    }
+  }
+
+  const btnShare = document.getElementById('btn-shortcut-share');
+  if (btnShare) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      btnShare.style.display = 'inline-flex';
+    } else {
+      btnShare.style.display = 'none';
+    }
+  }
+
+  // 모달 오픈 시 현재 방 manifest도 최신 동기화
+  if (typeof updatePwaManifestForRoom === 'function') {
+    updatePwaManifestForRoom(targetId);
+  }
+
+  const modal = document.getElementById('modal-room-shortcut');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeRoomShortcutModal() {
+  const modal = document.getElementById('modal-room-shortcut');
+  if (modal) modal.style.display = 'none';
+  currentShortcutRoomId = null;
+}
+
+function copyRoomShortcutUrl() {
+  const urlInput = document.getElementById('shortcut-modal-url');
+  if (!urlInput || !urlInput.value) return;
+
+  const textToCopy = urlInput.value;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      showToast('바로가기 링크가 클립보드에 복사되었습니다.');
+    }).catch(() => {
+      urlInput.select();
+      document.execCommand('copy');
+      showToast('바로가기 링크가 클립보드에 복사되었습니다.');
+    });
+  } else {
+    urlInput.select();
+    document.execCommand('copy');
+    showToast('바로가기 링크가 클립보드에 복사되었습니다.');
+  }
+}
+
+async function triggerRoomPwaInstall() {
+  if (typeof deferredPwaPrompt !== 'undefined' && deferredPwaPrompt) {
+    deferredPwaPrompt.prompt();
+    try {
+      const outcome = await deferredPwaPrompt.userChoice;
+      if (outcome && outcome.outcome === 'accepted') {
+        showToast('앱/바로가기 추가가 요청되었습니다.');
+      }
+    } catch (_) {}
+    deferredPwaPrompt = null;
+    if (typeof updatePwaUi === 'function') updatePwaUi();
+    const btnInstall = document.getElementById('btn-shortcut-pwa-install');
+    if (btnInstall) btnInstall.style.display = 'none';
+  } else {
+    showToast('브라우저 주소창 또는 메뉴에서 [홈 화면에 추가]를 선택해 주세요.');
+  }
+}
+
+async function shareRoomShortcut() {
+  const titleEl = document.getElementById('shortcut-modal-room-title');
+  const title = (titleEl ? titleEl.innerText : '대화방') + ' - second-bot';
+  const urlInput = document.getElementById('shortcut-modal-url');
+  const url = (urlInput ? urlInput.value : window.location.href);
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: title,
+        text: `${title} 바로가기`,
+        url: url,
+      });
+    } catch (err) {
+      if (err && err.name !== 'AbortError') {
+        copyRoomShortcutUrl();
+      }
+    }
+  } else {
+    copyRoomShortcutUrl();
+  }
+}
+
+function switchShortcutGuide(platform) {
+  const platforms = ['ios', 'android', 'desktop'];
+  platforms.forEach(p => {
+    const tab = document.getElementById(`tab-guide-${p}`);
+    const content = document.getElementById(`guide-content-${p}`);
+    if (tab) {
+      if (p === platform) tab.classList.add('active');
+      else tab.classList.remove('active');
+    }
+    if (content) {
+      content.style.display = (p === platform) ? 'block' : 'none';
+    }
+  });
 }

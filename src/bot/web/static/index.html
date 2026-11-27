@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#141416" media="(prefers-color-scheme: dark)">
-  <link rel="manifest" href="/manifest.json">
+  <link id="pwa-manifest-link" rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -335,6 +335,16 @@
                 <div class="popover-workdir-box" id="popover-room-workdir">(기본 작업 디렉토리)</div>
               </div>
 
+              <div class="popover-section" id="popover-section-shortcut">
+                <div class="popover-label-row">
+                  <label class="popover-label">홈 화면 바로가기 (PWA 딥링크)</label>
+                </div>
+                <button type="button" class="btn" style="width:100%;font-size:12px;padding:7px 10px;display:flex;align-items:center;justify-content:center;gap:6px;" onclick="closeRoomConfigPopover();openRoomShortcutModal();" title="이 대화방 홈 화면 바로가기 추가">
+                  <svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;color:var(--accent);"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 8 12 5 15 8"/><line x1="12" y1="5" x2="12" y2="13"/></svg>
+                  <span>홈 화면 바로가기 추가</span>
+                </button>
+              </div>
+
               <div class="popover-footer" id="popover-footer-actions" style="display:none;">
                 <button type="button" class="popover-reset-btn" id="btn-popover-reset" onclick="resetRoomConfigToDefault()" title="서버 기본 설정으로 초기화">
                   <svg class="i" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
@@ -345,6 +355,9 @@
           </div>
           <button class="icon-btn" id="btn-topbar-agent-config" style="display:none;" onclick="openCurrentRoomAgentConfigModal()" title="현재 에이전트 지침 및 하위 채팅 전달 프롬프트 설정">
             <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-topbar-shortcut" onclick="openRoomShortcutModal()" title="홈 화면 바로가기 / 딥링크 (PWA)">
+            <svg class="i" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 8 12 5 15 8"/><line x1="12" y1="5" x2="12" y2="13"/></svg>
           </button>
           <button class="icon-btn desktop-only" id="btn-copy-cli-cmd" onclick="copyCurrentRoomCliCommand()" title="터미널(CLI)에서 이어하기 명령어 복사">
             <svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
@@ -951,6 +964,82 @@
       <div class="modal-footer">
         <button type="button" class="btn ghost" onclick="closeRenameRoomModal()">취소</button>
         <button type="button" class="btn primary" onclick="submitRenameRoom()">변경</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 홈 화면 바로가기 및 PWA 딥링크 모달 ═══ -->
+  <div id="modal-room-shortcut" class="modal-overlay" onclick="onModalBackdropClick(event, 'modal-room-shortcut')">
+    <div class="modal-card sm shortcut-modal-card">
+      <div class="modal-header">
+        <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
+          <svg class="i" viewBox="0 0 24 24" style="color:var(--accent);width:18px;height:18px;"><rect x="5" y="2" width="14" height="20" rx="3" ry="3"/><line x1="12" y1="18" x2="12.01" y2="18"/><polyline points="9 8 12 5 15 8"/><line x1="12" y1="5" x2="12" y2="13"/></svg>
+          <span>홈 화면 바로가기</span>
+        </div>
+        <button class="icon-btn" onclick="closeRoomShortcutModal()" title="닫기"><svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;padding:16px 18px;">
+        <!-- 대화방 정보 요약 카드 -->
+        <div class="shortcut-room-info-card">
+          <div class="shortcut-room-badge" id="shortcut-room-badge">대화</div>
+          <div class="shortcut-room-details">
+            <div class="shortcut-room-title" id="shortcut-modal-room-title">새 대화</div>
+            <div class="shortcut-room-desc">이 대화방으로 바로 열리는 고유 바로가기/딥링크입니다.</div>
+          </div>
+        </div>
+
+        <!-- 딥링크 URL 복사 영역 -->
+        <div class="shortcut-url-box">
+          <input type="text" id="shortcut-modal-url" class="input shortcut-url-input" readonly onclick="this.select()">
+          <button type="button" class="btn" id="btn-shortcut-copy-url" onclick="copyRoomShortcutUrl()" title="링크 복사">복사</button>
+        </div>
+
+        <!-- 주요 원클릭 액션 버튼들 -->
+        <div class="shortcut-action-btns" id="shortcut-action-btns" style="display:flex;gap:8px;">
+          <button type="button" class="btn accent" id="btn-shortcut-pwa-install" onclick="triggerRoomPwaInstall()" style="flex:1;display:none;align-items:center;justify-content:center;gap:6px;">
+            <svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>홈 화면에 앱/바로가기 추가</span>
+          </button>
+          <button type="button" class="btn" id="btn-shortcut-share" onclick="shareRoomShortcut()" style="flex:1;display:none;align-items:center;justify-content:center;gap:6px;">
+            <svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            <span>공유하기</span>
+          </button>
+        </div>
+
+        <!-- 플랫폼별 맞춤 가이드 탭 & 콘텐츠 -->
+        <div class="shortcut-guide-container">
+          <div class="shortcut-guide-tabs">
+            <button type="button" class="shortcut-tab-btn active" id="tab-guide-ios" onclick="switchShortcutGuide('ios')">iOS (Safari)</button>
+            <button type="button" class="shortcut-tab-btn" id="tab-guide-android" onclick="switchShortcutGuide('android')">Android (Chrome)</button>
+            <button type="button" class="shortcut-tab-btn" id="tab-guide-desktop" onclick="switchShortcutGuide('desktop')">데스크톱</button>
+          </div>
+
+          <div class="shortcut-guide-content" id="guide-content-ios">
+            <ol class="shortcut-steps">
+              <li>Safari 하단(iPad는 상단)의 <strong>공유 아이콘 <svg class="i inline" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></strong> 터치</li>
+              <li>메뉴를 올려 <strong>'홈 화면에 추가'</strong> 선택</li>
+              <li>우측 상단 <strong>'추가'</strong> 완료 ➔ 홈 화면에서 이 방으로 즉시 열립니다!</li>
+            </ol>
+          </div>
+
+          <div class="shortcut-guide-content" id="guide-content-android" style="display:none;">
+            <ol class="shortcut-steps">
+              <li>Chrome 우측 상단 <strong>더보기 메뉴(⋮)</strong> 터치</li>
+              <li><strong>'홈 화면에 추가'</strong> (또는 '앱 설치') 터치</li>
+              <li>확인을 누르면 홈 화면에 이 대화방 전용 바로가기 아이콘이 생성됩니다.</li>
+            </ol>
+          </div>
+
+          <div class="shortcut-guide-content" id="guide-content-desktop" style="display:none;">
+            <ol class="shortcut-steps">
+              <li>주소창 우측의 <strong>설치 아이콘(⊞)</strong> 또는 바로가기 클릭</li>
+              <li>또는 <strong>Ctrl/Cmd + D</strong>로 북마크 바에 추가하여 언제든 즉시 진입 가능합니다.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn primary" onclick="closeRoomShortcutModal()">확인</button>
       </div>
     </div>
   </div>
