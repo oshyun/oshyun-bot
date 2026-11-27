@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import time
 import uuid
@@ -35,6 +36,32 @@ from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_T
 from bot.web.job_recovery import _remove_web_job, _save_web_job
 from bot.web.stream_watch import _run_stream_tail_loop
 
+
+def is_simple_greeting_fast_path(text: str) -> bool:
+    """단순 인사·안부·단답형 발화인지 판별하여 불필요한 LLM Thinking(추론) 지연을 방지한다."""
+    if not text:
+        return False
+    cleaned = re.sub(r"[^\w\s가-힣a-zA-Z]", "", text).strip().lower()
+    if not cleaned or len(cleaned) > 20:
+        return False
+    # 작업/명령/질문 키워드가 포함되어 있으면 단순 인사가 아님
+    action_keywords = (
+        "해줘", "해라", "알려", "어때", "왜", "어떻게", "언제", "누가",
+        "코드", "수정", "작업", "파일", "노트", "일정", "캘린더", "검색",
+        "분석", "버그", "에러", "오류", "커밋", "푸시", "확인해", "봐줘",
+    )
+    if any(kw in cleaned for kw in action_keywords):
+        return False
+    # 단순 인사/안부 패턴 매칭
+    greetings = {
+        "안녕", "안녕하세요", "안녕하십니까", "안뇽", "반가워", "반갑습니다",
+        "하이", "하이요", "헬로", "hi", "hello", "hey",
+        "좋은아침", "좋은아침입니다", "굿모닝", "good morning",
+        "수고", "수고해", "수고하세요", "고마워", "고맙습니다", "감사", "감사합니다",
+        "누구야", "넌누구야", "너누구야", "ㅎㅇ", "ㅂㅇ", "ㅂㅂ",
+    }
+    cleaned_no_space = cleaned.replace(" ", "")
+    return cleaned in greetings or cleaned_no_space in greetings
 
 
 async def execute_chat_turn(
@@ -80,7 +107,11 @@ async def execute_chat_turn(
         target_workdir = str(agent_cfg["workdir"]).strip() or curr_workdir
     elif room_key == EXPERT_CODING_ROOM_ID:
         target_workdir = curr_codedir or curr_workdir
-    elif room_key in (CORE_ORCHESTRATOR_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID):
+    elif room_key == CORE_ORCHESTRATOR_ROOM_ID:
+        # 마스터(오케스트레이터)는 볼트를 직접 읽지 않고 하위 에이전트에 위임하므로
+        # 거대한 볼트 대신 봇 작업 디렉토리를 워크스페이스로 사용하여 I/O 오버헤드 차단
+        target_workdir = curr_codedir or curr_workdir
+    elif room_key in (EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID):
         target_workdir = curr_workdir
     else:
         target_workdir = (curr_codedir or curr_workdir) if is_coding else curr_workdir
@@ -130,6 +161,16 @@ async def execute_chat_turn(
 
     active_model = model.strip() if (isinstance(model, str) and model.strip()) else fallback_model
     active_effort = effort if effort is not None else fallback_effort
+
+    # 단순 인사·단답 발화 시 LLM reasoning effort를 'low'로 자동 완화하여 불필요한 Thinking 지연(10~15초)을 1초대로 단축 (Fast-Path)
+    if is_simple_greeting_fast_path(user_text) and not attached_files and not attachments:
+        if active_effort in ("medium", "high", "xhigh"):
+            logger.info(
+                "[turn_execution] 단순 인사 Fast-Path 감지 ('%s') — reasoning effort 완화: '%s' -> 'low'",
+                user_text[:20],
+                active_effort,
+            )
+            active_effort = "low"
 
     current_check_idle = _get_mod_attr("check_and_reset_if_idle", check_and_reset_if_idle)
     if (

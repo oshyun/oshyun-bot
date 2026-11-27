@@ -591,7 +591,9 @@ class AGYEngine(BaseEngine):
         if os.path.isdir(mode_dir):
             cmd += ["--add-dir", mode_dir]
 
-        if workdir:
+        # orchestrator(마스터)는 볼트를 직접 읽거나 수정하지 않고 하위 에이전트에 위임하므로,
+        # 수천 개 파일이 있는 거대 볼트 디렉토리를 --add-dir에 마운트하여 발생하는 watcher/인덱싱 I/O 부하를 원천 차단한다.
+        if workdir and not orchestrator:
             cmd += ["--add-dir", workdir]
         if is_agent_mode:
             scripts_dir = os.path.join(_ROOT_DIR, "scripts")

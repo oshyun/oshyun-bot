@@ -168,7 +168,7 @@ class TestModelInjection(unittest.TestCase):
                  patch("bot.web.server.chat_db.update_message"):
                 mock_watch.return_value = {"result": "응답 완료", "session_id": "sess-new"}
                 await web_server.execute_chat_turn(
-                    "안녕",
+                    "일반 질문 테스트",
                     False,
                     room_id="test-room-1",
                     channel="web",

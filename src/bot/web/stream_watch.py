@@ -262,6 +262,7 @@ async def _run_stream_tail_loop(
     last_step_count = len(collected_steps)
     last_stream_len = len(live_snapshot.get("streamText") or "")
     last_activity_ts = time.time()
+    last_progress_heartbeat_ts = time.time()
 
     while not tail_stop_event.is_set():
         had_data = False
@@ -503,6 +504,29 @@ async def _run_stream_tail_loop(
                                     })
                 except Exception:
                     pass
+
+        # 답변 생성 전 대기 구간에서 매초 경과 피드를 브로드캐스트하여 멈춤 현상(체감 지연) 해소
+        now_ts = time.time()
+        if now_ts - last_progress_heartbeat_ts >= 1.0:
+            last_progress_heartbeat_ts = now_ts
+            if not (live_snapshot.get("streamText") or "").strip():
+                elapsed = int(now_ts - start_timestamp)
+                if elapsed >= 1:
+                    feed_txt = f"생각하는 중… ({elapsed}s)"
+                    _room_live_feeds[room_key] = feed_txt
+                    live_snapshot["feed"] = feed_txt
+                    try:
+                        await current_broadcast({
+                            "type": "progress",
+                            "jobId": job_id,
+                            "roomId": room_id,
+                            "feed": feed_txt,
+                            "text": feed_txt,
+                            "elapsedSeconds": elapsed,
+                            "stepCount": len(collected_steps),
+                        })
+                    except Exception:
+                        pass
 
         # 활성 스트리밍 중이거나 최근 0.5초 이내에 데이터가 유입되었으면 초고속(20ms), 유휴 시 80ms
         poll_delay = 0.02 if (had_data or (time.time() - last_activity_ts < 0.5)) else 0.08
