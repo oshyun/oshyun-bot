@@ -15,6 +15,7 @@ class TestTurnAccordionContainer(unittest.TestCase):
         self.assertIn("turn-header-bar", messages_js)
         self.assertIn("turn-collapsed-summary", messages_js)
         self.assertIn("turn-body", messages_js)
+        self.assertIn("function mergeTurnsByChildRoom", messages_js)
 
     def test_chat_css_has_clean_light_accordion_styles(self):
         chat_css = (self.static_dir / "css" / "chat.css").read_text(encoding="utf-8")
@@ -34,7 +35,7 @@ class TestTurnAccordionContainer(unittest.TestCase):
     def test_index_html_has_updated_cache_burst_versions(self):
         index_html = (self.static_dir / "index.html").read_text(encoding="utf-8")
         self.assertIn('/css/chat.css?v=25', index_html)
-        self.assertIn('/js/messages.js?v=26', index_html)
+        self.assertIn('/js/messages.js?v=27', index_html)
         self.assertIn('/js/core.js?v=26', index_html)
 
 if __name__ == "__main__":

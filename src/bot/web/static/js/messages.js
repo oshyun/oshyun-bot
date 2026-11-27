@@ -1653,7 +1653,45 @@ function groupEntriesIntoTurns(activeEntries) {
     }
   });
 
-  return turns;
+  return mergeTurnsByChildRoom(turns);
+}
+
+// 동일 하위 방(child room)에 대한 연속 지시/보고는 신규 컨테이너를 만들지 않고
+// 해당 방을 처음 다룬 기존 턴 컨테이너의 타임라인으로 병합한다.
+function getTurnChildRoomIds(turn) {
+  const ids = new Set();
+  turn.subAgentSlots.forEach(({ m }) => {
+    const rid = getChildAgentRoomId(m);
+    if (rid) ids.add(rid);
+  });
+  return ids;
+}
+
+function mergeTurnsByChildRoom(turns) {
+  const merged = [];
+  const roomOwner = new Map(); // childRoomId -> 병합 대상 턴
+  turns.forEach(turn => {
+    const ids = getTurnChildRoomIds(turn);
+    let target = null;
+    if (ids.size > 0 && turn.userEntry) {
+      for (const rid of ids) {
+        if (!roomOwner.has(rid)) { target = null; break; }
+        const owner = roomOwner.get(rid);
+        if (target && target !== owner) { target = null; break; }
+        target = owner;
+      }
+    }
+    if (target) {
+      target.entries.push(...turn.entries);
+      target.subAgentSlots.push(...turn.subAgentSlots);
+      target.hasError = target.hasError || turn.hasError;
+      target.mergedCount = (target.mergedCount || 1) + 1;
+      return;
+    }
+    merged.push(turn);
+    ids.forEach(rid => { if (!roomOwner.has(rid)) roomOwner.set(rid, turn); });
+  });
+  return merged;
 }
 
 function buildLiveRowDom(liveState, room, queuedEntries) {
