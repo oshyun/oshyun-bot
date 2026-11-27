@@ -1308,12 +1308,24 @@ function handleWsEvent(data) {
       updateSendButtonState();
     }
   } else if (data.type === 'queued_cancelled') {
+    if (Array.isArray(data.cancelledClientMsgIds) && data.cancelledClientMsgIds.length > 0) {
+      const cancelSet = new Set(data.cancelledClientMsgIds);
+      if (Array.isArray(targetRoom.messages)) {
+        targetRoom.messages = targetRoom.messages.filter(m => !(m && m.clientMsgId && cancelSet.has(m.clientMsgId)));
+      }
+    }
     liveState.queueCount = renumberQueuedMessages(targetRoom);
     renderRoomList();
     if (isCurrentRoom) {
       renderMessagesForCurrentRoom();
       updateComposerStatusBar();
       updateSendButtonState();
+    }
+    if (typeof updateSubAgentChipsStatus === 'function') {
+      const remainingQ = (typeof data.queueSize === 'number') ? data.queueSize : (liveState.queueCount || 0);
+      if (remainingQ === 0 && !liveState.isRunning) {
+        updateSubAgentChipsStatus(targetRoom.id, 'done', '대기열 취소됨', targetRoom.title);
+      }
     }
   } else if (data.type === 'agent_step') {
     const stepObj = data.step || data;
@@ -1440,6 +1452,45 @@ function handleWsEvent(data) {
     }
     if (typeof updateSubAgentChipsStatus === 'function') {
       updateSubAgentChipsStatus(targetRoom.id, 'error', '작업 취소됨', targetRoom.title);
+    }
+    // 발주처 방의 사전 예약 슬롯(.msg-slot-placeholder) 및 우측 스레드 패널 취소 상태 즉시 반영
+    if (targetRoom && targetRoom.id) {
+      document.querySelectorAll(`.msg-slot-placeholder[data-child-room-id="${targetRoom.id}"]`).forEach(slotCard => {
+        const feedEl = slotCard.querySelector('.slot-live-feed-text');
+        if (feedEl) feedEl.textContent = '🛑 사용자에 의해 실행이 중단되었습니다.';
+        const spinner = slotCard.querySelector('.spinner');
+        if (spinner) spinner.style.display = 'none';
+        const badgeEl = slotCard.querySelector('.slot-status-pill');
+        if (badgeEl) {
+          badgeEl.classList.remove('is-running', 'is-queued', 'is-done');
+          badgeEl.classList.add('is-error');
+          const labelEl = badgeEl.querySelector('.slot-status-label');
+          if (labelEl) labelEl.textContent = '중단/취소';
+        }
+      });
+      // 슬롯을 포함하는 모든 방의 메시지 상태 갱신
+      if (typeof chatRooms !== 'undefined' && Array.isArray(chatRooms)) {
+        let anySlotUpdated = false;
+        chatRooms.forEach(rm => {
+          if (rm && Array.isArray(rm.messages)) {
+            rm.messages.forEach(m => {
+              if (m && (m.bypassedFromRoomId === targetRoom.id || (Array.isArray(m.steps) && m.steps.some(s => s && (s.roomId === targetRoom.id || s.bypassedFromRoomId === targetRoom.id))))) {
+                m.isError = true;
+                if (!String(m.text || '').trim()) {
+                  m.text = `🛑 **[${targetRoom.title || targetRoom.id}]** 하위 작업이 취소되었습니다.`;
+                }
+                anySlotUpdated = true;
+              }
+            });
+          }
+        });
+        if (anySlotUpdated) {
+          saveChatRoomsToStorage();
+          if (currentRoomId && currentRoomId !== targetRoom.id) {
+            renderMessagesForCurrentRoom();
+          }
+        }
+      }
     }
   } else if (data.type === 'result') {
     if (typeof flushLiveStreamBuffer === 'function') {

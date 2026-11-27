@@ -28,7 +28,7 @@ ORCHESTRATOR_ROOM_IDS = (
 async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
     """GET /ws — 실시간 대화·음성 모드·진행 상태 스트리밍·즉시 취소 WebSocket 핸들러."""
     from bot.web.room_queue import cancel_active_run, enqueue_room_turn
-    from bot.web.runtime_state import _get_mod_attr, _connected_websockets, _active_watch_tasks, _room_queues, _room_session_ids, _last_chat_requests, broadcast_ws_json
+    from bot.web.runtime_state import _get_mod_attr, _connected_websockets, _active_watch_tasks, _active_agent_pids, _room_live_snapshots, _room_queues, _room_session_ids, _last_chat_requests, broadcast_ws_json
 
     t_start = time.time()
     from bot.web.auth import _get_client_ip
@@ -115,9 +115,12 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                     r_key = target_room or "__default__"
                     cancel_text = str(incoming.get("text") or "").strip()
                     cancel_idx = incoming.get("queueIndex")
+                    cancel_client_id = str(incoming.get("clientMsgId") or "").strip()
+                    cancel_user_id = incoming.get("userMsgId")
                     cancel_all = bool(incoming.get("all") or incoming.get("clearAll"))
                     q = _room_queues.get(r_key)
                     removed_count = 0
+                    cancelled_client_ids = []
                     if q is not None and not q.empty():
                         items = []
                         while not q.empty():
@@ -131,38 +134,112 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                                 fut = it.get("result_future") if isinstance(it, dict) else None
                                 if fut is not None and not fut.done():
                                     fut.set_exception(asyncio.CancelledError("대기열이 취소되었습니다."))
+                                c_id = it.get("client_msg_id") if isinstance(it, dict) else None
+                                if c_id:
+                                    cancelled_client_ids.append(c_id)
+                                queued_tid = it.get("task_id") if isinstance(it, dict) else None
+                                if queued_tid:
+                                    try:
+                                        from bot.web.agent_reporting import cancel_slot_message_for_task
+                                        cancel_slot_message_for_task(queued_tid, r_key, reason="대기열에서 취소됨")
+                                    except Exception:
+                                        pass
                             removed_count = len(items)
                             items = []
                         else:
                             removed = False
                             kept = []
                             for i, it in enumerate(items):
-                                if not removed and (
-                                    (cancel_text and it.get("user_text") == cancel_text)
-                                    or (isinstance(cancel_idx, int) and i == cancel_idx)
-                                ):
+                                it_client_id = it.get("client_msg_id") if isinstance(it, dict) else None
+                                it_user_id = it.get("user_msg_id") if isinstance(it, dict) else None
+                                is_match = False
+                                if cancel_client_id and it_client_id == cancel_client_id:
+                                    is_match = True
+                                elif cancel_user_id and it_user_id == cancel_user_id:
+                                    is_match = True
+                                elif not cancel_client_id and not cancel_user_id:
+                                    if cancel_text and it.get("user_text") == cancel_text:
+                                        is_match = True
+                                    elif isinstance(cancel_idx, int) and i == cancel_idx:
+                                        is_match = True
+
+                                if not removed and is_match:
                                     removed = True
                                     removed_count += 1
+                                    if it_client_id:
+                                        cancelled_client_ids.append(it_client_id)
                                     fut = it.get("result_future") if isinstance(it, dict) else None
                                     if fut is not None and not fut.done():
                                         fut.set_exception(asyncio.CancelledError("대기열 항목이 취소되었습니다."))
+                                    queued_tid = it.get("task_id") if isinstance(it, dict) else None
+                                    if queued_tid:
+                                        try:
+                                            from bot.web.agent_reporting import cancel_slot_message_for_task
+                                            cancel_slot_message_for_task(queued_tid, r_key, reason="대기열에서 취소됨")
+                                        except Exception:
+                                            pass
                                     continue
                                 kept.append(it)
-                            if not removed and kept:
+                            if not removed and kept and not cancel_client_id:
                                 popped = kept.pop()
+                                pop_client_id = popped.get("client_msg_id") if isinstance(popped, dict) else None
+                                if pop_client_id:
+                                    cancelled_client_ids.append(pop_client_id)
                                 fut = popped.get("result_future") if isinstance(popped, dict) else None
                                 if fut is not None and not fut.done():
                                     fut.set_exception(asyncio.CancelledError("대기열 항목이 취소되었습니다."))
+                                pop_tid = popped.get("task_id") if isinstance(popped, dict) else None
+                                if pop_tid:
+                                    try:
+                                        from bot.web.agent_reporting import cancel_slot_message_for_task
+                                        cancel_slot_message_for_task(pop_tid, r_key, reason="대기열에서 취소됨")
+                                    except Exception:
+                                        pass
                                 removed_count += 1
                             items = kept
                         for it in items:
                             await q.put(it)
+
+                    # 경쟁 상태 방어(Race Condition Fallback):
+                    # 큐에서 매칭 항목을 찾지 못했으나 현재 방에서 턴이 막 실행 시작된 경우
+                    # 사용자의 취소 의도를 보장하기 위해 실행 중인 턴을 즉시 취소 처리(cancel_active_run)
+                    fallback_active_cancelled = False
+                    if removed_count == 0:
+                        is_active_run = (
+                            r_key in _active_watch_tasks
+                            or r_key in _active_agent_pids
+                            or r_key in _room_live_snapshots
+                        )
+                        snap = _room_live_snapshots.get(r_key)
+                        snap_matches = False
+                        if snap and isinstance(snap, dict):
+                            if cancel_client_id and snap.get("clientMsgId") == cancel_client_id:
+                                snap_matches = True
+                            elif cancel_text and snap.get("userText") == cancel_text:
+                                snap_matches = True
+                            elif cancel_user_id and snap.get("userMsgId") == cancel_user_id:
+                                snap_matches = True
+
+                        if cancel_all or snap_matches or (is_active_run and not cancel_client_id):
+                            cancel_run_fn(target_room)
+                            fallback_active_cancelled = True
+                            await broadcast_fn(
+                                {
+                                    "type": "cancelled",
+                                    "jobId": snap.get("jobId") if snap else None,
+                                    "roomId": target_room,
+                                    "sessionTerminated": False,
+                                }
+                            )
+
                     await broadcast_fn(
                         {
                             "type": "queued_cancelled",
                             "roomId": target_room,
                             "removedCount": removed_count,
                             "queueSize": q.qsize() if q is not None else 0,
+                            "cancelledClientMsgIds": cancelled_client_ids,
+                            "fallbackActiveCancelled": fallback_active_cancelled,
                         }
                     )
                 elif message_type in ("delete_room", "delete_session", "delete_rooms", "batch_delete_rooms"):

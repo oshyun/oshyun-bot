@@ -50,15 +50,19 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
                         fut.set_exception(asyncio.CancelledError("작업이 취소되었습니다."))
                     queued_tid = item.get("task_id") if isinstance(item, dict) else None
                     if queued_tid:
-                        master_tasks.update_task(
-                            queued_tid,
-                            status="cancelled",
-                            user_cancelled=True,
-                            user_confirmed=True,
-                            reviewed=True,
-                            error="대기열에서 취소됨",
-                            finishedAt=time.time(),
-                        )
+                        try:
+                            from bot.web.agent_reporting import cancel_slot_message_for_task
+                            cancel_slot_message_for_task(queued_tid, r_key, reason="대기열에서 취소됨")
+                        except Exception:
+                            master_tasks.update_task(
+                                queued_tid,
+                                status="cancelled",
+                                user_cancelled=True,
+                                user_confirmed=True,
+                                reviewed=True,
+                                error="대기열에서 취소됨",
+                                finishedAt=time.time(),
+                            )
                     q.task_done()
                     was_running = True
                 except Exception:
@@ -67,15 +71,19 @@ def cancel_active_run(target_room_id: str | None = None) -> bool:
         snap = _room_live_snapshots.get(r_key)
         snap_tid = snap.get("taskId") if isinstance(snap, dict) else None
         if snap_tid:
-            master_tasks.update_task(
-                snap_tid,
-                status="cancelled",
-                user_cancelled=True,
-                user_confirmed=True,
-                reviewed=True,
-                error="사용자에 의해 작업이 취소되었습니다.",
-                finishedAt=time.time(),
-            )
+            try:
+                from bot.web.agent_reporting import cancel_slot_message_for_task
+                cancel_slot_message_for_task(snap_tid, r_key, reason="사용자에 의해 작업이 취소되었습니다.")
+            except Exception:
+                master_tasks.update_task(
+                    snap_tid,
+                    status="cancelled",
+                    user_cancelled=True,
+                    user_confirmed=True,
+                    reviewed=True,
+                    error="사용자에 의해 작업이 취소되었습니다.",
+                    finishedAt=time.time(),
+                )
 
         pid = _active_agent_pids.pop(r_key, None)
         if pid is not None:
