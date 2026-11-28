@@ -1063,6 +1063,12 @@ async def execute_chat_turn(
             current_chat_db.update_room_status(room_key, final_turn_st, active_job_id=None, run_updated_at=completed_at)
         except Exception:
             pass
+    if active_group_id and not is_turn_error and reply_text.strip():
+        try:
+            from bot.web.turn_title import schedule_turn_title_update
+            schedule_turn_title_update(room_key, active_group_id, current_chat_db, current_broadcast)
+        except Exception:
+            pass
     await current_broadcast(result_payload)
     build_status_fn = _get_mod_attr("build_status_payload", None)
     if build_status_fn:

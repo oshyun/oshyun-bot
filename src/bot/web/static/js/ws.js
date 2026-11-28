@@ -1864,5 +1864,27 @@ function handleWsEvent(data) {
     if (!isSilent && (!isChildRoom || isDelegationResult) && typeof handleAgentResponseNotification === 'function') {
       handleAgentResponseNotification(targetRoom, errMsg, { isError: true });
     }
+  } else if (data.type === 'turn_title' && data.roomId && data.groupId && data.title) {
+    const tRoom = getRoomById(data.roomId);
+    if (tRoom) {
+      if (!tRoom.turnTitles) tRoom.turnTitles = {};
+      tRoom.turnTitles[data.groupId] = data.title;
+      if (Array.isArray(tRoom.messages)) {
+        tRoom.messages.forEach(m => {
+          if (m && (m.groupId === data.groupId || m.group_id === data.groupId)) {
+            m.turnTitle = data.title;
+          }
+        });
+      }
+      saveChatRoomsToStorage();
+    }
+    if (data.roomId === currentRoomId) {
+      const turnEls = document.querySelectorAll(`.chat-turn-container[data-group-id="${data.groupId}"]`);
+      turnEls.forEach(el => {
+        el.setAttribute('data-turn-preview', data.title);
+        const previewEl = el.querySelector('.turn-query-preview');
+        if (previewEl) previewEl.textContent = data.title;
+      });
+    }
   }
 }

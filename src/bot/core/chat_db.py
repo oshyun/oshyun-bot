@@ -166,6 +166,18 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
             pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id);")
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS turn_titles (
+                group_id TEXT PRIMARY KEY,
+                room_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_turn_titles_room ON turn_titles(room_id);")
+
         # rooms 테이블 model, effort 컬럼 누락 시 하위 호환 추가
         try:
             conn.execute("ALTER TABLE rooms ADD COLUMN model TEXT DEFAULT NULL;")
@@ -1408,6 +1420,11 @@ def get_messages(
             (actual_room_id,),
         )
         rows = cur.fetchall()
+        title_rows = cur.execute(
+            "SELECT group_id, title FROM turn_titles WHERE room_id = ?;",
+            (actual_room_id,),
+        ).fetchall()
+        turn_titles_map = {str(r["group_id"]): str(r["title"]) for r in title_rows if r["group_id"] and r["title"]}
         messages = []
         for row in rows:
             steps = []
@@ -1424,7 +1441,8 @@ def get_messages(
             except Exception:
                 attachments = []
             resolved_role = _resolve_message_role(row["role"], row["channel"], row["text"])
-            messages.append({
+            gid = row["group_id"] if "group_id" in row.keys() else None
+            msg_dict = {
                 "id": row["id"],
                 "role": resolved_role,
                 "sender": resolved_role,
@@ -1436,10 +1454,40 @@ def get_messages(
                 "effort": row["effort"] if "effort" in row.keys() else None,
                 "cost": row["cost"],
                 "sessionId": row["session_id"],
-                "groupId": row["group_id"] if "group_id" in row.keys() else None,
+                "groupId": gid,
                 "createdAt": row["created_at"],
-            })
+            }
+            if gid and gid in turn_titles_map:
+                msg_dict["turnTitle"] = turn_titles_map[gid]
+            messages.append(msg_dict)
         return messages
+
+
+def set_turn_title(
+    group_id: str,
+    room_id: str,
+    title: str,
+    db_path: str | None = None,
+) -> None:
+    """대화 턴 그룹(group_id)의 요약 제목을 저장/갱신한다."""
+    clean_gid = str(group_id or "").strip()
+    clean_rid = str(room_id or "").strip()
+    clean_title = str(title or "").strip()
+    if not clean_gid or not clean_rid or not clean_title:
+        return
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO turn_titles (group_id, room_id, title, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(group_id) DO UPDATE SET
+                title = excluded.title,
+                updated_at = excluded.updated_at;
+            """,
+            (clean_gid, clean_rid, clean_title, time.time()),
+        )
+        conn.commit()
 
 
 def clear_room_messages(

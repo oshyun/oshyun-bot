@@ -1683,6 +1683,7 @@ function groupEntriesIntoTurns(activeEntries) {
       currentTurn = {
         turnId,
         groupId: gid || null,
+        turnTitle: m.turnTitle || null,
         sessionId: m.sessionId || m.session_id || null,
         userEntry: isUser ? entry : null,
         userEntries: isUser ? [entry] : [],
@@ -1706,6 +1707,9 @@ function groupEntriesIntoTurns(activeEntries) {
       }
       if (m.isError) {
         currentTurn.hasError = true;
+      }
+      if (m.turnTitle) {
+        currentTurn.turnTitle = m.turnTitle;
       }
       if (m.sessionId || m.session_id) {
         currentTurn.sessionId = m.sessionId || m.session_id;
@@ -2040,11 +2044,13 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     turnContainer.setAttribute('data-turn-id', turnId);
     turnContainer.setAttribute('data-group-id', turn.groupId || turnId);
 
-    // 1. 헤더 요약 텍스트
+    // 1. 헤더 요약 텍스트 (Gemini 요약 제목 우선, 없으면 첫 질문 미리보기)
     const userMsgText = turn.userEntry && turn.userEntry.m ? String(turn.userEntry.m.text || '').trim() : '';
-    const userPreview = userMsgText
+    const fallbackPreview = userMsgText
       ? (userMsgText.length > 45 ? userMsgText.slice(0, 45) + '…' : userMsgText)
       : (turnIdx === 0 ? '시작 대화' : `대화 #${turnIdx + 1}`);
+    const savedTitle = turn.turnTitle || (room.turnTitles && turn.groupId ? room.turnTitles[turn.groupId] : null);
+    const userPreview = savedTitle || fallbackPreview;
     turnContainer.setAttribute('data-turn-preview', userPreview);
 
     // 연속 질문 수 뱃지
