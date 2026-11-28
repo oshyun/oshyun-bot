@@ -118,24 +118,27 @@ class TestSlotPollutionReconciliation(unittest.IsolatedAsyncioTestCase):
         """웹서버 기동 시 고아 슬롯(자식 방 메시지 0건)은 삭제되고, 실제 대화가 있는 방 슬롯은 중단으로 복구된다."""
         # 1. 고아 방
         chat_db.get_or_create_room("room-ghost-child", title="유령방", db_path=self.db_path)
+        old_ts = time.time() - 45.0
         ghost_slot = chat_db.add_message(
             room_id="__core__",
             role="assistant",
             text="",
             channel="thread_bypass",
             steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-ghost-child", "taskId": "mt-ghost", "status": "running"}],
+            created_at=old_ts,
             db_path=self.db_path,
         )
 
         # 2. 실제 대화 방
         chat_db.get_or_create_room("room-real-child", title="실제방", db_path=self.db_path)
-        chat_db.add_message("room-real-child", role="user", text="안녕", db_path=self.db_path)
+        chat_db.add_message("room-real-child", role="user", text="안녕", created_at=old_ts, db_path=self.db_path)
         real_slot = chat_db.add_message(
             room_id="__core__",
             role="assistant",
             text="",
             channel="thread_bypass",
             steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-real-child", "taskId": "mt-real", "status": "running", "title": "실제작업"}],
+            created_at=old_ts,
             db_path=self.db_path,
         )
 

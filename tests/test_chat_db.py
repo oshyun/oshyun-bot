@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -537,24 +538,27 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         """고아 슬롯 플레이스홀더 정리(메시지 0건 방 슬롯 삭제, 대화 있는 방 실패 전환, 활성 방 보존) 검증."""
         # 1. 고아 방(메시지 0건) 및 슬롯 메시지
         chat_db.get_or_create_room("room-orphan-child", title="고아 작업방", db_path=self.db_path)
+        old_ts = time.time() - 45.0
         orphan_slot_id = chat_db.add_message(
             room_id="__core__",
             role="assistant",
             text="",
             channel="thread_bypass",
             steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-orphan-child", "taskId": "mt-orphan", "status": "running"}],
+            created_at=old_ts,
             db_path=self.db_path,
         )
 
         # 2. 실제 대화가 있는 방 및 슬롯 메시지
         chat_db.get_or_create_room("room-real-child", title="실제 작업방", db_path=self.db_path)
-        chat_db.add_message("room-real-child", role="user", text="작업 진행해줘", db_path=self.db_path)
+        chat_db.add_message("room-real-child", role="user", text="작업 진행해줘", created_at=old_ts, db_path=self.db_path)
         real_slot_id = chat_db.add_message(
             room_id="__core__",
             role="assistant",
             text="",
             channel="thread_bypass",
             steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-real-child", "taskId": "mt-real", "status": "running", "title": "실제 작업"}],
+            created_at=old_ts,
             db_path=self.db_path,
         )
 
@@ -566,6 +570,7 @@ class TestSessionContinuityAndSync(unittest.TestCase):
             text="",
             channel="thread_bypass",
             steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-active-child", "taskId": "mt-active", "status": "running"}],
+            created_at=old_ts,
             db_path=self.db_path,
         )
 

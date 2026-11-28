@@ -1144,17 +1144,20 @@ def cleanup_stale_slot_messages(
     active_room_ids: set[str] | list[str] | None = None,
     db_path: str | None = None,
 ) -> int:
-    """서버 기동 또는 복구 시, 비어있거나 중단된 채 방치된 isSlotPlaceholder 메시지들을 정리한다."""
+    """서버 기동 또는 복구 시, 비어있거나 중단된 채 방치된 thread_bypass 슬롯 메시지들을 안전하게 정리한다."""
     active_rids = {str(r).strip() for r in (active_room_ids or []) if r and str(r).strip()}
     fixed_count = 0
+    now = time.time()
     with get_connection(db_path) as conn:
         cur = conn.cursor()
+        # 슬롯 메시지는 반드시 channel == 'thread_bypass'이며, 최근 30초 이내에 생성된 활성 턴은 배제
         cur.execute("""
-            SELECT id, room_id, steps_json
+            SELECT id, room_id, steps_json, created_at
             FROM messages
-            WHERE (channel = 'thread_bypass' OR steps_json LIKE '%isSlotPlaceholder%')
-              AND (text IS NULL OR trim(text) = '');
-        """)
+            WHERE channel = 'thread_bypass'
+              AND (text IS NULL OR trim(text) = '')
+              AND created_at < ?;
+        """, (now - 30.0,))
         rows = cur.fetchall()
         for row in rows:
             mid = row["id"]
@@ -1166,12 +1169,14 @@ def cleanup_stale_slot_messages(
             except Exception:
                 steps = []
 
+            has_slot_structure = False
             child_rid = None
             task_title = "하위 작업"
             task_id = None
             if isinstance(steps, list):
                 for s in steps:
                     if isinstance(s, dict) and (s.get("kind") == "subagent_bypass" or s.get("tool") == "bypass"):
+                        has_slot_structure = True
                         child_rid = s.get("roomId") or s.get("bypassedFromRoomId")
                         if s.get("title"):
                             task_title = s.get("title")
@@ -1179,8 +1184,12 @@ def cleanup_stale_slot_messages(
                             task_id = s.get("taskId")
                         break
 
+            # 실제 서브에이전트 슬롯 구조체가 아닌 일반 메시지는 보호
+            if not has_slot_structure:
+                continue
+
             # 현재 활발히 실행 중인 방이면 보존
-            if child_rid and child_rid in active_rids:
+            if rid in active_rids or (child_rid and child_rid in active_rids):
                 continue
 
             # 만약 child_rid가 없거나, 해당 child_rid에 실제 메시지가 0건인 고아/테스트 잔여물인 경우 완전 삭제하여 UI 오염 제거
