@@ -139,6 +139,7 @@ async def run_room_worker(r_key: str) -> None:
                         raw_prompt=bool(item.get("raw_prompt", False)),
                         slash_commands=bool(item.get("slash_commands", False)),
                         orchestrator=item.get("orchestrator"),
+                        group_id=item.get("group_id"),
                         on_complete=item.get("on_complete"),
                     )
                 )
@@ -196,6 +197,7 @@ async def enqueue_room_turn(
     raw_prompt: bool = False,
     slash_commands: bool = False,
     orchestrator: bool | None = None,
+    group_id: str | None = None,
     on_complete: Callable[[dict[str, Any]], Any] | None = None,
 ) -> tuple[bool, int]:
     """대화방 큐에 새 턴을 적재하고 워커가 없으면 기동한다. (이미 실행 중이었는지 여부, 큐 크기) 반환."""
@@ -255,6 +257,7 @@ async def enqueue_room_turn(
         "raw_prompt": bool(raw_prompt),
         "slash_commands": bool(slash_commands),
         "orchestrator": orchestrator,
+        "group_id": group_id,
         "on_complete": on_complete,
     }
     await q.put(queue_item)

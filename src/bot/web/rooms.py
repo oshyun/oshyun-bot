@@ -169,6 +169,8 @@ def _append_room_message(room_id: str, msg_record: dict) -> int | None:
         model = msg_record.get("model")
         effort = msg_record.get("effort")
         cost = msg_record.get("cost")
+        sid = str(msg_record.get("sessionId") or "").strip() or None
+        gid = str(msg_record.get("groupId") or msg_record.get("group_id") or "").strip() or None
         msg_id = current_chat_db.add_message(
             room_id=clean_rid,
             role=role,
@@ -180,6 +182,7 @@ def _append_room_message(room_id: str, msg_record: dict) -> int | None:
             effort=effort,
             cost=cost,
             session_id=sid,
+            group_id=gid,
             created_at=msg_record.get("createdAt"),
         )
         return msg_id if isinstance(msg_id, int) and msg_id > 0 else None

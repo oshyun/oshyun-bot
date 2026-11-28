@@ -32,7 +32,7 @@ from bot.engine.stream_parser import _EMPTY_OUTPUT_TEXT, _NO_RESULT_TEXT, extrac
 from bot.web.speech import VOICE_MODE_PROMPT_SUFFIX, clean_text_for_speech
 
 from bot.web.agent_reporting import _finalize_orchestrator_completion
-from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_TITLE, EXPERT_CODING_ROOM_ID, EXPERT_CODING_TITLE, EXPERT_GENERAL_ROOM_ID, EXPERT_GENERAL_TITLE, EXPERT_VAULT_ROOM_ID, EXPERT_VAULT_TITLE, IDLE_RESET_SECONDS, ORCHESTRATOR_ROOM_IDS, WEB_PORT, WEB_TOKEN, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _is_orchestrator_room_id, _room_session_ids, _should_sync_global_session, _user_cancelled_rooms, broadcast_ws_json, poke_master_supervisor, is_shutting_down
+from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, CORE_ORCHESTRATOR_TITLE, EXPERT_CODING_ROOM_ID, EXPERT_CODING_TITLE, EXPERT_GENERAL_ROOM_ID, EXPERT_GENERAL_TITLE, EXPERT_VAULT_ROOM_ID, EXPERT_VAULT_TITLE, IDLE_RESET_SECONDS, ORCHESTRATOR_ROOM_IDS, WEB_PORT, WEB_TOKEN, _active_agent_pids, _active_watch_tasks, _get_mod_attr, _room_live_feeds, _room_live_snapshots, _is_orchestrator_room_id, _room_session_ids, _room_group_ids, _room_last_turn_times, _should_sync_global_session, _user_cancelled_rooms, broadcast_ws_json, poke_master_supervisor, is_shutting_down
 from bot.web.job_recovery import _remove_web_job, _save_web_job
 from bot.web.stream_watch import _run_stream_tail_loop
 
@@ -81,6 +81,7 @@ async def execute_chat_turn(
     raw_prompt: bool = False,
     slash_commands: bool = False,
     orchestrator: bool | None = None,
+    group_id: str | None = None,
     on_complete: Callable[[dict[str, Any]], Any] | None = None,
 ) -> dict[str, Any]:
     """단일 대화방(AGY 세션)의 1턴 질의응답을 실행하고 실시간 스트림을 브로드캐스트한다."""
@@ -88,6 +89,31 @@ async def execute_chat_turn(
     is_orchestrator = _is_orchestrator_room_id(room_key)
     agent_cfg = agent_configs.get_agent_config(room_key) if is_orchestrator else None
     is_coding = get_coding_mode() or (room_key == EXPERT_CODING_ROOM_ID)
+
+    # ── 동일 맥락 연속 대화 묶음(대화 세트) ID 결정 ──
+    client_group_id = str(group_id or "").strip() or None
+    now_ts = time.time()
+    last_turn_ts = _room_last_turn_times.get(room_key, 0.0)
+    inactivity_gap = now_ts - last_turn_ts if last_turn_ts > 0 else 0.0
+
+    if is_new_session:
+        active_group_id = f"grp-{uuid.uuid4().hex[:12]}"
+        _room_group_ids[room_key] = active_group_id
+    elif client_group_id:
+        active_group_id = client_group_id
+        _room_group_ids[room_key] = active_group_id
+    elif (
+        room_key in _room_group_ids
+        and _room_group_ids[room_key]
+        and (last_turn_ts <= 0 or inactivity_gap <= 1200.0)
+    ):
+        # 20분 이내 연속 발화는 동일 대화 세트(group_id)로 묶어 유지
+        active_group_id = _room_group_ids[room_key]
+    else:
+        active_group_id = f"grp-{uuid.uuid4().hex[:12]}"
+        _room_group_ids[room_key] = active_group_id
+
+    _room_last_turn_times[room_key] = now_ts
     if room_key == CORE_ORCHESTRATOR_ROOM_ID:
         session_namespace = "core_"
     elif room_key == EXPERT_GENERAL_ROOM_ID:
@@ -284,6 +310,8 @@ async def execute_chat_turn(
             "attachments": attachments or [],
             "attachedFiles": attached_paths,
             "createdAt": now_iso,
+            "sessionId": current_session_id,
+            "groupId": active_group_id,
         })
 
     cur_room_info = current_chat_db.get_room(room_key)
@@ -321,6 +349,7 @@ async def execute_chat_turn(
         effort=active_effort,
         cost=None,
         session_id=current_session_id,
+        group_id=active_group_id,
     )
 
     job_id = f"web-{uuid.uuid4().hex[:10]}"
@@ -341,6 +370,7 @@ async def execute_chat_turn(
         "err_file": err_file_path,
         "started_at": start_timestamp,
         "session_id": current_session_id,
+        "group_id": active_group_id,
         "session_namespace": session_namespace,
         "channel": channel,
         "voice_mode": is_voice_mode,
@@ -358,6 +388,7 @@ async def execute_chat_turn(
         "clientMsgId": client_msg_id,
         "roomId": room_id or room_key,
         "sessionId": current_session_id,
+        "groupId": active_group_id,
         "userText": user_text,
         "attachments": attachments or [],
         "attachedFiles": attached_paths,
@@ -397,6 +428,8 @@ async def execute_chat_turn(
             "type": "started",
             "jobId": job_id,
             "roomId": room_id,
+            "sessionId": current_session_id,
+            "groupId": active_group_id,
             "userText": user_text,
             "userMsgId": actual_user_msg_id,
             "clientMsgId": client_msg_id,
@@ -868,6 +901,7 @@ async def execute_chat_turn(
                 effort=asst_effort,
                 cost=agent_output.get("cost"),
                 session_id=resolved_session_id,
+                group_id=active_group_id,
                 created_at=completed_at,
                 update_preview=True,
             )
@@ -882,6 +916,7 @@ async def execute_chat_turn(
                 "effort": asst_effort,
                 "cost": agent_output.get("cost"),
                 "sessionId": resolved_session_id,
+                "groupId": active_group_id,
                 "createdAt": completed_at,
             })
 
@@ -1011,6 +1046,7 @@ async def execute_chat_turn(
         "speechText": speech_text,
         "steps": collected_steps,
         "sessionId": resolved_session_id,
+        "groupId": active_group_id,
         "model": asst_model,
         "effort": asst_effort,
         "engine": get_engine(),

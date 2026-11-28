@@ -425,6 +425,10 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
   const targetRoomId = room ? room.id : 'room-default';
   const targetSessionId = room ? (room.sessionId || null) : null;
   const isNew = Boolean(!room || room.isNewSession || !targetSessionId);
+  const targetGroupId = isNew ? null : (room ? (room.activeGroupId || null) : null);
+  if (isNew && room) {
+    room.activeGroupId = null;
+  }
   const isVoice = Boolean(isVoiceTurn);
   lastRequestedRoomId = targetRoomId;
 
@@ -440,6 +444,7 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
       voiceMode: isVoice,
       roomId: targetRoomId,
       sessionId: targetSessionId,
+      groupId: targetGroupId,
       newSession: isNew,
       attachments: uploadedFiles,
       attachedFiles: attachedPaths,

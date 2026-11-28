@@ -409,6 +409,8 @@ async def handle_websocket(request: web.Request) -> web.WebSocketResponse:
                         extra_turn_kwargs["slash_commands"] = True
                     if "orchestrator" in incoming and incoming.get("orchestrator") is not None:
                         extra_turn_kwargs["orchestrator"] = bool(incoming.get("orchestrator"))
+                    if incoming.get("groupId"):
+                        extra_turn_kwargs["group_id"] = str(incoming["groupId"]).strip() or None
                     await enqueue_turn_fn(
                         room_id=room_id,
                         user_text=user_text,

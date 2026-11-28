@@ -1628,6 +1628,66 @@ function toggleAllTurnsInCurrentRoom(collapseAll) {
   });
 }
 
+function shouldStartNewTurnGroup(prevTurn, currentEntry, entryIdx) {
+  if (!prevTurn) return true;
+  const currM = currentEntry && currentEntry.m;
+  if (!currM) return false;
+
+  const role = currM.sender || currM.role || 'assistant';
+  const isUser = (role === 'user');
+
+  // Assistant / Sub-agent messages always attach to the active turn container
+  if (!isUser) {
+    return false;
+  }
+
+  // 1. 명시적 groupId 비교 (백엔드/소켓에서 발급된 단일 진실 원천)
+  const currGroupId = currM.groupId || currM.group_id;
+  if (currGroupId && prevTurn.groupId) {
+    return currGroupId !== prevTurn.groupId;
+  }
+
+  // 2. 명시적 신규 세션 플래그
+  if (currM.newSession || currM.isNewSession) {
+    return true;
+  }
+
+  // 3. 정기 스케줄 실행 요청이나 시스템 이벤트는 별도 독립 턴 카드로 분리
+  const text = String(currM.text || '').trim();
+  if (text.startsWith('[정기 스케줄 실행 요청]') || text.startsWith('[System Event]')) {
+    return true;
+  }
+
+  // 4. 이전 턴의 첫 질문이 정기 스케줄 요청이었던 경우, 이후 사용자 질문은 새 카드로 시작
+  const prevFirstUserText = prevTurn.userEntry && prevTurn.userEntry.m ? String(prevTurn.userEntry.m.text || '').trim() : '';
+  if (prevFirstUserText.startsWith('[정기 스케줄 실행 요청]')) {
+    return true;
+  }
+
+  // 5. 세션 ID 불일치 검증
+  const prevSessionId = prevTurn.sessionId;
+  const currSessionId = currM.sessionId || currM.session_id;
+  if (prevSessionId && currSessionId && prevSessionId !== currSessionId) {
+    return true;
+  }
+
+  // 6. 유휴 시간(Inactivity Window) 검증
+  // 직전 턴의 마지막 메시지 생성 시각과 현재 유저 메시지 시각 사이의 간격이 15분(900초)을 초과하면 새 주제로 분리
+  const prevTimeMs = typeof parseTimestampMs === 'function'
+    ? parseTimestampMs(prevTurn.lastCreatedAt || prevTurn.createdAt)
+    : (prevTurn.lastCreatedAt || prevTurn.createdAt);
+  const currTimeMs = typeof parseTimestampMs === 'function'
+    ? parseTimestampMs(currM.createdAt)
+    : (currM.createdAt || Date.now());
+  const INACTIVITY_WINDOW_MS = 15 * 60 * 1000;
+  if (prevTimeMs && currTimeMs && (currTimeMs - prevTimeMs) > INACTIVITY_WINDOW_MS) {
+    return true;
+  }
+
+  // 위 분리 조건에 해당하지 않는 모든 사용자 질문은 동일 연속 대화 세트(후속 질문)로 간주하여 누적 병합
+  return false;
+}
+
 function groupEntriesIntoTurns(activeEntries) {
   const turns = [];
   let currentTurn = null;
@@ -1638,27 +1698,50 @@ function groupEntriesIntoTurns(activeEntries) {
     const role = m.sender || m.role || 'assistant';
     const isUser = (role === 'user');
 
-    if (isUser || !currentTurn) {
-      const turnId = isUser
-        ? (m.id ? `turn_u_${m.id}` : `turn_u_${idx}`)
-        : (m.id ? `turn_a_${m.id}` : `turn_init_${idx}`);
+    const shouldStartNew = shouldStartNewTurnGroup(currentTurn, entry, idx);
+
+    if (shouldStartNew || !currentTurn) {
+      const gid = m.groupId || m.group_id;
+      const turnId = gid
+        ? `turn_g_${gid}`
+        : (isUser
+          ? (m.id ? `turn_u_${m.id}` : `turn_u_${idx}`)
+          : (m.id ? `turn_a_${m.id}` : `turn_init_${idx}`));
+
       currentTurn = {
         turnId,
+        groupId: gid || null,
+        sessionId: m.sessionId || m.session_id || null,
         userEntry: isUser ? entry : null,
+        userEntries: isUser ? [entry] : [],
         entries: [entry],
         subAgentSlots: isSubAgentSlotMessage(m) ? [entry] : [],
         hasError: Boolean(m.isError),
-        createdAt: m.createdAt || Date.now()
+        createdAt: m.createdAt || Date.now(),
+        lastCreatedAt: m.createdAt || Date.now()
       };
       turns.push(currentTurn);
     } else {
       currentTurn.entries.push(entry);
+      if (isUser) {
+        currentTurn.userEntries.push(entry);
+        if (!currentTurn.userEntry) {
+          currentTurn.userEntry = entry;
+        }
+      }
       if (isSubAgentSlotMessage(m)) {
         currentTurn.subAgentSlots.push(entry);
       }
       if (m.isError) {
         currentTurn.hasError = true;
       }
+      if (m.sessionId || m.session_id) {
+        currentTurn.sessionId = m.sessionId || m.session_id;
+      }
+      if (m.groupId || m.group_id) {
+        currentTurn.groupId = m.groupId || m.group_id;
+      }
+      currentTurn.lastCreatedAt = m.createdAt || Date.now();
     }
   });
 
@@ -1692,6 +1775,10 @@ function mergeTurnsByChildRoom(turns) {
     }
     if (target) {
       target.entries.push(...turn.entries);
+      if (turn.userEntries) {
+        target.userEntries = target.userEntries || [];
+        target.userEntries.push(...turn.userEntries);
+      }
       target.subAgentSlots.push(...turn.subAgentSlots);
       target.hasError = target.hasError || turn.hasError;
       target.mergedCount = (target.mergedCount || 1) + 1;
@@ -1986,6 +2073,12 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
       ? (userMsgText.length > 45 ? userMsgText.slice(0, 45) + '…' : userMsgText)
       : (turnIdx === 0 ? '시작 대화' : `대화 #${turnIdx + 1}`);
 
+    // 연속 질문 수 뱃지
+    const queryCount = turn.userEntries ? turn.userEntries.length : (turn.userEntry ? 1 : 0);
+    const queryCountBadgeHtml = queryCount > 1
+      ? `<span class="turn-query-count-badge" title="이 대화 세트의 연속 질문 ${queryCount}건">대화 ${queryCount}건</span>`
+      : '';
+
     // 하위 보고 뱃지
     const subAgentCount = turn.subAgentSlots.length;
     let subAgentBadgeHtml = '';
@@ -2032,6 +2125,7 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
       <div class="turn-header-left">
         <span class="turn-seq-badge">#${turnIdx + 1}</span>
         <span class="turn-query-preview">${escapeHtml(userPreview)}</span>
+        ${queryCountBadgeHtml}
       </div>
       <div class="turn-header-right">
         ${subAgentBadgeHtml}
@@ -2049,7 +2143,7 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     collapsedSummary.setAttribute('onclick', `toggleTurnAccordion('${escapeHtml(room.id)}', '${escapeHtml(turnId)}')`);
     collapsedSummary.innerHTML = `
       <div class="turn-summary-content">
-        <span class="turn-summary-pill">답변 요약</span>
+        <span class="turn-summary-pill">${queryCount > 1 ? `최종 응답 (대화 ${queryCount}건)` : '답변 요약'}</span>
         <span class="turn-summary-text">${escapeHtml(responseSummary)}</span>
       </div>
       <span class="turn-summary-hint">클릭하여 전체 보기 ↗</span>

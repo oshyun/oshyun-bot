@@ -158,6 +158,14 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
         except sqlite3.OperationalError:
             pass
 
+        # messages 테이블 group_id 컬럼 누락 시 하위 호환 추가
+        try:
+            conn.execute("ALTER TABLE messages ADD COLUMN group_id TEXT DEFAULT NULL;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id);")
+
         # rooms 테이블 model, effort 컬럼 누락 시 하위 호환 추가
         try:
             conn.execute("ALTER TABLE rooms ADD COLUMN model TEXT DEFAULT NULL;")
@@ -695,6 +703,7 @@ def add_message(
     effort: str | None = None,
     cost: float | None = None,
     session_id: str | None = None,
+    group_id: str | None = None,
     created_at: float | None = None,
     db_path: str | None = None,
 ) -> int:
@@ -708,6 +717,7 @@ def add_message(
         json.dumps(attachments, ensure_ascii=False) if isinstance(attachments, list) else "[]"
     )
     clean_sid = str(session_id).strip() if session_id else None
+    clean_gid = str(group_id).strip() if group_id else None
     resolved_role = _resolve_message_role(role, channel, text)
 
     # 방이 없으면 자동 생성 또는 기존 매칭 방 조회
@@ -718,10 +728,10 @@ def add_message(
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO messages (room_id, role, channel, text, steps_json, attachments_json, model, effort, cost, session_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO messages (room_id, role, channel, text, steps_json, attachments_json, model, effort, cost, session_id, group_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
-            (actual_rid, resolved_role, channel, text, steps_json, attachments_json, model, effort, cost, clean_sid, now),
+            (actual_rid, resolved_role, channel, text, steps_json, attachments_json, model, effort, cost, clean_sid, clean_gid, now),
         )
         msg_id = cur.lastrowid
 
@@ -775,6 +785,7 @@ def update_message(
     effort: str | None = None,
     cost: float | None = None,
     session_id: str | None = None,
+    group_id: str | None = None,
     created_at: float | None = None,
     update_preview: bool = True,
     db_path: str | None = None,
@@ -802,6 +813,9 @@ def update_message(
     if session_id is not None:
         updates.append("session_id = ?")
         params.append(session_id)
+    if group_id is not None:
+        updates.append("group_id = ?")
+        params.append(group_id)
     if created_at is not None:
         updates.append("created_at = ?")
         params.append(_parse_timestamp(created_at, default=time.time()))
@@ -1385,7 +1399,7 @@ def get_messages(
         limit_clause = f"LIMIT {int(limit)}" if limit and limit > 0 else ""
         cur.execute(
             f"""
-            SELECT id, room_id, role, channel, text, steps_json, attachments_json, model, effort, cost, session_id, created_at
+            SELECT id, room_id, role, channel, text, steps_json, attachments_json, model, effort, cost, session_id, group_id, created_at
             FROM messages
             WHERE room_id = ?
             ORDER BY id ASC
@@ -1422,6 +1436,7 @@ def get_messages(
                 "effort": row["effort"] if "effort" in row.keys() else None,
                 "cost": row["cost"],
                 "sessionId": row["session_id"],
+                "groupId": row["group_id"] if "group_id" in row.keys() else None,
                 "createdAt": row["created_at"],
             })
         return messages

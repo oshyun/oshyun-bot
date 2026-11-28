@@ -689,6 +689,7 @@ async def _watch_and_finish_web_job(
                     effort=job_effort,
                     cost=agent_output.get("cost"),
                     session_id=resolved_session_id,
+                    group_id=rec.get("group_id"),
                     update_preview=True,
                 )
                 _update_room_metadata(
@@ -773,6 +774,7 @@ async def _watch_and_finish_web_job(
                 "speechText": clean_text_for_speech(reply_text),
                 "steps": steps,
                 "sessionId": resolved_session_id,
+                "groupId": rec.get("group_id"),
                 "model": job_model,
                 "effort": job_effort,
                 "engine": get_engine(),

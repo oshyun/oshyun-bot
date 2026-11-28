@@ -1282,6 +1282,8 @@ function handleWsEvent(data) {
           role: incomingRole,
           text: data.userText,
           channel: data.channel || 'web',
+          groupId: data.groupId || targetRoom.activeGroupId || undefined,
+          sessionId: data.sessionId || undefined,
           createdAt: Date.now()
         }, { clearQueued: true, beforeQueued: true });
       } else {
@@ -1298,6 +1300,9 @@ function handleWsEvent(data) {
       }
       if (data.channel === 'orchestrator') {
         targetRoom.isOrchestratorChild = true;
+      }
+      if (data.groupId) {
+        targetRoom.activeGroupId = data.groupId;
       }
       targetRoom.messageCount = Math.max(targetRoom.messageCount || 0, targetRoom.messages.length);
       liveState.queueCount = renumberQueuedMessages(targetRoom);
@@ -1673,6 +1678,9 @@ function handleWsEvent(data) {
     setAgentAvatarStatus(remainingQueued > 0 ? 'thinking' : 'idle', remainingQueued > 0 ? '다음 질문 준비 중…' : '대기 중');
 
     const wasCurrentRoom = (targetRoom.id === currentRoomId);
+    if (data.groupId) {
+      targetRoom.activeGroupId = data.groupId;
+    }
     if (data.sessionId) {
       const oldRoomId = targetRoom.id;
       targetRoom.sessionId = data.sessionId;
@@ -1738,6 +1746,8 @@ function handleWsEvent(data) {
       delegatedRooms: Array.isArray(data.delegatedRooms) ? data.delegatedRooms : undefined,
       model: data.model,
       effort: data.effort,
+      groupId: data.groupId || targetRoom.activeGroupId || undefined,
+      sessionId: data.sessionId || undefined,
       elapsedSeconds: data.elapsedSeconds,
       createdAt: data.createdAt || Date.now()
     }, { beforeQueued: true, updateTimestamp: !data.inPlaceHydrated });
