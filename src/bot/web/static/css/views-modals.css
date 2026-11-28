@@ -556,23 +556,31 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
-/* ═══ 토스트 ═══ */
+/* ═══ 토스트 (모던 클린 라이트 디자인 시스템) ═══ */
 #toast {
   position: fixed; left: 50%; bottom: 96px; z-index: 3000;
-  transform: translate(-50%, 12px);
-  max-width: min(92vw, 520px);
-  background: var(--text); color: var(--bg);
-  padding: 8px 12px 8px 16px; border-radius: 12px;
-  font-size: calc(13.5px * var(--ui-scale, 1)); font-weight: 500; line-height: 1.45;
-  box-shadow: var(--shadow-lg);
+  transform: translate(-50%, 14px) scale(0.97);
+  min-width: 300px;
+  max-width: min(92vw, 480px);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  padding: 10px 12px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(230, 230, 233, 0.82);
+  font-size: calc(13px * var(--ui-scale, 1));
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   opacity: 0; pointer-events: none;
-  transition: opacity .2s ease, transform .2s ease, filter .15s ease, box-shadow .15s ease;
+  transition: opacity .24s cubic-bezier(0.16, 1, 0.3, 1), transform .24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .2s ease;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   box-sizing: border-box;
 }
 #toast.show {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, 0) scale(1);
   pointer-events: auto;
 }
 #toast.clickable {
@@ -580,42 +588,110 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   touch-action: manipulation;
 }
 #toast.clickable:hover {
-  filter: brightness(1.15);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
-  transform: translate(-50%, -2px);
+  box-shadow: 0 14px 36px -4px rgba(16, 185, 129, 0.14), 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(16, 185, 129, 0.35);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translate(-50%, -2px) scale(1.005);
 }
 #toast.clickable:active {
-  transform: translate(-50%, 0);
-  filter: brightness(0.95);
+  transform: translate(-50%, 0) scale(0.995);
+  box-shadow: 0 6px 18px -2px rgba(0, 0, 0, 0.08);
+}
+
+/* 상태별 아이콘 뱃지 박스 */
+.toast-icon-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.toast-icon-box svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* 상태별 스타일 분기 */
+#toast.toast-success .toast-icon-box {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+#toast.toast-info .toast-icon-box {
+  background: rgba(59, 130, 246, 0.10);
+  color: #2563EB;
+  border-color: rgba(59, 130, 246, 0.24);
+}
+#toast.toast-warning .toast-icon-box {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: rgba(217, 119, 6, 0.24);
+}
+#toast.toast-error .toast-icon-box {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: rgba(229, 72, 77, 0.24);
 }
 
 .toast-content {
   display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
 }
 .toast-message {
-  flex: 1; word-break: break-word; line-height: 1.4;
+  flex: 1; word-break: break-word; line-height: 1.42;
+  color: var(--text);
+  font-size: calc(13px * var(--ui-scale, 1));
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* 액션 영역 및 버튼 */
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .toast-action-badge {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600;
-  padding: 2px 7px; border-radius: 6px;
-  background: rgba(255, 255, 255, 0.22);
-  color: inherit;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11.5px; font-weight: 600;
+  padding: 4px 9px; border-radius: 9999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-2);
   letter-spacing: -0.2px;
+  white-space: nowrap;
+  transition: all .15s ease;
 }
+#toast.clickable:hover .toast-action-badge {
+  background: var(--accent-soft);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--accent-strong);
+}
+
 .toast-close-btn {
   background: transparent; border: none; outline: none;
-  color: inherit; opacity: 0.6;
-  cursor: pointer; font-size: 20px; line-height: 1;
-  padding: 2px 6px; border-radius: 6px;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: opacity .15s ease, background-color .15s ease;
+  transition: color .15s ease, background-color .15s ease;
+}
+.toast-close-btn svg {
+  width: 14px;
+  height: 14px;
 }
 .toast-close-btn:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
 /* ═══ 홈 화면 바로가기 (PWA 딥링크) 모달 스타일 ═══ */
