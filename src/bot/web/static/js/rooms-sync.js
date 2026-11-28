@@ -743,8 +743,6 @@ async function syncRoomsWithServer() {
       updateComposerStatusBar();
       updateSendButtonState();
     }
-
-    showToast('대화 목록을 서버와 동기화했습니다.');
   } catch (_) {
     showToast('동기화 실패');
   } finally {
