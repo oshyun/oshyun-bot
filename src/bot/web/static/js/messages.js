@@ -1451,13 +1451,16 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
         if (lastStep.detail) stepDiag += `\n상세: ${String(lastStep.detail).slice(0, 300)}`;
       }
 
+      const catSubHtml = (errCategory && errCategory !== '작업 중단')
+        ? `<span class="msg-error-cat">${escapeHtml(errCategory)}</span>`
+        : '';
       errCard.className = 'msg-error-card is-compact';
       errCard.innerHTML = `
         <details class="msg-error-details">
           <summary class="msg-error-summary">
             <span class="msg-error-dot"></span>
-            <span class="msg-error-label">실패</span>
-            <span class="msg-error-cat">${escapeHtml(errCategory)}</span>
+            <span class="msg-error-label">작업 중단</span>
+            ${catSubHtml}
             <span class="msg-error-chev">${ICONS.chevDown || '▾'}</span>
           </summary>
           <div class="msg-error-body">

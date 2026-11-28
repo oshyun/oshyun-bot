@@ -494,11 +494,11 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--danger-soft);
-  border: 1px solid rgba(229, 72, 77, 0.25);
-  color: var(--danger);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-2);
   font-size: calc(12px * var(--ui-scale, 1));
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
   list-style: none;
@@ -506,22 +506,25 @@
 }
 .msg-error-summary::-webkit-details-marker { display: none; }
 .msg-error-summary:hover {
-  border-color: var(--danger);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 .msg-error-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--danger);
+  background: #d97706;
+  opacity: 0.75;
   flex-shrink: 0;
 }
 .msg-error-cat {
-  font-weight: 500;
-  opacity: 0.85;
+  font-weight: 400;
+  color: var(--text-3);
 }
 .msg-error-chev {
   display: inline-flex;
   align-items: center;
+  color: var(--text-3);
   transition: transform .15s ease;
 }
 .msg-error-chev svg.i {
@@ -536,7 +539,7 @@
   padding: 10px 12px;
   border-radius: 10px;
   background: var(--bg-subtle);
-  border: 1px solid rgba(229, 72, 77, 0.22);
+  border: 1px solid var(--border);
 }
 @keyframes chip-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
