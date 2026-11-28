@@ -2263,7 +2263,6 @@ function populateAgentConfigForm(targetAgentId = null) {
 
   setVal('agent-cfg-id', formVals.id);
   setVal('agent-cfg-name', formVals.name);
-  setVal('agent-cfg-emoji', formVals.emoji);
   setVal('agent-cfg-role', formVals.roleDescription);
   setVal('agent-cfg-workdir', formVals.workdir);
   const addDirsText = Array.isArray(formVals.addDirs) ? formVals.addDirs.join('\n') : (formVals.addDirs || '');
@@ -2410,7 +2409,8 @@ function addAgentConfigDirPreset(preset) {
 function collectAgentConfigFormDraft() {
   const idVal = (document.getElementById('agent-cfg-id')?.value || '').trim();
   const nameVal = (document.getElementById('agent-cfg-name')?.value || '').trim();
-  const emojiVal = (document.getElementById('agent-cfg-emoji')?.value || '🤖').trim() || '🤖';
+  const existingCfg = editingAgentId ? getAgentConfigById(editingAgentId) : null;
+  const emojiVal = (existingCfg && existingCfg.emoji) ? existingCfg.emoji : '🤖';
   const parentVal = (document.getElementById('agent-cfg-parent')?.value || '').trim();
   const roleVal = (document.getElementById('agent-cfg-role')?.value || '').trim();
   const workdirVal = (document.getElementById('agent-cfg-workdir')?.value || '').trim();

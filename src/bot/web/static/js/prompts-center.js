@@ -12,6 +12,7 @@
   async function openPromptsCenterModal(targetId = null) {
     const modal = document.getElementById('modal-prompts-center');
     if (!modal) return;
+    modal.style.display = 'flex';
     modal.classList.add('open');
 
     if (targetId) {
@@ -26,7 +27,10 @@
 
   function closePromptsCenterModal() {
     const modal = document.getElementById('modal-prompts-center');
-    if (modal) modal.classList.remove('open');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.style.display = 'none';
+    }
   }
 
   async function loadPromptsList() {

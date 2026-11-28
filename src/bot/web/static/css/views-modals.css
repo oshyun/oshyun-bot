@@ -445,10 +445,15 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.agent-cfg-grid-emoji-color {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 10px;
+#modal-agent-config .field {
+  min-width: 0;
+}
+#modal-agent-config .select,
+#modal-agent-config .input {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .agent-cfg-subcard {
   padding: 12px 14px;
@@ -456,6 +461,11 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   margin-bottom: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+.agent-cfg-subcard .agent-cfg-grid-2 {
+  gap: 8px;
 }
 .agent-cfg-subcard-title {
   font-size: calc(11px * var(--ui-scale, 1));
