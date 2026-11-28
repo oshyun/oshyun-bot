@@ -1064,6 +1064,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
 
     if not wait_for_result and current_chat_db and target_ui_room_id:
         try:
+            from bot.web.runtime_state import _room_group_ids
             raw_slot_id = current_chat_db.add_message(
                 room_id=target_ui_room_id,
                 role="assistant",
@@ -1072,6 +1073,7 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
                 steps=slot_steps,
                 model=clean_model,
                 effort=clean_effort,
+                group_id=_room_group_ids.get(target_ui_room_id),
                 created_at=time.time(),
             )
             if isinstance(raw_slot_id, int) and raw_slot_id > 0:
