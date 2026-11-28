@@ -1389,7 +1389,7 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       );
       const isErr = Boolean(
         m.isError ||
-        (bypassStepObj && (bypassStepObj.status === 'error' || bypassStepObj.status === 'failed' || bypassStepObj.status === 'cancelled')) ||
+        (bypassStepObj && (bypassStepObj.status === 'error' || bypassStepObj.status === 'failed' || bypassStepObj.status === 'cancelled' || bypassStepObj.status === 'lost')) ||
         (typeof m.text === 'string' && (m.text.startsWith('⚠️') || m.text.startsWith('🛑')))
       );
       if (isSlotPending) {

@@ -533,6 +533,65 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         self.assertEqual(r2["status"], "running")
         self.assertEqual(r2["activeJobId"], "live-job-2")
 
+    def test_cleanup_stale_slot_messages(self):
+        """고아 슬롯 플레이스홀더 정리(메시지 0건 방 슬롯 삭제, 대화 있는 방 실패 전환, 활성 방 보존) 검증."""
+        # 1. 고아 방(메시지 0건) 및 슬롯 메시지
+        chat_db.get_or_create_room("room-orphan-child", title="고아 작업방", db_path=self.db_path)
+        orphan_slot_id = chat_db.add_message(
+            room_id="__core__",
+            role="assistant",
+            text="",
+            channel="thread_bypass",
+            steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-orphan-child", "taskId": "mt-orphan", "status": "running"}],
+            db_path=self.db_path,
+        )
+
+        # 2. 실제 대화가 있는 방 및 슬롯 메시지
+        chat_db.get_or_create_room("room-real-child", title="실제 작업방", db_path=self.db_path)
+        chat_db.add_message("room-real-child", role="user", text="작업 진행해줘", db_path=self.db_path)
+        real_slot_id = chat_db.add_message(
+            room_id="__core__",
+            role="assistant",
+            text="",
+            channel="thread_bypass",
+            steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-real-child", "taskId": "mt-real", "status": "running", "title": "실제 작업"}],
+            db_path=self.db_path,
+        )
+
+        # 3. 현재 활성 실행 중인 방 및 슬롯 메시지
+        chat_db.get_or_create_room("room-active-child", title="활성 작업방", db_path=self.db_path)
+        active_slot_id = chat_db.add_message(
+            room_id="__core__",
+            role="assistant",
+            text="",
+            channel="thread_bypass",
+            steps=[{"kind": "subagent_bypass", "tool": "bypass", "isSlotPlaceholder": True, "roomId": "room-active-child", "taskId": "mt-active", "status": "running"}],
+            db_path=self.db_path,
+        )
+
+        # 클린업 실행 (active_room_ids에 room-active-child 전달)
+        cleaned = chat_db.cleanup_stale_slot_messages(active_room_ids={"room-active-child"}, db_path=self.db_path)
+        self.assertEqual(cleaned, 2)
+
+        # 1은 완전 삭제되었어야 함
+        orphan_msg = chat_db.get_message(orphan_slot_id, db_path=self.db_path)
+        self.assertIsNone(orphan_msg)
+        # 고아 방도 함께 삭제되었어야 함
+        self.assertIsNone(chat_db.get_room("room-orphan-child", db_path=self.db_path))
+
+        # 2는 실패/중단 상태로 업데이트되었어야 함
+        real_msg = chat_db.get_message(real_slot_id, db_path=self.db_path)
+        self.assertIsNotNone(real_msg)
+        self.assertTrue(real_msg["text"].startswith("⚠️"))
+        self.assertFalse(real_msg["steps"][0]["isSlotPlaceholder"])
+        self.assertEqual(real_msg["steps"][0]["status"], "failed")
+
+        # 3은 활성 중이므로 보존되었어야 함
+        active_msg = chat_db.get_message(active_slot_id, db_path=self.db_path)
+        self.assertIsNotNone(active_msg)
+        self.assertEqual(active_msg["text"], "")
+        self.assertTrue(active_msg["steps"][0]["isSlotPlaceholder"])
+
 
 if __name__ == "__main__":
     unittest.main()

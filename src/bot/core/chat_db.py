@@ -89,7 +89,7 @@ def _parse_timestamp(val: Any, default: float | None = None) -> float:
 
 def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     """SQLite DB 커넥션을 생성하고 WAL 모드 및 외래키 제약을 활성화한다."""
-    path = db_path or CHAT_DB_FILE
+    path = db_path or os.environ.get("CHAT_DB_FILE") or CHAT_DB_FILE
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     conn = sqlite3.connect(path, timeout=10.0)
     conn.row_factory = sqlite3.Row
@@ -1138,6 +1138,99 @@ def cleanup_stale_running_rooms(
             conn.commit()
             return len(stale_ids)
         return 0
+
+
+def cleanup_stale_slot_messages(
+    active_room_ids: set[str] | list[str] | None = None,
+    db_path: str | None = None,
+) -> int:
+    """서버 기동 또는 복구 시, 비어있거나 중단된 채 방치된 isSlotPlaceholder 메시지들을 정리한다."""
+    active_rids = {str(r).strip() for r in (active_room_ids or []) if r and str(r).strip()}
+    fixed_count = 0
+    with get_connection(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, room_id, steps_json
+            FROM messages
+            WHERE (channel = 'thread_bypass' OR steps_json LIKE '%isSlotPlaceholder%')
+              AND (text IS NULL OR trim(text) = '');
+        """)
+        rows = cur.fetchall()
+        for row in rows:
+            mid = row["id"]
+            rid = row["room_id"]
+            raw_steps = row["steps_json"]
+            steps = []
+            try:
+                steps = json.loads(raw_steps) if raw_steps else []
+            except Exception:
+                steps = []
+
+            child_rid = None
+            task_title = "하위 작업"
+            task_id = None
+            if isinstance(steps, list):
+                for s in steps:
+                    if isinstance(s, dict) and (s.get("kind") == "subagent_bypass" or s.get("tool") == "bypass"):
+                        child_rid = s.get("roomId") or s.get("bypassedFromRoomId")
+                        if s.get("title"):
+                            task_title = s.get("title")
+                        if s.get("taskId"):
+                            task_id = s.get("taskId")
+                        break
+
+            # 현재 활발히 실행 중인 방이면 보존
+            if child_rid and child_rid in active_rids:
+                continue
+
+            # 만약 child_rid가 없거나, 해당 child_rid에 실제 메시지가 0건인 고아/테스트 잔여물인 경우 완전 삭제하여 UI 오염 제거
+            cur.execute("SELECT count(*) AS cnt FROM messages WHERE room_id = ?;", (child_rid or "",))
+            child_cnt_row = cur.fetchone()
+            child_msg_cnt = child_cnt_row["cnt"] if child_cnt_row else 0
+
+            if child_msg_cnt == 0:
+                cur.execute("DELETE FROM messages WHERE id = ?;", (mid,))
+                # 빈 고아 방이 존재하면 함께 정리
+                if child_rid and not _is_protected_room_id(child_rid):
+                    cur.execute("DELETE FROM rooms WHERE id = ?;", (child_rid,))
+                fixed_count += 1
+            else:
+                # 하위 방에 실제 대화가 있는 경우 실패/중단 상태로 업데이트
+                updated_steps = []
+                if isinstance(steps, list):
+                    for s in steps:
+                        if isinstance(s, dict) and (s.get("kind") == "subagent_bypass" or s.get("tool") == "bypass"):
+                            s_copy = dict(s)
+                            s_copy["isSlotPlaceholder"] = False
+                            s_copy["status"] = "failed"
+                            s_copy["reason"] = "서버 재시작 또는 비정상 종료로 작업이 중단되었습니다."
+                            updated_steps.append(s_copy)
+                        else:
+                            updated_steps.append(s)
+                else:
+                    updated_steps = [{
+                        "kind": "subagent_bypass",
+                        "tool": "bypass",
+                        "isSlotPlaceholder": False,
+                        "title": task_title,
+                        "roomId": child_rid or rid,
+                        "taskId": task_id,
+                        "status": "failed",
+                        "reason": "서버 재시작 또는 비정상 종료로 작업이 중단되었습니다.",
+                    }]
+
+                fail_text = f"⚠️ **[{task_title}]** 하위 작업이 중단되었습니다 (서버 재시작/비정상 종료)."
+                cur.execute("""
+                    UPDATE messages
+                    SET text = ?,
+                        steps_json = ?
+                    WHERE id = ?;
+                """, (fail_text, json.dumps(updated_steps, ensure_ascii=False), mid))
+                fixed_count += 1
+
+        if fixed_count > 0:
+            conn.commit()
+    return fixed_count
 
 
 def archive_room(

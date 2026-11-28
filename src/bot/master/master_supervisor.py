@@ -493,8 +493,37 @@ class MasterSupervisor:
         ):
             master_tasks.update_task(tid, **upd)
             reconciled += 1
-            if upd.get("status"):
-                logger.info("[master] 작업 %s 상태 → %s", tid, upd["status"])
+            st = upd.get("status")
+            if st:
+                logger.info("[master] 작업 %s 상태 → %s", tid, st)
+                if st in ("lost", "failed", "cancelled"):
+                    task_rec = master_tasks.get_task(tid) or {}
+                    slot_id = task_rec.get("slotMsgId")
+                    if isinstance(slot_id, int) and slot_id > 0:
+                        try:
+                            from bot.core import chat_db
+                            title = str(task_rec.get("title") or tid)
+                            room_id = str(task_rec.get("roomId") or "")
+                            err_msg = upd.get("error") or ("실행이 중단되었습니다." if st == "lost" else "작업 실패")
+                            cancel_steps = [{
+                                "kind": "subagent_bypass",
+                                "tool": "bypass",
+                                "isSlotPlaceholder": False,
+                                "title": title,
+                                "roomId": room_id,
+                                "taskId": tid,
+                                "status": st,
+                                "reason": err_msg,
+                                "bypassedFromRoomId": room_id,
+                            }]
+                            chat_db.update_message(
+                                slot_id,
+                                text=f"⚠️ **[{title}]** 하위 작업이 중단되었습니다 ({err_msg}).",
+                                steps=cancel_steps,
+                                update_preview=True,
+                            )
+                        except Exception as exc:
+                            logger.debug("[master] 슬롯 메시지 정리 실패 (%s): %s", slot_id, exc)
 
         auto_review_ids = [
             t["id"]

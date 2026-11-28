@@ -20,13 +20,27 @@ class TestSpawnSimilarityIsolation(unittest.IsolatedAsyncioTestCase):
         self.db_path = os.path.join(self.test_dir, "test_chat.db")
         self.state_dir = os.path.join(self.test_dir, "state")
         os.makedirs(self.state_dir, exist_ok=True)
+        self.tasks_path = os.path.join(self.state_dir, "master_tasks.json")
+        os.environ["CHAT_DB_FILE"] = self.db_path
+        os.environ["MASTER_TASKS_FILE"] = self.tasks_path
         self.patch_chat_db_file = patch("bot.core.paths.CHAT_DB_FILE", self.db_path)
+        self.patch_chat_db_mod = patch("bot.core.chat_db.CHAT_DB_FILE", self.db_path)
+        self.patch_tasks_file = patch("bot.core.paths.MASTER_TASKS_FILE", self.tasks_path)
+        self.patch_tasks_mod = patch("bot.master.master_tasks.MASTER_TASKS_FILE", self.tasks_path)
         self.patch_chat_db_file.start()
+        self.patch_chat_db_mod.start()
+        self.patch_tasks_file.start()
+        self.patch_tasks_mod.start()
         chat_db.init_db(self.db_path)
         self.custom_agent_id = "__custom_ebb5f245__"
 
     def tearDown(self):
         self.patch_chat_db_file.stop()
+        self.patch_chat_db_mod.stop()
+        self.patch_tasks_file.stop()
+        self.patch_tasks_mod.stop()
+        os.environ.pop("CHAT_DB_FILE", None)
+        os.environ.pop("MASTER_TASKS_FILE", None)
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_permanent_and_custom_agents_excluded_from_spawn_similarity(self):

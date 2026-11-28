@@ -388,8 +388,17 @@ async def _recover_startup_placeholders() -> int:
         return 0
     fixed_count = 0
     try:
-        rooms = current_chat_db.get_rooms(limit=300)
         active_room_ids = set(_active_agent_pids.keys()) | set(_room_live_snapshots.keys())
+        if hasattr(current_chat_db, "cleanup_stale_slot_messages"):
+            try:
+                slot_cleaned = current_chat_db.cleanup_stale_slot_messages(active_room_ids)
+                if isinstance(slot_cleaned, int) and slot_cleaned > 0:
+                    fixed_count += slot_cleaned
+                    logger.info("[web_jobs] 기동 시 고아 슬롯 플레이스홀더 메시지 %d건 정리/복구 완료", slot_cleaned)
+            except Exception as e:
+                logger.debug("[web_jobs] cleanup_stale_slot_messages 예외: %s", e)
+
+        rooms = current_chat_db.get_rooms(limit=300)
         for r in rooms:
             rid = str(r.get("id") or "").strip()
             if not rid or rid in active_room_ids:

@@ -130,7 +130,7 @@ CHATS_DIR = os.path.join(DATA_DIR, "chats")
 # 대화방 메타데이터 인덱스 파일 (레거시).
 CHAT_ROOMS_FILE = os.path.join(STATE_DIR, "chat_rooms.json")
 # 통합 SQLite 대화 데이터베이스 (웹 채널 공통 SSOT).
-CHAT_DB_FILE = os.path.join(STATE_DIR, "chat.db")
+CHAT_DB_FILE = os.environ.get("CHAT_DB_FILE") or os.path.join(STATE_DIR, "chat.db")
 # claude CLI 의 설정·인증·세션 디렉토리(~/.claude) 를 봇 전용으로 분리한 위치 — AGENT_CONFIG_DIR
 # 로 여기를 가리킨다. 인증(.credentials.json)은 사용자가 한 번 대화형 /login 으로 채워야 한다
 # (파일복사로는 안 됨 — 토큰이 stale). 설정·봇세션만 agent_engine 이 1회 시드한다.
@@ -141,7 +141,7 @@ AGENT_TMP_DIR = os.path.join(AGENT_HOME_DIR, "tmp")
 BURN_TODO_FILE = os.path.join(STATE_DIR, "burn_todo.json")
 BURN_STATE_FILE = os.path.join(STATE_DIR, "burn_state.json")
 # 마스터 에이전트 작업 원장(Task Ledger) — 하위 채팅에 위임한 작업과 정기 점검(patrol) 상태.
-MASTER_TASKS_FILE = os.path.join(STATE_DIR, "master_tasks.json")
+MASTER_TASKS_FILE = os.environ.get("MASTER_TASKS_FILE") or os.path.join(STATE_DIR, "master_tasks.json")
 # 마스터 에이전트 서브 태스크 이벤트 및 콜백 상태(master_state.json).
 MASTER_STATE_FILE = os.path.join(STATE_DIR, "master_state.json")
 # 마스터 에이전트 4계층 메모리(Hot/Warm/Cold/Freeze) 영속화 파일.
