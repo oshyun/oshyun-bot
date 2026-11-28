@@ -293,6 +293,52 @@ class TestExpertAgentsRestApi(AioHTTPTestCase):
             for p in reversed(patches):
                 p.stop()
 
+    @unittest_run_loop
+    async def test_handle_orchestrator_reset_general_room(self):
+        """POST /api/orchestrator/reset 으로 일반 대화(__expert_general__) 룸 초기화 시 에러 없이 리셋되는지 검증."""
+        rid = chat_db.EXPERT_GENERAL_ROOM_ID
+        chat_db.add_message(rid, "user", "안녕 일반 대화", db_path=self.db_path)
+        chat_db.add_message(rid, "assistant", "반갑습니다", db_path=self.db_path)
+
+        import sys
+        ws_mod = sys.modules.get("bot.web.server")
+        from unittest.mock import MagicMock
+        mock_clear = MagicMock()
+        patches = [
+            patch.object(chat_db, "CHAT_DB_FILE", self.db_path),
+            patch("bot.core.paths.CHAT_DB_FILE", self.db_path),
+            patch("bot.web.orchestrator.clear_session", mock_clear),
+            patch("bot.web.execution.broadcast_ws_json", new_callable=AsyncMock),
+        ]
+        if ws_mod and hasattr(ws_mod, "clear_session"):
+            patches.append(patch.object(ws_mod, "clear_session", mock_clear))
+
+        for p in patches:
+            p.start()
+        try:
+            resp = await self.client.post("/api/orchestrator/reset", json={
+                "roomId": rid,
+                "agentId": "general",
+                "memoryMode": "keep",
+            })
+            self.assertEqual(resp.status, 200)
+            data = await resp.json()
+            self.assertTrue(data.get("ok"))
+            self.assertEqual(data.get("roomId"), rid)
+
+            mock_clear.assert_called_with(ns="general_")
+
+            # 메시지는 비워졌는지 확인
+            msgs = chat_db.get_messages(rid, db_path=self.db_path)
+            self.assertEqual(len(msgs), 0)
+
+            # 방은 여전히 존재하는지 확인
+            room = chat_db.get_room(rid, db_path=self.db_path)
+            self.assertIsNotNone(room)
+        finally:
+            for p in reversed(patches):
+                p.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

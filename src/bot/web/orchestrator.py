@@ -2212,7 +2212,8 @@ async def handle_orchestrator_reset(request: web.Request) -> web.Response:
 
     target_room_id = str(
         payload.get("roomId") or payload.get("room_id")
-        or (EXPERT_VAULT_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("vault", "expert_vault", "second_brain") else
+        or (EXPERT_GENERAL_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("general", "expert_general") else
+            EXPERT_VAULT_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("vault", "expert_vault", "second_brain") else
             EXPERT_CODING_ROOM_ID if str(payload.get("agentId") or payload.get("agent_id") or "").strip() in ("coding", "expert_coding", "bot_dev") else
             payload.get("agentId") or payload.get("agent_id") or CORE_ORCHESTRATOR_ROOM_ID)
     ).strip()

@@ -81,11 +81,13 @@ TIER_LABELS: dict[str, str] = {
 
 AGENT_LABELS: dict[str, str] = {
     "master": "마스터 에이전트",
+    "general": "일반 대화 에이전트",
     "second_brain": "세컨브레인 에이전트",
     "bot_dev": "봇개발 에이전트",
 }
 AGENT_DOMAIN_TAGS: dict[str, str] = {
     "master": "[마스터]",
+    "general": "[일반대화]",
     "second_brain": "[세컨브레인]",
     "bot_dev": "[봇개발]",
 }
@@ -94,6 +96,9 @@ _AGENT_ALIASES: dict[str, str] = {
     "master": "master",
     "__core__": "master",
     "core": "master",
+    "general": "general",
+    "__expert_general__": "general",
+    "expert_general": "general",
     "second_brain": "second_brain",
     "__expert_vault__": "second_brain",
     "expert_vault": "second_brain",
