@@ -1349,7 +1349,8 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const effectiveThreadRoomId = targetThreadRoomId || childRoomId || '';
     const effectiveThreadTitle = targetThreadTitle || subRoomTitle || agentInfo.name;
 
-    const threadBtnHtml = effectiveThreadRoomId
+    const showHeaderThreadBtn = Boolean(effectiveThreadRoomId && (isBypassOrSlot || agentInfo.role !== 'master'));
+    const threadBtnHtml = showHeaderThreadBtn
       ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(effectiveThreadRoomId)}', '${escapeHtml(effectiveThreadTitle)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드</span></button>`
       : '';
 
