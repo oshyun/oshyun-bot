@@ -944,10 +944,10 @@
 .md.md-compact table { font-size: 11.5px; }
 .md.md-compact th, .md.md-compact td { padding: 4px 8px; }
 
-/* 작업 과정 (도구 실행 단계) */
+/* 작업 과정 (도구 실행 단계) — 완료된 메시지는 기본 숨김, '전체 보고 보기' 펼침 또는 실시간 진행 중일 때만 노출 */
 .steps { margin-bottom: 10px; font-size: calc(13px * var(--ui-scale, 1)); animation: msgFadeIn .16s ease-out; }
-/* 완료된 접힘 보고가 있는 메시지는 기본 상태에서 tools 칩을 숨기고, '전체 보고 보기' 펼침 시 자연스럽게 노출 */
-.msg:has(.sub-agent-details:not([open])) > .steps { display: none; }
+.msg.assistant:not(#live-assistant-row) > .steps { display: none; }
+.msg.assistant:has(.sub-agent-details[open]) > .steps { display: block; }
 .steps > summary {
   display: inline-flex; align-items: center; gap: 6px;
   list-style: none; cursor: pointer; user-select: none;
