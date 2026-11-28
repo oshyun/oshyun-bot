@@ -54,6 +54,7 @@ class TestWebGoogleEndpoints(AioHTTPTestCase):
         app.router.add_post("/api/google/disconnect", web_google.handle_google_disconnect)
         app.router.add_get("/api/gmail/status", web_google.handle_gmail_status)
         app.router.add_post("/api/gmail/sync", web_google.handle_gmail_sync)
+        app.router.add_post("/api/gmail/trash", web_google.handle_gmail_trash)
         app.router.add_post("/api/schedules/ensure-gmail", web_google.handle_schedules_ensure_gmail)
         return app
 
@@ -153,6 +154,36 @@ class TestWebGoogleEndpoints(AioHTTPTestCase):
             data = await res_sync.json()
             self.assertEqual(data["status"], "ok")
             self.assertEqual(data["result"]["totalCount"], 5)
+
+    async def test_gmail_trash_endpoint(self):
+        # 1. 미인증 시 401
+        res_unauth = await self.client.post("/api/gmail/trash", json={"messageId": "123"})
+        self.assertEqual(res_unauth.status, 401)
+
+        # 2. 인증되었으나 needsReauth(권한 부족) 시 403
+        with patch.object(self.mock_auth, "is_authenticated", return_value=True), \
+             patch.object(self.mock_auth, "get_account_info", return_value={"needsReauth": True}):
+            res_no_scope = await self.client.post("/api/gmail/trash", json={"messageId": "123"})
+            self.assertEqual(res_no_scope.status, 403)
+            data_no_scope = await res_no_scope.json()
+            self.assertTrue(data_no_scope.get("needsReauth"))
+
+        # 3. messageId 누락 시 400
+        with patch.object(self.mock_auth, "is_authenticated", return_value=True), \
+             patch.object(self.mock_auth, "get_account_info", return_value={"needsReauth": False}):
+            res_bad = await self.client.post("/api/gmail/trash", json={})
+            self.assertEqual(res_bad.status, 400)
+
+        # 4. 정상 삭제(휴지통 이동) 시 200
+        with patch.object(self.mock_auth, "is_authenticated", return_value=True), \
+             patch.object(self.mock_auth, "get_account_info", return_value={"needsReauth": False}), \
+             patch.object(self.mock_gmail, "trash_message", return_value=True):
+            res_ok = await self.client.post("/api/gmail/trash", json={"messageId": "msg_999"})
+            self.assertEqual(res_ok.status, 200)
+            data_ok = await res_ok.json()
+            self.assertEqual(data_ok["status"], "ok")
+            self.assertEqual(data_ok["messageId"], "msg_999")
+            self.assertTrue(data_ok["trashed"])
 
     async def test_schedules_ensure_gmail(self):
         with patch("bot.web.google.ensure_default_gmail_schedule", return_value={"id": "gmail-auto", "cron": "0 8 * * *"}):

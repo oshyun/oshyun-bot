@@ -65,7 +65,7 @@ from bot.web.speech import AVAILABLE_TTS_VOICES, DEFAULT_TTS_VOICE, VALID_TTS_MO
 
 from bot.web.vault import _resolve_vault_absolute_path, handle_vault_create_file, handle_vault_get_file, handle_vault_recent, handle_vault_save_file, handle_vault_tree
 
-from bot.web.google import handle_gmail_status, handle_gmail_sync, handle_google_auth_callback, handle_google_auth_code, handle_google_auth_url, handle_google_credentials, handle_google_disconnect, handle_google_status, handle_schedules_ensure_gmail
+from bot.web.google import handle_gmail_status, handle_gmail_sync, handle_gmail_trash, handle_google_auth_callback, handle_google_auth_code, handle_google_auth_url, handle_google_credentials, handle_google_disconnect, handle_google_status, handle_schedules_ensure_gmail
 from bot.google.google_auth import default_google_auth
 
 import bot.web.job_recovery as web_job_recovery
@@ -657,6 +657,7 @@ def create_web_app(static_dir: str | None = None) -> web.Application:
     web_app.router.add_post("/api/google/disconnect", handle_google_disconnect)
     web_app.router.add_get("/api/gmail/status", handle_gmail_status)
     web_app.router.add_post("/api/gmail/sync", handle_gmail_sync)
+    web_app.router.add_post("/api/gmail/trash", handle_gmail_trash)
     web_app.router.add_post("/api/schedules/ensure-gmail", handle_schedules_ensure_gmail)
 
     resolved_static_dir = static_dir if static_dir is not None else WEB_STATIC_DIR

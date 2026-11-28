@@ -34,6 +34,7 @@ class TestGoogleAuthManager(unittest.TestCase):
         self.assertFalse(self.mgr.has_token)
         self.assertFalse(self.mgr.is_authenticated())
         self.assertIn("https://www.googleapis.com/auth/gmail.readonly", self.mgr.scopes)
+        self.assertIn("https://www.googleapis.com/auth/gmail.modify", self.mgr.scopes)
         self.assertIn("https://www.googleapis.com/auth/calendar", self.mgr.scopes)
 
     def test_save_credentials_file_dict_and_string(self):
@@ -134,18 +135,39 @@ class TestGoogleAuthManager(unittest.TestCase):
         # 1. 미인증 상태
         info = self.mgr.get_account_info()
         self.assertFalse(info["isAuthenticated"])
+        self.assertFalse(info["needsReauth"])
         self.assertIsNone(info["email"])
 
-        # 2. 토큰 파일 내 email 존재 상태
+        # 2. 토큰 파일 내 email 존재 및 모든 스코프 보유 상태
         with open(self.token_file, "w") as f:
             f.write(json.dumps({"token": "123", "email": "user@example.com"}))
 
         mock_creds = MagicMock()
         mock_creds.valid = True
+        mock_creds.scopes = list(self.mgr.scopes)
         with patch.object(self.mgr, "get_credentials", return_value=mock_creds):
             info = self.mgr.get_account_info()
             self.assertTrue(info["isAuthenticated"])
+            self.assertFalse(info["needsReauth"])
+            self.assertEqual(info["missingScopes"], [])
             self.assertEqual(info["email"], "user@example.com")
+
+        # 3. gmail.modify 권한이 누락된 구버전 토큰 상태 -> needsReauth True
+        mock_creds_old = MagicMock()
+        mock_creds_old.valid = True
+        mock_creds_old.scopes = [
+            "openid",
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/userinfo.email",
+        ]
+        mock_creds_old.has_scopes.side_effect = lambda sc: all(s in mock_creds_old.scopes for s in sc)
+        with patch.object(self.mgr, "get_credentials", return_value=mock_creds_old):
+            info_old = self.mgr.get_account_info()
+            self.assertTrue(info_old["isAuthenticated"])
+            self.assertTrue(info_old["needsReauth"])
+            self.assertIn("https://www.googleapis.com/auth/gmail.modify", info_old["missingScopes"])
 
 
 if __name__ == "__main__":

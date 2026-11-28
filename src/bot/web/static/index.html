@@ -827,8 +827,9 @@
                     <div class="setting-label">연동 계정</div>
                     <div class="setting-desc" id="google-auth-status-desc">확인 중...</div>
                   </div>
-                  <div class="ctrl" id="google-auth-actions">
+                  <div class="ctrl" id="google-auth-actions" style="display:flex;gap:6px;flex-wrap:wrap;">
                     <button type="button" class="btn accent" id="btn-google-auth-connect" onclick="startGoogleAuth()">구글 계정 연동</button>
+                    <button type="button" class="btn accent" id="btn-google-auth-reauth" style="display:none;" onclick="startGoogleAuth()">권한 갱신 (재인증)</button>
                     <button type="button" class="btn danger" id="btn-google-auth-disconnect" style="display:none;" onclick="disconnectGoogleAuth()">연동 해제</button>
                   </div>
                 </div>

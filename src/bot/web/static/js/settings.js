@@ -551,6 +551,7 @@ let cachedGoogleStatus = null;
 async function loadGoogleAuthStatus() {
   const descEl = document.getElementById('google-auth-status-desc');
   const btnConnect = document.getElementById('btn-google-auth-connect');
+  const btnReauth = document.getElementById('btn-google-auth-reauth');
   const btnDisconnect = document.getElementById('btn-google-auth-disconnect');
   const rowGmail = document.getElementById('row-gmail-sync');
   const gmailDescEl = document.getElementById('gmail-sync-status-desc');
@@ -568,9 +569,17 @@ async function loadGoogleAuthStatus() {
 
     if (acct.isAuthenticated) {
       const email = acct.email ? ` (${acct.email})` : '';
-      descEl.innerHTML = `<span style="color:var(--accent, #4ade80); font-weight:600;">🟢 연동됨</span>${escapeHtml(email)}`;
-      if (btnConnect) btnConnect.style.display = 'none';
-      if (btnDisconnect) btnDisconnect.style.display = 'inline-block';
+      if (acct.needsReauth) {
+        descEl.innerHTML = `<span style="color:#f59e0b; font-weight:600;">🟠 권한 갱신 필요</span>${escapeHtml(email)} <span style="font-size:12px;color:var(--text-2);">(메일 관리/삭제 권한 필요)</span>`;
+        if (btnConnect) btnConnect.style.display = 'none';
+        if (btnReauth) btnReauth.style.display = 'inline-block';
+        if (btnDisconnect) btnDisconnect.style.display = 'inline-block';
+      } else {
+        descEl.innerHTML = `<span style="color:var(--accent, #4ade80); font-weight:600;">🟢 연동됨</span>${escapeHtml(email)}`;
+        if (btnConnect) btnConnect.style.display = 'none';
+        if (btnReauth) btnReauth.style.display = 'none';
+        if (btnDisconnect) btnDisconnect.style.display = 'inline-block';
+      }
       if (rowGmail) rowGmail.style.display = 'flex';
 
       if (gmailDescEl) {
@@ -587,6 +596,7 @@ async function loadGoogleAuthStatus() {
         descEl.innerHTML = `<span style="color:#f59e0b; font-weight:500;">🟡 클라이언트 설정 필요 (credentials.json 미등록)</span>`;
       }
       if (btnConnect) btnConnect.style.display = 'inline-block';
+      if (btnReauth) btnReauth.style.display = 'none';
       if (btnDisconnect) btnDisconnect.style.display = 'none';
       if (rowGmail) rowGmail.style.display = 'none';
     }

@@ -361,6 +361,48 @@ async def handle_gmail_sync(request: web.Request) -> web.Response:
         )
 
 
+async def handle_gmail_trash(request: web.Request) -> web.Response:
+    """POST /api/gmail/trash — 메일 휴지통 이동 (메일 삭제)."""
+    if not default_google_auth.is_authenticated():
+        return web.json_response(
+            {"status": "error", "error": "Google 계정 연동이 필요합니다."},
+            status=401,
+        )
+
+    account_info = default_google_auth.get_account_info()
+    if account_info.get("needsReauth"):
+        return web.json_response(
+            {
+                "status": "error",
+                "error": "메일 삭제/수정 권한(gmail.modify)이 없습니다. 설정에서 구글 권한 갱신(재인증)을 완료해주세요.",
+                "needsReauth": True,
+            },
+            status=403,
+        )
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    message_id = str(body.get("messageId") or body.get("id") or "").strip()
+    if not message_id:
+        return web.json_response(
+            {"status": "error", "error": "messageId 파라미터가 필요합니다."},
+            status=400,
+        )
+
+    try:
+        default_gmail_manager.trash_message(message_id)
+        return web.json_response({"status": "ok", "messageId": message_id, "trashed": True})
+    except Exception as exc:
+        logger.warning("Gmail 휴지통 이동 처리 실패: %s", exc)
+        return web.json_response(
+            {"status": "error", "error": f"메일 휴지통 이동 실패: {exc}"},
+            status=500,
+        )
+
+
 async def handle_schedules_ensure_gmail(request: web.Request) -> web.Response:
     """POST /api/schedules/ensure-gmail — Gmail 정기 수신 스케줄 등록/확보."""
     try:
