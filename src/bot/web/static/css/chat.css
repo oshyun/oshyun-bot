@@ -74,7 +74,7 @@
 .msg.user .msg-actions { margin-left: 0; margin-right: -4px; justify-content: flex-end; }
 .msg.assistant { align-items: stretch; }
 .assistant-head {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;
   margin-bottom: 6px; font-size: calc(12.5px * var(--ui-scale, 1)); font-weight: 600; color: var(--text-2);
 }
 .assistant-avatar {
@@ -113,7 +113,38 @@
 .assistant-head .model-tag {
   font-size: calc(11px * var(--ui-scale, 1)); font-weight: 500; color: var(--text-3);
   background: var(--bg-subtle); border: 1px solid var(--border);
-  padding: 0 6px; border-radius: 999px;
+  padding: 1px 7px; border-radius: 999px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.assistant-head .msg-time {
+  white-space: nowrap; flex-shrink: 0;
+}
+.btn-open-thread-inline {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+}
+.btn-open-thread-inline:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.btn-open-thread-inline svg.i {
+  width: 11px;
+  height: 11px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
 }
 .assistant-head .model-tag.sub-agent-badge {
   font-size: calc(10.5px * var(--ui-scale, 1));

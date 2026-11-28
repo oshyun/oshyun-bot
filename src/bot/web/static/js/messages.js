@@ -1367,17 +1367,19 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
         row.setAttribute('data-task-id', String(targetThreadTaskId));
       }
     }
-    const threadBtnHtml = targetThreadRoomId
-      ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(targetThreadRoomId)}', '${escapeHtml(targetThreadTitle || agentInfo.name)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기" style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;"><svg class="i" viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드 열기</span></button>`
+    const subRoom = childRoomId ? getRoomById(childRoomId) : null;
+    const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId || '');
+    const effectiveThreadRoomId = targetThreadRoomId || childRoomId || '';
+    const effectiveThreadTitle = targetThreadTitle || subRoomTitle || agentInfo.name;
+    if (effectiveThreadRoomId) {
+      head.setAttribute('title', `클릭 시 [${effectiveThreadTitle}] 작업 스레드 열기`);
+    }
+
+    const threadBtnHtml = effectiveThreadRoomId
+      ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(effectiveThreadRoomId)}', '${escapeHtml(effectiveThreadTitle)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드</span></button>`
       : '';
 
-    let childBadgeHtml = '';
-    if (childRoomId) {
-      const subRoom = getRoomById(childRoomId);
-      const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId);
-      head.setAttribute('title', `클릭 시 [${subRoomTitle}] 작업 스레드 열기`);
-      childBadgeHtml = `<button type="button" class="child-room-badge" onclick="event.stopPropagation(); (typeof openThreadPanel === 'function' ? openThreadPanel(null, '${escapeHtml(childRoomId)}', '${escapeHtml(subRoomTitle)}') : selectRoom('${escapeHtml(childRoomId)}'));" title="클릭 시 [${escapeHtml(subRoomTitle)}] 작업 스레드 열기"><span class="child-room-badge-text">${escapeHtml(subRoomTitle)}</span><span class="child-nav-hint">↗</span></button>`;
-    }
+    const childBadgeHtml = '';
 
     let slotStatusPillHtml = '';
     if (isBypassOrSlot) {

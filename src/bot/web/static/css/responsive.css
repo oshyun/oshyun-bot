@@ -330,6 +330,15 @@ body.is-pinching-font {
   .topbar-usage-badge .quota-track { display: none; }
 }
 
+@media (max-width: 640px) {
+  .assistant-head .model-tag:not(.slot-status-pill):not(.sub-agent-badge) {
+    display: none;
+  }
+  .assistant-head .assistant-name {
+    max-width: 155px;
+  }
+}
+
 @media (max-width: 480px) {
   .topbar {
     padding: 0 6px;
