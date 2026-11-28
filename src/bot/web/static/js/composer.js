@@ -377,6 +377,9 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
   const isNew = Boolean(!room || room.isNewSession || !targetSessionId);
   const replyCtx = (typeof window !== 'undefined' && window._replyContext) ? window._replyContext : null;
   const targetGroupId = (!isNew && replyCtx && replyCtx.groupId) ? replyCtx.groupId : null;
+  if (targetGroupId && room && typeof setTurnCollapsed === 'function') {
+    setTurnCollapsed(room.id, (replyCtx && replyCtx.turnId) || `turn_g_${targetGroupId}`, false);
+  }
   if (typeof clearReplyContext === 'function') {
     clearReplyContext();
   }

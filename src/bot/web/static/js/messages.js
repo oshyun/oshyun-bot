@@ -1571,10 +1571,23 @@ function replyToMessageByIndex(idx) {
 // ─── 턴 아코디언 컨테이너 상태 관리 ───
 window._roomTurnCollapsedMap = window._roomTurnCollapsedMap || {};
 
-function isTurnCollapsed(roomId, turnId) {
+const TURN_AUTO_COLLAPSE_MS = 30 * 60 * 1000;
+
+function isTurnCollapsed(roomId, turnId, lastCreatedAt = null) {
   if (!roomId || !turnId) return false;
   const key = `${roomId}__${turnId}`;
-  return Boolean(window._roomTurnCollapsedMap[key]);
+  if (Object.prototype.hasOwnProperty.call(window._roomTurnCollapsedMap, key)) {
+    return Boolean(window._roomTurnCollapsedMap[key]);
+  }
+  if (lastCreatedAt) {
+    const lastMs = typeof parseTimestampMs === 'function'
+      ? parseTimestampMs(lastCreatedAt)
+      : Number(lastCreatedAt);
+    if (lastMs > 0 && (Date.now() - lastMs) >= TURN_AUTO_COLLAPSE_MS) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function setTurnCollapsed(roomId, turnId, collapsed) {
@@ -1585,9 +1598,10 @@ function setTurnCollapsed(roomId, turnId, collapsed) {
 
 function toggleTurnAccordion(roomId, turnId) {
   if (!roomId || !turnId) return;
-  const next = !isTurnCollapsed(roomId, turnId);
-  setTurnCollapsed(roomId, turnId, next);
   const turnEl = document.getElementById(`turn-${turnId}`);
+  const lastTs = turnEl ? turnEl.getAttribute('data-last-created-at') : null;
+  const next = !isTurnCollapsed(roomId, turnId, lastTs);
+  setTurnCollapsed(roomId, turnId, next);
   if (turnEl) {
     turnEl.classList.toggle('is-collapsed', next);
     const body = turnEl.querySelector('.turn-body');
@@ -1741,7 +1755,10 @@ function groupEntriesIntoTurns(activeEntries) {
     }
   });
 
-  return mergeTurnsByChildRoom(turns);
+  const mergedTurns = mergeTurnsByChildRoom(turns);
+  const toMs = (ts) => (typeof parseTimestampMs === 'function' ? parseTimestampMs(ts) : Number(ts)) || 0;
+  mergedTurns.sort((a, b) => toMs(a.lastCreatedAt || a.createdAt) - toMs(b.lastCreatedAt || b.createdAt));
+  return mergedTurns;
 }
 
 // 동일 하위 방(child room)에 대한 연속 지시/보고는 신규 컨테이너를 만들지 않고
@@ -2052,9 +2069,11 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
 
     const isLastTurn = (turnIdx === turns.length - 1);
     const turnId = turn.turnId;
-    let isCollapsed = isTurnCollapsed(room.id, turnId);
-    // 현재 답변 생성 중인 마지막 턴은 접지 않고 강제 펼침
-    if (isLastTurn && liveState.isRunning) {
+    let isCollapsed = isTurnCollapsed(room.id, turnId, turn.lastCreatedAt);
+    // 현재 답변 생성 중인 마지막 턴 또는 답장 대상 턴은 접지 않고 강제 펼침
+    const replyTargetGid = liveState && liveState.replyGroupId ? liveState.replyGroupId : null;
+    const isTargetReplyNow = Boolean(replyTargetGid && (turn.groupId === replyTargetGid || turn.turnId === replyTargetGid));
+    if ((isLastTurn || isTargetReplyNow) && liveState.isRunning) {
       isCollapsed = false;
     }
 
@@ -2062,6 +2081,9 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     turnContainer.className = 'chat-turn-container' + (isCollapsed ? ' is-collapsed' : '');
     turnContainer.id = `turn-${turnId}`;
     turnContainer.setAttribute('data-turn-id', turnId);
+    if (turn.lastCreatedAt) {
+      turnContainer.setAttribute('data-last-created-at', String(turn.lastCreatedAt));
+    }
     turnContainer.setAttribute('data-group-id', turn.groupId || turnId);
 
     // 1. 헤더 요약 텍스트 (Gemini 요약 제목 우선, 없으면 첫 질문 미리보기)
@@ -2155,9 +2177,7 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
       if (row) turnBody.appendChild(row);
     });
 
-    const replyTargetGid = liveState && liveState.replyGroupId ? liveState.replyGroupId : null;
-    const isTargetReplyTurn = Boolean(replyTargetGid && (turn.groupId === replyTargetGid || turn.turnId === replyTargetGid));
-    const shouldMountLiveHere = liveState.isRunning && (isTargetReplyTurn || (!replyTargetGid && isLastTurn));
+    const shouldMountLiveHere = liveState.isRunning && (isTargetReplyNow || (!replyTargetGid && isLastTurn));
 
     if (shouldMountLiveHere) {
       const liveRow = buildLiveRowDom(liveState, room, queuedEntries);
