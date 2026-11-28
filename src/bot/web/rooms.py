@@ -784,6 +784,8 @@ async def handle_api_room_settings(request: web.Request) -> web.Response:
     update_kwargs: dict[str, Any] = {"model": clean_model, "effort": clean_effort}
     if "workdir" in payload:
         update_kwargs["workdir"] = clean_workdir
+    if "addDirs" in payload or "add_dirs" in payload:
+        update_kwargs["add_dirs"] = payload.get("addDirs") if "addDirs" in payload else payload.get("add_dirs")
 
     try:
         current_chat_db.update_room(room_id=target_key, session_id=session_id, **update_kwargs)
@@ -821,6 +823,8 @@ async def handle_api_room_settings(request: web.Request) -> web.Response:
         }
         if "workdir" in payload:
             broadcast_data["workdir"] = clean_workdir
+        if "addDirs" in payload or "add_dirs" in payload:
+            broadcast_data["addDirs"] = updated_room.get("addDirs") if updated_room else None
         await broadcast_fn(broadcast_data)
 
     resp_data: dict[str, Any] = {

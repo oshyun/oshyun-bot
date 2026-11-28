@@ -2100,6 +2100,7 @@ function populateAgentConfigForm(targetAgentId = null) {
     parentAgentId: cfg.parentAgentId || CORE_ROOM_ID,
     roleDescription: cfg.roleDescription || '',
     workdir: cfg.workdir || defaultVaultDir,
+    addDirs: Array.isArray(cfg.addDirs) ? cfg.addDirs : [],
     model: cfg.model || 'gemini-3.8-flash',
     effort: cfg.effort || 'medium',
     childModel: cfg.childModel || cfg.model || 'gemini-3.8-flash',
@@ -2114,6 +2115,7 @@ function populateAgentConfigForm(targetAgentId = null) {
     parentAgentId: CORE_ROOM_ID,
     roleDescription: '',
     workdir: defaultVaultDir,
+    addDirs: [],
     model: 'gemini-3.8-flash',
     effort: 'medium',
     childModel: 'gemini-3.8-flash',
@@ -2171,6 +2173,8 @@ function populateAgentConfigForm(targetAgentId = null) {
   setVal('agent-cfg-emoji', formVals.emoji);
   setVal('agent-cfg-role', formVals.roleDescription);
   setVal('agent-cfg-workdir', formVals.workdir);
+  const addDirsText = Array.isArray(formVals.addDirs) ? formVals.addDirs.join('\n') : (formVals.addDirs || '');
+  setVal('agent-cfg-add-dirs', addDirsText);
   setVal('agent-cfg-child-prompt', formVals.childPromptTemplate);
   setVal('agent-cfg-sys-prompt', formVals.systemPrompt);
 
@@ -2288,6 +2292,28 @@ function setAgentConfigWorkdirPreset(preset) {
   onAgentConfigFieldInput();
 }
 
+function addAgentConfigDirPreset(preset) {
+  const textarea = document.getElementById('agent-cfg-add-dirs');
+  if (!textarea) return;
+  let targetPath = '';
+  if (preset === 'scripts') {
+    const rootPath = (serverStatus && (serverStatus.codeDir || serverStatus.codedir)) || '';
+    targetPath = rootPath ? `${rootPath.replace(/\/+$/, '')}/scripts` : 'scripts';
+  } else if (preset === 'vault') {
+    targetPath = (serverStatus && (serverStatus.vaultDir || serverStatus.workdir)) || '';
+  } else if (preset === 'code') {
+    targetPath = (serverStatus && (serverStatus.codeDir || serverStatus.codedir)) || '';
+  }
+  if (!targetPath) return;
+
+  const currentLines = textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!currentLines.includes(targetPath)) {
+    currentLines.push(targetPath);
+    textarea.value = currentLines.join('\n');
+    onAgentConfigFieldInput();
+  }
+}
+
 function collectAgentConfigFormDraft() {
   const idVal = (document.getElementById('agent-cfg-id')?.value || '').trim();
   const nameVal = (document.getElementById('agent-cfg-name')?.value || '').trim();
@@ -2295,6 +2321,8 @@ function collectAgentConfigFormDraft() {
   const parentVal = (document.getElementById('agent-cfg-parent')?.value || '').trim();
   const roleVal = (document.getElementById('agent-cfg-role')?.value || '').trim();
   const workdirVal = (document.getElementById('agent-cfg-workdir')?.value || '').trim();
+  const addDirsRaw = (document.getElementById('agent-cfg-add-dirs')?.value || '');
+  const addDirsList = addDirsRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0 && !s.startsWith('#'));
   const modelVal = (document.getElementById('agent-cfg-model')?.value || 'gemini-3.8-flash').trim();
   const effortVal = (document.getElementById('agent-cfg-effort')?.value || 'medium').trim();
   const childModelVal = (document.getElementById('agent-cfg-child-model')?.value || modelVal).trim();
@@ -2310,6 +2338,7 @@ function collectAgentConfigFormDraft() {
     parentAgentId: idVal === CORE_ROOM_ID ? null : (parentVal || CORE_ROOM_ID),
     roleDescription: roleVal,
     workdir: workdirVal,
+    addDirs: addDirsList,
     model: modelVal,
     effort: effortVal,
     childModel: childModelVal,

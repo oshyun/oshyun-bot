@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from bot.core.json_store import read_json, write_json_atomic
-from bot.core.paths import AGENT_CONFIGS_FILE, CODEDIR, CUSTOM_INSTRUCTIONS_DIR, INSTRUCTIONS_DIR, RUNTIME_INSTRUCTIONS_DIR, WORKDIR
+from bot.core.paths import AGENT_CONFIGS_FILE, CODEDIR, CUSTOM_INSTRUCTIONS_DIR, INSTRUCTIONS_DIR, ROOT_DIR, RUNTIME_INSTRUCTIONS_DIR, WORKDIR
 
 CORE_ORCHESTRATOR_ROOM_ID = "__core__"
 EXPERT_GENERAL_ROOM_ID = "__expert_general__"
@@ -65,6 +65,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
     """기본 내장 3대 에이전트(__core__, __expert_vault__, __expert_coding__)의 초기 기본 설정을 반환한다."""
     vault_dir = WORKDIR
     code_dir = CODEDIR or WORKDIR
+    scripts_dir = os.path.join(ROOT_DIR, "scripts")
     return {
         CORE_ORCHESTRATOR_ROOM_ID: {
             "id": CORE_ORCHESTRATOR_ROOM_ID,
@@ -77,6 +78,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "sessionNamespace": "core_",
             "roleDescription": "모든 하위 에이전트 및 채팅방(AGY 세션)을 총괄 조율하고 완료 보고를 브리핑하는 최상위 마스터 에이전트",
             "workdir": vault_dir,
+            "addDirs": [scripts_dir] if os.path.isdir(scripts_dir) else [],
             "model": "gemini-3.8-flash",
             "effort": "medium",
             "childModel": "gemini-3.8-flash",
@@ -102,6 +104,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "sessionNamespace": "general_",
             "roleDescription": "특정 도메인 제약 없이 빠르고 자유롭게 대화하는 순수 범용 비서",
             "workdir": vault_dir,
+            "addDirs": [],
             "model": "gemini-3.8-flash",
             "effort": "medium",
             "childModel": "gemini-3.8-flash",
@@ -123,6 +126,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "sessionNamespace": "vault_",
             "roleDescription": "Obsidian 볼트 지식 탐색 및 5대 도메인(건강, 할일, 식재료, 금융, 차량) 동기화 전담 전문가 에이전트",
             "workdir": vault_dir,
+            "addDirs": [vault_dir] if os.path.isdir(vault_dir) else [],
             "model": "gemini-3.8-flash",
             "effort": "medium",
             "childModel": "gemini-3.8-flash",
@@ -149,6 +153,7 @@ def _builtin_defaults() -> dict[str, dict[str, Any]]:
             "sessionNamespace": "coding_",
             "roleDescription": "oshyun-bot 소스코드 개발, 버그 수정, 웹 UI 개선, 단위 테스트 및 배포 총괄 전문가 에이전트",
             "workdir": code_dir,
+            "addDirs": [p for p in (code_dir, scripts_dir) if p and os.path.isdir(p)],
             "model": "gemini-3.8-flash",
             "effort": "medium",
             "childModel": "gemini-3.8-flash",
@@ -247,6 +252,7 @@ def _normalize_agent_record(
         "sessionNamespace": f"{agent_id.strip('_')}_",
         "roleDescription": "사용자 정의 전문 에이전트",
         "workdir": WORKDIR,
+        "addDirs": [],
         "model": "gemini-3.8-flash",
         "effort": "medium",
         "childModel": "gemini-3.8-flash",
@@ -309,6 +315,25 @@ def _normalize_agent_record(
         else bool(base.get("injectChildTemplate", True))
     )
 
+    raw_add_dirs = raw.get("addDirs") if "addDirs" in raw else raw.get("add_dirs")
+    if raw_add_dirs is not None:
+        if isinstance(raw_add_dirs, str):
+            parsed_dirs = [d.strip() for d in raw_add_dirs.splitlines() if d.strip() and not d.strip().startswith("#")]
+        elif isinstance(raw_add_dirs, (list, tuple)):
+            parsed_dirs = [str(d).strip() for d in raw_add_dirs if str(d).strip() and not str(d).strip().startswith("#")]
+        else:
+            parsed_dirs = list(base.get("addDirs", []))
+    else:
+        parsed_dirs = list(base.get("addDirs", []))
+
+    normalized_dirs: list[str] = []
+    seen_dirs: set[str] = set()
+    for d in parsed_dirs:
+        norm = os.path.abspath(os.path.expanduser(d)) if d else ""
+        if norm and norm not in seen_dirs:
+            seen_dirs.add(norm)
+            normalized_dirs.append(norm)
+
     try:
         order_val = int(raw.get("order") if raw.get("order") is not None else base["order"])
     except (TypeError, ValueError):
@@ -325,6 +350,7 @@ def _normalize_agent_record(
         "sessionNamespace": base["sessionNamespace"],
         "roleDescription": role_desc[:300],
         "workdir": workdir,
+        "addDirs": normalized_dirs,
         "model": model,
         "effort": effort,
         "childModel": child_model,
@@ -337,6 +363,25 @@ def _normalize_agent_record(
         "order": order_val,
         "updatedAt": float(raw.get("updatedAt") or time.time()),
     }
+
+
+def sanitize_add_dirs(dirs: list[str] | None) -> list[str]:
+    """존재하는 유효한 디렉토리 경로만 반환한다 (중복 제거)."""
+    if not dirs:
+        return []
+    valid: list[str] = []
+    seen: set[str] = set()
+    for d in dirs:
+        if not d or not isinstance(d, str):
+            continue
+        try:
+            norm = os.path.abspath(os.path.expanduser(d.strip()))
+            if os.path.isdir(norm) and norm not in seen:
+                seen.add(norm)
+                valid.append(norm)
+        except Exception:
+            continue
+    return valid
 
 
 _BUILTIN_REPO_MODE_MAP: dict[str, str] = {
@@ -553,6 +598,17 @@ def get_agent_workdir(agent_id: str | None) -> str | None:
     return str(cfg.get("workdir") or "").strip() or None
 
 
+def get_agent_add_dirs(agent_id: str | None) -> list[str]:
+    """에이전트의 사전 정의 add-dir 목록을 반환한다."""
+    cfg = get_agent_config(agent_id)
+    if not cfg:
+        return []
+    raw = cfg.get("addDirs")
+    if isinstance(raw, list):
+        return [str(d) for d in raw if d]
+    return []
+
+
 def upsert_agent_config(payload: dict[str, Any]) -> dict[str, Any]:
     """기존 에이전트 설정을 수정하거나 신규 커스텀 에이전트를 생성·저장한다."""
     if not isinstance(payload, dict):
@@ -719,11 +775,13 @@ def build_agent_prompt_preview(
         f'session-ctl spawn "<작업제목>" "<작업지시>" '
         f'--parent {cfg["id"]} --model {child_model} --effort {child_effort}'
     )
+    add_dirs = cfg.get("addDirs") or []
+    add_dirs_flags = "".join(f' --add-dir {d}' for d in add_dirs)
     agy_child_cli_preview = (
         f'agy -p "<조립된_하위_프롬프트>" --model {child_model} --effort {child_effort} '
         f'--add-dir {os.path.join(INSTRUCTIONS_DIR, "common")} '
-        f'--add-dir {os.path.join(INSTRUCTIONS_DIR, "web")} '
-        f'--add-dir {workdir}'
+        f'--add-dir {os.path.join(INSTRUCTIONS_DIR, "web")}'
+        f'{add_dirs_flags}'
     )
 
     combined_sys = f"{common_md}\n\n{agent_sys_md}".strip() if common_md else agent_sys_md

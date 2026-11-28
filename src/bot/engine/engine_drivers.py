@@ -349,6 +349,7 @@ class BaseEngine(ABC):
         web: bool = False,
         extra_env: dict[str, str] | None = None,
         agent_id: str | None = None,
+        add_dirs: list[str] | None = None,
     ) -> dict:
         """반환 dict: {"cmd": list[str], "env": dict, "workdir": str}"""
         ...
@@ -404,6 +405,7 @@ class ClaudeEngine(BaseEngine):
         web: bool = False,
         extra_env: dict[str, str] | None = None,
         agent_id: str | None = None,
+        add_dirs: list[str] | None = None,
     ) -> dict:
         is_agent_mode = bool(orchestrator or expert_vault or expert_coding or agent_id)
         use_sandbox = (
@@ -543,6 +545,7 @@ class AGYEngine(BaseEngine):
         web: bool = False,
         extra_env: dict[str, str] | None = None,
         agent_id: str | None = None,
+        add_dirs: list[str] | None = None,
     ) -> dict:
         agy_cmd = _resolve_agy_bin()
         is_agent_mode = bool(orchestrator or expert_vault or expert_coding or agent_id)
@@ -586,19 +589,37 @@ class AGYEngine(BaseEngine):
             except Exception:
                 pass
 
+        mounted_dirs: set[str] = set()
         if os.path.isdir(common_dir):
             cmd += ["--add-dir", common_dir]
-        if os.path.isdir(mode_dir):
+            mounted_dirs.add(os.path.realpath(common_dir))
+        if os.path.isdir(mode_dir) and os.path.realpath(mode_dir) not in mounted_dirs:
             cmd += ["--add-dir", mode_dir]
+            mounted_dirs.add(os.path.realpath(mode_dir))
 
-        # orchestrator(마스터)는 볼트를 직접 읽거나 수정하지 않고 하위 에이전트에 위임하므로,
-        # 수천 개 파일이 있는 거대 볼트 디렉토리를 --add-dir에 마운트하여 발생하는 watcher/인덱싱 I/O 부하를 원천 차단한다.
-        if workdir and not orchestrator:
-            cmd += ["--add-dir", workdir]
-        if is_agent_mode:
-            scripts_dir = os.path.join(_ROOT_DIR, "scripts")
-            if os.path.isdir(scripts_dir):
-                cmd += ["--add-dir", scripts_dir]
+        # 사전에 정의되거나 지정된 add_dirs 목록이 있으면 유효성 검증 후 --add-dir 마운트
+        if add_dirs is not None:
+            for d in add_dirs:
+                if not d or not isinstance(d, str):
+                    continue
+                resolved_d = os.path.realpath(os.path.expanduser(d.strip()))
+                if os.path.isdir(resolved_d) and resolved_d not in mounted_dirs:
+                    cmd += ["--add-dir", resolved_d]
+                    mounted_dirs.add(resolved_d)
+        else:
+            # 하위 호환 기본 폴백
+            # orchestrator(마스터)는 볼트를 직접 읽거나 수정하지 않고 하위 에이전트에 위임하므로,
+            # 수천 개 파일이 있는 거대 볼트 디렉토리를 --add-dir에 마운트하여 발생하는 watcher/인덱싱 I/O 부하를 원천 차단한다.
+            if workdir and not orchestrator:
+                real_w = os.path.realpath(workdir)
+                if real_w not in mounted_dirs:
+                    cmd += ["--add-dir", workdir]
+                    mounted_dirs.add(real_w)
+            if is_agent_mode:
+                scripts_dir = os.path.join(_ROOT_DIR, "scripts")
+                if os.path.isdir(scripts_dir) and os.path.realpath(scripts_dir) not in mounted_dirs:
+                    cmd += ["--add-dir", scripts_dir]
+                    mounted_dirs.add(os.path.realpath(scripts_dir))
         if not slash_commands:
             cmd += ["--disable-slash-commands"]
         if session_id:

@@ -1370,6 +1370,27 @@
             <input type="text" id="agent-cfg-workdir" class="input mono" placeholder="/Users/user/... 또는 볼트 하위 상대경로" oninput="onAgentConfigFieldInput()">
           </div>
 
+          <div class="field">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <label for="agent-cfg-add-dirs">추가 참조 디렉토리 (add-dir · agy --add-dir 바인딩)</label>
+              <div style="display:flex;gap:4px;">
+                <button type="button" class="btn xs ghost" onclick="addAgentConfigDirPreset('scripts')" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;">
+                  <span>+ 스크립트</span>
+                </button>
+                <button type="button" class="btn xs ghost" onclick="addAgentConfigDirPreset('vault')" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;">
+                  <span>+ 볼트</span>
+                </button>
+                <button type="button" class="btn xs ghost" onclick="addAgentConfigDirPreset('code')" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;">
+                  <span>+ 코드</span>
+                </button>
+              </div>
+            </div>
+            <textarea id="agent-cfg-add-dirs" class="input mono" rows="3" placeholder="한 줄에 디렉토리 경로 하나씩 입력 (예: /Users/user/repos/oshyun-bot/scripts)" oninput="onAgentConfigFieldInput()" style="resize:vertical;min-height:56px;"></textarea>
+            <div class="setting-desc" style="font-size:11px;color:var(--text-3);margin-top:4px;">
+              에이전트 기동 시 --add-dir로 마운트할 디렉토리 목록입니다. 마스터는 볼트를 제외하고 scripts만 바인딩하여 턴 지연을 방지합니다.
+            </div>
+          </div>
+
           <div class="agent-cfg-grid-2">
             <div class="agent-cfg-subcard">
               <div class="agent-cfg-subcard-title">
