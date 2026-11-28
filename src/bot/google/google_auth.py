@@ -64,7 +64,8 @@ class GoogleAuthManager:
             from google.auth.transport.requests import Request
             from google.oauth2.credentials import Credentials
 
-            creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
+            # scopes 인자를 생략하여 token.json에 실제 부여된 granted scopes를 보존한다
+            creds = Credentials.from_authorized_user_file(self.token_file)
             if creds and creds.expired and creds.refresh_token:
                 logger.info("Google OAuth 토큰 만료됨, 자동 갱신 시도")
                 creds.refresh(Request())
@@ -200,6 +201,14 @@ class GoogleAuthManager:
 
         # 현재 부여된 스코프 및 누락된 필수 스코프 계산
         granted = list(getattr(creds, "scopes", []) or [])
+        if not granted and self.has_token:
+            try:
+                with open(self.token_file, "r", encoding="utf-8") as f:
+                    tok_d = json.load(f)
+                    if isinstance(tok_d, dict) and tok_d.get("scopes"):
+                        granted = list(tok_d["scopes"])
+            except Exception:
+                pass
         info["grantedScopes"] = granted
 
         has_full_mail = "https://mail.google.com/" in granted
