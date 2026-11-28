@@ -1662,6 +1662,7 @@ function shouldStartNewTurnGroup(prevTurn, currentEntry, entryIdx) {
 
 function groupEntriesIntoTurns(activeEntries) {
   const turns = [];
+  const turnByKey = new Map();
   let currentTurn = null;
 
   activeEntries.forEach((entry, idx) => {
@@ -1669,11 +1670,27 @@ function groupEntriesIntoTurns(activeEntries) {
     if (!m) return;
     const role = m.sender || m.role || 'assistant';
     const isUser = (role === 'user');
+    const gid = m.groupId || m.group_id;
+    const existingByGid = (gid && turnByKey.has(gid)) ? turnByKey.get(gid) : null;
+
+    if (existingByGid) {
+      currentTurn = existingByGid;
+      currentTurn.entries.push(entry);
+      if (isUser) {
+        currentTurn.userEntries.push(entry);
+        if (!currentTurn.userEntry) currentTurn.userEntry = entry;
+      }
+      if (isSubAgentSlotMessage(m)) currentTurn.subAgentSlots.push(entry);
+      if (m.isError) currentTurn.hasError = true;
+      if (m.turnTitle) currentTurn.turnTitle = m.turnTitle;
+      if (m.sessionId || m.session_id) currentTurn.sessionId = m.sessionId || m.session_id;
+      currentTurn.lastCreatedAt = m.createdAt || Date.now();
+      return;
+    }
 
     const shouldStartNew = shouldStartNewTurnGroup(currentTurn, entry, idx);
 
     if (shouldStartNew || !currentTurn) {
-      const gid = m.groupId || m.group_id;
       const turnId = gid
         ? `turn_g_${gid}`
         : (isUser
@@ -1694,6 +1711,8 @@ function groupEntriesIntoTurns(activeEntries) {
         lastCreatedAt: m.createdAt || Date.now()
       };
       turns.push(currentTurn);
+      turnByKey.set(turnId, currentTurn);
+      if (gid) turnByKey.set(gid, currentTurn);
     } else {
       currentTurn.entries.push(entry);
       if (isUser) {
@@ -1714,8 +1733,9 @@ function groupEntriesIntoTurns(activeEntries) {
       if (m.sessionId || m.session_id) {
         currentTurn.sessionId = m.sessionId || m.session_id;
       }
-      if (m.groupId || m.group_id) {
-        currentTurn.groupId = m.groupId || m.group_id;
+      if (gid) {
+        currentTurn.groupId = gid;
+        turnByKey.set(gid, currentTurn);
       }
       currentTurn.lastCreatedAt = m.createdAt || Date.now();
     }
@@ -2135,7 +2155,11 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
       if (row) turnBody.appendChild(row);
     });
 
-    if (isLastTurn && liveState.isRunning) {
+    const replyTargetGid = liveState && liveState.replyGroupId ? liveState.replyGroupId : null;
+    const isTargetReplyTurn = Boolean(replyTargetGid && (turn.groupId === replyTargetGid || turn.turnId === replyTargetGid));
+    const shouldMountLiveHere = liveState.isRunning && (isTargetReplyTurn || (!replyTargetGid && isLastTurn));
+
+    if (shouldMountLiveHere) {
       const liveRow = buildLiveRowDom(liveState, room, queuedEntries);
       if (liveRow) turnBody.appendChild(liveRow);
     }

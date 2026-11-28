@@ -372,6 +372,18 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
 
   const clientMsgId = 'c-' + now + '-' + Math.random().toString(36).slice(2, 7);
   const room = getCurrentRoom();
+  const targetRoomId = room ? room.id : 'room-default';
+  const targetSessionId = room ? (room.sessionId || null) : null;
+  const isNew = Boolean(!room || room.isNewSession || !targetSessionId);
+  const replyCtx = (typeof window !== 'undefined' && window._replyContext) ? window._replyContext : null;
+  const targetGroupId = (!isNew && replyCtx && replyCtx.groupId) ? replyCtx.groupId : null;
+  if (typeof clearReplyContext === 'function') {
+    clearReplyContext();
+  }
+  if (isNew && room) {
+    room.activeGroupId = null;
+  }
+
   if (room) {
     const liveState = ensureRoomLiveState(room.id);
     const existingQueuedCount = getQueuedMessagesCount(room);
@@ -382,6 +394,7 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
       role: 'user',
       text: text,
       attachments: uploadedFiles,
+      groupId: targetGroupId || undefined,
       createdAt: now
     };
     if (isQueuedSend) {
@@ -393,6 +406,7 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
       liveState.isRunning = true;
       liveState.jobId = '';
       liveState.asstMsgId = null;
+      liveState.replyGroupId = targetGroupId || null;
       liveState.feed = '생각하는 중…';
       liveState.steps = [];
       liveState.streamText = '';
@@ -422,17 +436,6 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
     console.error('[sendUserMessage UI]', uiErr);
   }
 
-  const targetRoomId = room ? room.id : 'room-default';
-  const targetSessionId = room ? (room.sessionId || null) : null;
-  const isNew = Boolean(!room || room.isNewSession || !targetSessionId);
-  const replyCtx = (typeof window !== 'undefined' && window._replyContext) ? window._replyContext : null;
-  const targetGroupId = (!isNew && replyCtx && replyCtx.groupId) ? replyCtx.groupId : null;
-  if (typeof clearReplyContext === 'function') {
-    clearReplyContext();
-  }
-  if (isNew && room) {
-    room.activeGroupId = null;
-  }
   const isVoice = Boolean(isVoiceTurn);
   lastRequestedRoomId = targetRoomId;
 
