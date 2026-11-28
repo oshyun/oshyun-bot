@@ -1379,12 +1379,12 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       }
     }
 
-    const metaParts = [];
-    if (agentInfo.fullName) metaParts.push(agentInfo.fullName);
-    if (slotOrderNum > 0) metaParts.push(`#${slotOrderNum}`);
-    if (slotStatusText) metaParts.push(slotStatusText);
-    if (m.model) metaParts.push(`${m.model}${headEffort ? ` (${headEffort})` : ''}`);
-    const avatarMetaText = metaParts.join(' · ');
+    const headMetaParts = [];
+    if (agentInfo.fullName) headMetaParts.push(agentInfo.fullName);
+    if (slotOrderNum > 0) headMetaParts.push(`#${slotOrderNum}`);
+    if (slotStatusText) headMetaParts.push(slotStatusText);
+    if (m.model) headMetaParts.push(`${m.model}${headEffort ? ` (${headEffort})` : ''}`);
+    const avatarMetaText = headMetaParts.join(' · ');
     const avatarTitleAttr = avatarMetaText ? ` title="${escapeHtml(avatarMetaText)}"` : '';
     const avatarClickAttr = avatarMetaText ? ` onclick="event.stopPropagation(); if (typeof showToast === 'function') showToast(this.getAttribute('title'), 'info');" style="cursor:pointer;"` : '';
 
