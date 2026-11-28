@@ -1153,8 +1153,6 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     }
     if (childRoomId) {
       row.setAttribute('data-child-room-id', childRoomId);
-      row.classList.add('is-child-navigable');
-      row.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
     }
     if (isQueued) {
       row.appendChild(buildQueueStatusTagDom(idx, qOrder || m.queuePos || 1));
@@ -1162,30 +1160,19 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
 
     const head = document.createElement('div');
     head.className = 'assistant-head';
-    if (childRoomId) {
-      head.classList.add('is-child-clickable');
-      head.setAttribute('data-child-room-id', childRoomId);
-      head.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
-    }
     const avatarErrCls = parsed.statusKind === 'error' ? ' is-error' : '';
     const tagTitleAttr = parsed.badgeTitle ? ` title="${escapeHtml(parsed.badgeTitle)}"` : '';
     const matchedSubRoom = (childRoomId && getRoomById(childRoomId)) || (parsed.roomId ? getRoomById(parsed.roomId) : (parsed.roomTitle ? findChatRoom(parsed.roomTitle) : null));
     const navSubTarget = childRoomId || (matchedSubRoom && matchedSubRoom.id) || parsed.roomId || (matchedSubRoom ? matchedSubRoom.title : (findChatRoom(parsed.roomTitle) ? parsed.roomTitle : ''));
     const displaySubTitle = parsed.roomTitle || (matchedSubRoom && matchedSubRoom.title) || navSubTarget;
-    if (childRoomId) {
-      head.setAttribute('title', `클릭 시 [${displaySubTitle}] 채팅방으로 이동`);
-    }
     const roomChipHtml = navSubTarget
-      ? `<button type="button" class="sub-agent-room-btn" onclick="event.stopPropagation(); ${childRoomId ? `selectRoom('${escapeHtml(childRoomId)}')` : `openSubSessionChip('${escapeHtml(navSubTarget)}', '${escapeHtml(displaySubTitle)}')`};" title="클릭 시 [${escapeHtml(displaySubTitle)}] 채팅방으로 이동">${escapeHtml(displaySubTitle)}<span class="child-nav-hint">↗</span></button>`
+      ? `<button type="button" class="sub-agent-room-btn" onclick="event.stopPropagation(); openSubSessionChip('${escapeHtml(navSubTarget)}', '${escapeHtml(displaySubTitle)}');" title="클릭 시 [${escapeHtml(displaySubTitle)}] 스레드 미리보기 열기">${escapeHtml(displaySubTitle)}<span class="child-nav-hint">↗</span></button>`
       : `<span style="font-weight:600;">${escapeHtml(parsed.roomTitle || '하위 에이전트')}</span>`;
     head.innerHTML = `<span class="assistant-avatar sub-agent-avatar${avatarErrCls}">${ICONS.spark}</span>${roomChipHtml}<span class="model-tag sub-agent-tag is-${parsed.statusKind}"${tagTitleAttr}>${escapeHtml(parsed.metaBadge)}</span>${buildMsgTimeHtml(m.createdAt)}`;
     row.appendChild(head);
 
     const md = document.createElement('div');
-    md.className = 'md sub-agent-md' + (childRoomId ? ' is-child-clickable' : '');
-    if (childRoomId) {
-      md.setAttribute('title', `클릭 시 [${displaySubTitle}] 채팅방으로 이동`);
-    }
+    md.className = 'md sub-agent-md';
     populateCollapsibleSubAgentMarkdownDom(md, m, parsed.bodyMarkdown);
     row.appendChild(md);
 
@@ -1320,17 +1307,10 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const childRoomId = getChildAgentRoomId(m);
     if (childRoomId) {
       row.setAttribute('data-child-room-id', childRoomId);
-      row.classList.add('is-child-navigable');
-      row.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
     }
 
     const head = document.createElement('div');
     head.className = 'assistant-head';
-    if (childRoomId) {
-      head.classList.add('is-child-clickable');
-      head.setAttribute('data-child-room-id', childRoomId);
-      head.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
-    }
     const headEffort = m.effort || (typeof serverStatus !== 'undefined' && serverStatus && serverStatus.effort ? serverStatus.effort : '');
     const modelLabel = m.model ? `<span class="model-tag">${escapeHtml(m.model + (headEffort ? ` (${headEffort})` : ''))}</span>` : '';
     const agentInfo = getAssistantDisplayInfo(getCurrentRoom(), m);

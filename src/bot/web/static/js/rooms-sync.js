@@ -1948,10 +1948,13 @@ function showToast(msg, options = {}) {
 
   toast.appendChild(actionsEl);
 
-  // 토스트 본체 클릭 이벤트 — 해당 채팅방으로 즉시 화면 전환
+  // 토스트 본체 클릭 이벤트 — 하위 방이면 우측 스레드 미리보기 우선, 일반 방이면 화면 전환
   toast.onclick = (e) => {
     if (hasTargetRoom) {
-      if (typeof selectRoom === 'function') {
+      const targetRoom = typeof getRoomById === 'function' ? getRoomById(targetRoomId) : null;
+      if (targetRoom && targetRoom.parentId && typeof openThreadPanel === 'function') {
+        openThreadPanel(null, targetRoomId, targetRoom.title || '하위 작업');
+      } else if (typeof selectRoom === 'function') {
         selectRoom(targetRoomId);
       } else if (typeof openRoom === 'function') {
         openRoom(targetRoomId);
