@@ -23,6 +23,7 @@ DEFAULT_GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
 
@@ -152,6 +153,15 @@ class GoogleAuthManager:
         flow.fetch_token(code=code.strip())
         creds = flow.credentials
         if creds and creds.valid:
+            # Refresh token 보존: 추가 권한 증분 인가 시 구글이 refresh_token을 재발급하지 않은 경우 기존 토큰 유지
+            if not getattr(creds, "refresh_token", None) and os.path.exists(self.token_file):
+                try:
+                    with open(self.token_file, "r", encoding="utf-8") as f:
+                        old_data = json.load(f)
+                        if isinstance(old_data, dict) and old_data.get("refresh_token"):
+                            creds.refresh_token = old_data["refresh_token"]
+                except Exception:
+                    pass
             self._save_credentials(creds)
             return True
         return False
@@ -169,11 +179,14 @@ class GoogleAuthManager:
         return False
 
     def get_account_info(self) -> dict[str, Any]:
-        """연동 상태 및 계정 이메일 조회."""
+        """연동 상태, 계정 이메일 및 스코프 권한 충족 여부 조회."""
         info: dict[str, Any] = {
             "hasCredentials": self.has_credentials,
             "hasToken": self.has_token,
             "isAuthenticated": False,
+            "needsReauth": False,
+            "missingScopes": [],
+            "grantedScopes": [],
             "email": None,
             "scopes": self.scopes,
             "credentialsPath": self.credentials_file,
@@ -184,6 +197,27 @@ class GoogleAuthManager:
             return info
 
         info["isAuthenticated"] = True
+
+        # 현재 부여된 스코프 및 누락된 필수 스코프 계산
+        granted = list(getattr(creds, "scopes", []) or [])
+        info["grantedScopes"] = granted
+
+        has_full_mail = "https://mail.google.com/" in granted
+        missing: list[str] = []
+        for req_scope in self.scopes:
+            if req_scope in granted:
+                continue
+            if has_full_mail and req_scope in (
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.modify",
+            ):
+                continue
+            if hasattr(creds, "has_scopes") and creds.has_scopes([req_scope]):
+                continue
+            missing.append(req_scope)
+
+        info["missingScopes"] = missing
+        info["needsReauth"] = len(missing) > 0
 
         # 계정 이메일 확인 시도 (UserInfo API 또는 ID Token)
         try:

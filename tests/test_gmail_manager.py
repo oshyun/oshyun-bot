@@ -195,6 +195,32 @@ class TestGmailManager(unittest.TestCase):
             self.assertTrue(status["vaultFileExists"])
             self.assertEqual(status["totalCount"], 2)
 
+    def test_trash_and_delete_message(self):
+        mock_service = MagicMock()
+        mock_users = MagicMock()
+        mock_messages = MagicMock()
+        mock_service.users.return_value = mock_users
+        mock_users.messages.return_value = mock_messages
+        mock_messages.trash.return_value.execute.return_value = {"id": "msg_to_trash"}
+        mock_messages.delete.return_value.execute.return_value = {}
+
+        with patch.object(self.gmail_mgr, "get_service", return_value=mock_service):
+            # 1. trash_message 성공
+            res_trash = self.gmail_mgr.trash_message("msg_to_trash")
+            self.assertTrue(res_trash)
+            mock_messages.trash.assert_called_once_with(userId="me", id="msg_to_trash")
+
+            # 2. delete_message 성공
+            res_delete = self.gmail_mgr.delete_message("msg_to_delete")
+            self.assertTrue(res_delete)
+            mock_messages.delete.assert_called_once_with(userId="me", id="msg_to_delete")
+
+            # 3. 빈 message_id 예외 발생
+            with self.assertRaises(ValueError):
+                self.gmail_mgr.trash_message("")
+            with self.assertRaises(ValueError):
+                self.gmail_mgr.delete_message("")
+
 
 if __name__ == "__main__":
     unittest.main()

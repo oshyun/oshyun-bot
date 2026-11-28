@@ -180,6 +180,32 @@ class GmailManager:
 
         return results
 
+    def trash_message(self, message_id: str) -> bool:
+        """메일을 휴지통으로 이동한다 (gmail.modify 권한 필요)."""
+        if not message_id:
+            raise ValueError("message_id가 필요합니다.")
+        service = self.get_service()
+        try:
+            service.users().messages().trash(userId="me", id=message_id).execute()
+            logger.info("Gmail 메시지 휴지통 이동 완료: %s", message_id)
+            return True
+        except Exception as exc:
+            logger.error("Gmail 메시지 휴지통 이동 실패 [%s]: %s", message_id, exc)
+            raise
+
+    def delete_message(self, message_id: str) -> bool:
+        """메일을 영구 삭제한다 (gmail.modify 권한 필요)."""
+        if not message_id:
+            raise ValueError("message_id가 필요합니다.")
+        service = self.get_service()
+        try:
+            service.users().messages().delete(userId="me", id=message_id).execute()
+            logger.info("Gmail 메시지 영구 삭제 완료: %s", message_id)
+            return True
+        except Exception as exc:
+            logger.error("Gmail 메시지 영구 삭제 실패 [%s]: %s", message_id, exc)
+            raise
+
     def get_unread_count(self) -> int:
         """읽지 않은 메일 개수를 신속하게 조회."""
         try:
