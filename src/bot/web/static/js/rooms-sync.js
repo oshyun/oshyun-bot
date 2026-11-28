@@ -1818,8 +1818,62 @@ function showToast(msg, options = {}) {
   const textMsg = String(msg || '').trim();
   if (!textMsg) return;
 
-  toast.innerHTML = '';
+  // 상태 타입 파악 (success, error, warning, info)
+  let statusType = opts.type || (opts.isError ? 'error' : null);
+  if (!statusType) {
+    const lower = textMsg.toLowerCase();
+    if (lower.includes('실패') || lower.includes('오류') || lower.includes('에러') || lower.includes('error') || lower.includes('failed')) {
+      statusType = 'error';
+    } else if (lower.includes('경고') || lower.includes('주의') || lower.includes('warning')) {
+      statusType = 'warning';
+    } else if (lower.includes('완료') || lower.includes('성공') || lower.includes('저장') || lower.includes('복원') || lower.includes('연동 완료') || lower.includes('시작되었습니다')) {
+      statusType = 'success';
+    } else {
+      statusType = 'info';
+    }
+  }
 
+  toast.innerHTML = '';
+  toast.className = ''; // 기존 상태 클래스 초기화
+  toast.classList.add(`toast-${statusType}`);
+
+  // 1. 상태별 SVG 아이콘 뱃지 박스
+  const iconBox = document.createElement('div');
+  iconBox.className = 'toast-icon-box';
+  iconBox.setAttribute('aria-hidden', 'true');
+
+  let iconSvg = '';
+  if (statusType === 'error') {
+    // Alert Circle
+    iconSvg = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="8"></circle>
+      <line x1="10" y1="6" x2="10" y2="10"></line>
+      <line x1="10" y1="14" x2="10.01" y2="14"></line>
+    </svg>`;
+  } else if (statusType === 'warning') {
+    // Triangle Alert
+    iconSvg = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 2.86L18.7 16.71c.36.6.01 1.29-.68 1.29H1.98c-.69 0-1.04-.69-.68-1.29L9.71 2.86a.79.79 0 0 1 1.38 0z"></path>
+      <line x1="10" y1="8" x2="10" y2="12"></line>
+      <line x1="10" y1="15" x2="10.01" y2="15"></line>
+    </svg>`;
+  } else if (statusType === 'success') {
+    // Check
+    iconSvg = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="16 6 8.5 13.5 4 9"></polyline>
+    </svg>`;
+  } else {
+    // Info / General
+    iconSvg = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="8"></circle>
+      <line x1="10" y1="14" x2="10" y2="10"></line>
+      <line x1="10" y1="7" x2="10.01" y2="7"></line>
+    </svg>`;
+  }
+  iconBox.innerHTML = iconSvg;
+  toast.appendChild(iconBox);
+
+  // 2. 텍스트 컨텐트 영역
   const contentEl = document.createElement('div');
   contentEl.className = 'toast-content';
 
@@ -1827,14 +1881,18 @@ function showToast(msg, options = {}) {
   msgEl.className = 'toast-message';
   msgEl.textContent = textMsg;
   contentEl.appendChild(msgEl);
+  toast.appendChild(contentEl);
+
+  // 3. 액션 그룹 (이동 뱃지 + 닫기 버튼)
+  const actionsEl = document.createElement('div');
+  actionsEl.className = 'toast-actions';
 
   const hasTargetRoom = Boolean(targetRoomId);
-
   if (hasTargetRoom) {
     const actionBadge = document.createElement('span');
     actionBadge.className = 'toast-action-badge';
-    actionBadge.textContent = '이동 →';
-    contentEl.appendChild(actionBadge);
+    actionBadge.innerHTML = `<span>이동</span><svg class="toast-action-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" style="width: 11px; height: 11px;"><path d="M6 12L10 8L6 4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    actionsEl.appendChild(actionBadge);
     toast.classList.add('clickable');
     toast.title = '클릭하여 해당 대화방으로 이동';
   } else {
@@ -1842,19 +1900,19 @@ function showToast(msg, options = {}) {
     toast.removeAttribute('title');
   }
 
-  toast.appendChild(contentEl);
-
   // 닫기(X) 버튼 추가 — 방 이동 없이 토스트만 닫히도록 이벤트 버블링 분리(stopPropagation)
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'toast-close-btn';
   closeBtn.setAttribute('aria-label', '닫기');
-  closeBtn.innerHTML = '&times;';
+  closeBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"></path></svg>`;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     hideToast();
   });
-  toast.appendChild(closeBtn);
+  actionsEl.appendChild(closeBtn);
+
+  toast.appendChild(actionsEl);
 
   // 토스트 본체 클릭 이벤트 — 해당 채팅방으로 즉시 화면 전환
   toast.onclick = (e) => {
