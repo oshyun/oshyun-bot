@@ -1432,18 +1432,17 @@ body.app-ready #sb-initial-skeleton {
 
 .chat-turn-container {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: none;
+  transition: border-color 0.15s ease;
   overflow: hidden;
 }
 
 .chat-turn-container:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .chat-turn-container.is-collapsed {
@@ -1456,9 +1455,9 @@ body.app-ready #sb-initial-skeleton {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
-  background: var(--bg-subtle);
+  gap: 10px;
+  padding: 9px 14px;
+  background: transparent;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;

@@ -1335,9 +1335,6 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       m.bypassedFromRoomId
     );
     const slotOrderNum = (typeof m._slotOrder === 'number' && m._slotOrder > 0) ? m._slotOrder : 0;
-    const slotOrderBadgeHtml = slotOrderNum > 0
-      ? `<span class="slot-order-badge" title="발주 순서 #${slotOrderNum}">#${slotOrderNum}</span>`
-      : '';
     if (isBypassOrSlot) {
       row.classList.add('sub-agent-slot-row');
       if (slotOrderNum > 0) {
@@ -1351,17 +1348,13 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId || '');
     const effectiveThreadRoomId = targetThreadRoomId || childRoomId || '';
     const effectiveThreadTitle = targetThreadTitle || subRoomTitle || agentInfo.name;
-    if (effectiveThreadRoomId) {
-      head.setAttribute('title', `클릭 시 [${effectiveThreadTitle}] 작업 스레드 열기`);
-    }
 
     const threadBtnHtml = effectiveThreadRoomId
       ? `<button type="button" class="btn sm ghost btn-open-thread-inline" onclick="event.stopPropagation();openThreadPanel('${escapeHtml(targetThreadTaskId || '')}', '${escapeHtml(effectiveThreadRoomId)}', '${escapeHtml(effectiveThreadTitle)}')" title="우측 스레드 패널에서 실행 단계 및 로그 보기"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>스레드</span></button>`
       : '';
 
-    const childBadgeHtml = '';
-
     let slotStatusPillHtml = '';
+    let slotStatusText = '';
     if (isBypassOrSlot) {
       const childLive = childRoomId && typeof roomLiveStates !== 'undefined' ? roomLiveStates[childRoomId] : null;
       const isSlotPending = !String(m.text || '').trim() && (
@@ -1376,15 +1369,26 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       );
       if (isSlotPending) {
         const isQ = bypassStepObj && bypassStepObj.status === 'queued' && !(childLive && childLive.isRunning);
-        slotStatusPillHtml = `<span class="model-tag slot-status-pill ${isQ ? 'is-queued' : 'is-running'}"><span class="slot-spin-dot"></span><span class="slot-status-label">${isQ ? '대기 중' : '실행 중'}</span></span>`;
+        slotStatusText = isQ ? '대기 중' : '실행 중';
+        slotStatusPillHtml = `<span class="model-tag slot-status-pill ${isQ ? 'is-queued' : 'is-running'}"><span class="slot-spin-dot"></span><span class="slot-status-label">${slotStatusText}</span></span>`;
       } else if (isErr) {
+        slotStatusText = '중단/오류';
         slotStatusPillHtml = `<span class="model-tag slot-status-pill is-error"><span class="slot-status-label">중단/오류</span></span>`;
       } else {
-        slotStatusPillHtml = `<span class="model-tag slot-status-pill is-done"><span class="slot-status-label">완료</span></span>`;
+        slotStatusText = '완료';
       }
     }
 
-    head.innerHTML = `${slotOrderBadgeHtml}<span class="assistant-avatar ${agentInfo.avatarCls}">${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${childBadgeHtml}${slotStatusPillHtml}${modelLabel}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
+    const metaParts = [];
+    if (agentInfo.fullName) metaParts.push(agentInfo.fullName);
+    if (slotOrderNum > 0) metaParts.push(`#${slotOrderNum}`);
+    if (slotStatusText) metaParts.push(slotStatusText);
+    if (m.model) metaParts.push(`${m.model}${headEffort ? ` (${headEffort})` : ''}`);
+    const avatarMetaText = metaParts.join(' · ');
+    const avatarTitleAttr = avatarMetaText ? ` title="${escapeHtml(avatarMetaText)}"` : '';
+    const avatarClickAttr = avatarMetaText ? ` onclick="event.stopPropagation(); if (typeof showToast === 'function') showToast(this.getAttribute('title'), 'info');" style="cursor:pointer;"` : '';
+
+    head.innerHTML = `<span class="assistant-avatar ${agentInfo.avatarCls}"${avatarTitleAttr}${avatarClickAttr}>${agentInfo.avatarIcon}</span><span class="assistant-name" title="${escapeHtml(agentInfo.fullName)}">${escapeHtml(agentInfo.name)}</span>${agentInfo.roleBadgeHtml}${slotStatusPillHtml}${buildMsgTimeHtml(m.createdAt)}${threadBtnHtml}`;
     row.appendChild(head);
 
     const toolSteps = filterToolSteps(m.steps);
@@ -2105,16 +2109,13 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     const chevIcon = isCollapsed ? (ICONS.chevDown || '▼') : (ICONS.chevUp || '▲');
     headerBar.innerHTML = `
       <div class="turn-header-left">
-        <span class="turn-seq-badge">#${turnIdx + 1}</span>
         <span class="turn-query-preview">${escapeHtml(userPreview)}</span>
         ${queryCountBadgeHtml}
       </div>
       <div class="turn-header-right">
-        ${subAgentBadgeHtml}
         ${turnStatusBadgeHtml}
         <button type="button" class="btn sm ghost btn-turn-accordion-toggle" aria-expanded="${!isCollapsed}" aria-label="${isCollapsed ? '대화 펼치기' : '대화 접기'}" onclick="event.stopPropagation(); toggleTurnAccordion('${escapeHtml(room.id)}', '${escapeHtml(turnId)}')">
           ${chevIcon}
-          <span class="turn-toggle-text">${isCollapsed ? '펼치기' : '접기'}</span>
         </button>
       </div>
     `;
