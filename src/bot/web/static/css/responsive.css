@@ -339,7 +339,7 @@ body.is-pinching-font {
     padding: 4px;
   }
   .topbar-title-btn span.t {
-    max-width: 9.5ch;
+    max-width: 8ch;
   }
   .topbar-actions {
     gap: 4px;
@@ -359,8 +359,8 @@ body.is-pinching-font {
   }
   .topbar-model-pill {
     height: 28px;
-    padding: 0 6px;
-    gap: 3px;
+    padding: 0 5px;
+    gap: 2.5px;
   }
   .topbar-model-pill .pill-spark {
     width: 12px;
