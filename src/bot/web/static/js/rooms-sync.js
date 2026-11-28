@@ -2281,7 +2281,7 @@ function populateAgentConfigForm(targetAgentId = null) {
       if (editingAgentId) forbiddenIds.add(editingAgentId);
 
       const parentOptions = [
-        `<option value="${CORE_ROOM_ID}">👑 마스터 직속 (${CORE_ROOM_ID})</option>`
+        `<option value="${CORE_ROOM_ID}">마스터 직속 (${CORE_ROOM_ID})</option>`
       ];
 
       (agentConfigs || []).forEach(a => {
