@@ -123,6 +123,12 @@ def cancel_slot_message_for_task(task_id: str, room_id: str, reason: str = "사�
         finishedAt=_now_done,
         error=reason[:400],
     )
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    if current_chat_db and hasattr(current_chat_db, "update_room_status"):
+        try:
+            current_chat_db.update_room_status(room_id, "failed", active_job_id=None, run_updated_at=_now_done)
+        except Exception:
+            pass
     poke_master_supervisor()
 
 
@@ -173,6 +179,14 @@ async def _finalize_orchestrator_completion(
                 finishedAt=_now_done,
                 error=(error_text or result_text)[:400],
             )
+
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    if current_chat_db and hasattr(current_chat_db, "update_room_status"):
+        try:
+            final_status = "failed" if (is_user_aborted or not is_success or status in ("failed", "cancelled")) else "completed"
+            current_chat_db.update_room_status(room_id, final_status, active_job_id=None, run_updated_at=time.time())
+        except Exception as st_err:
+            logger.debug("[agent_reporting] 방(%s) %s 상태 DB 갱신 경고: %s", room_id, status, st_err)
 
     await _invoke_on_complete_hook(
         on_complete,

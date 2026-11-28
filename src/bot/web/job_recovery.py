@@ -370,6 +370,17 @@ async def _recover_web_jobs() -> None:
     await _restore_pending_room_turns()
     await _recover_startup_placeholders()
 
+    # DB 내 running 상태인 방들 중 실제 살아있는 detached 프로세스가 없는 고아 룸 클린업
+    current_chat_db = _get_mod_attr("chat_db", chat_db)
+    if current_chat_db and hasattr(current_chat_db, "cleanup_stale_running_rooms"):
+        try:
+            live_job_ids = set(_load_web_jobs().keys())
+            cleaned_stale = current_chat_db.cleanup_stale_running_rooms(live_job_ids)
+            if cleaned_stale > 0:
+                logger.info("[web_jobs] 기동 시 DB 고아 running 대화방 %d건 정리 완료", cleaned_stale)
+        except Exception as cl_err:
+            logger.debug("[web_jobs] DB 고아 running 룸 정리 예외: %s", cl_err)
+
 async def _recover_startup_placeholders() -> int:
     """웹 서버 시작 시, web_jobs에 등록되지 않았지만 DB에 빈 플레이스홀더('text'=='')로 남아있는 고아 메시지를 복구한다."""
     current_chat_db = _get_mod_attr("chat_db", chat_db)

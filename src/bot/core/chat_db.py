@@ -117,7 +117,10 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
                 effort TEXT DEFAULT NULL,
                 workdir TEXT DEFAULT NULL,
                 parent_agent_id TEXT DEFAULT NULL,
-                add_dirs TEXT DEFAULT NULL
+                add_dirs TEXT DEFAULT NULL,
+                status TEXT DEFAULT 'idle',
+                active_job_id TEXT DEFAULT NULL,
+                run_updated_at REAL DEFAULT NULL
             );
         """)
         conn.execute("""
@@ -196,8 +199,28 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
         except sqlite3.OperationalError:
             pass
 
+        # rooms 테이블 status, active_job_id, run_updated_at 컬럼 누락 시 하위 호환 추가
+        try:
+            conn.execute("ALTER TABLE rooms ADD COLUMN status TEXT DEFAULT 'idle';")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE rooms ADD COLUMN active_job_id TEXT DEFAULT NULL;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE rooms ADD COLUMN run_updated_at REAL DEFAULT NULL;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rooms_archived ON rooms(is_archived, updated_at DESC);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rooms_parent_agent ON rooms(parent_agent_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status);")
 
         # 밀리초 단위(> 100억)로 저장된 기존 타임스탬프를 초 단위로 자동 정규화 (1회 보정)
         conn.execute("UPDATE rooms SET updated_at = updated_at / 1000.0 WHERE updated_at > 10000000000;")
@@ -555,6 +578,9 @@ def update_room(
     workdir: Any = _UNSET,
     parent_agent_id: Any = _UNSET,
     add_dirs: Any = _UNSET,
+    status: Any = _UNSET,
+    active_job_id: Any = _UNSET,
+    run_updated_at: Any = _UNSET,
     is_archived: bool | None = None,
     updated_at: float | None = None,
     force_title: bool = True,
@@ -623,6 +649,17 @@ def update_room(
                 params.append(json.dumps(parsed, ensure_ascii=False) if parsed else None)
             else:
                 params.append(None)
+        if status is not _UNSET:
+            clean_st = str(status).strip().lower() if status else "idle"
+            updates.append("status = ?")
+            params.append(clean_st)
+        if active_job_id is not _UNSET:
+            clean_jid = str(active_job_id).strip() if (active_job_id and str(active_job_id).strip()) else None
+            updates.append("active_job_id = ?")
+            params.append(clean_jid)
+        if run_updated_at is not _UNSET:
+            updates.append("run_updated_at = ?")
+            params.append(_parse_timestamp(run_updated_at, default=now) if run_updated_at is not None else None)
         if is_archived is not None:
             updates.append("is_archived = ?")
             params.append(1 if is_archived else 0)
@@ -794,6 +831,9 @@ def update_message(
 
 
 def _normalize_room_dict_payload(d: dict) -> dict:
+    d["status"] = d.get("status") or "idle"
+    d["activeJobId"] = d.get("activeJobId") or d.get("active_job_id")
+    d["runUpdatedAt"] = d.get("runUpdatedAt") or d.get("run_updated_at")
     d["isNewSession"] = not bool(d.get("sessionId"))
     d["isArchived"] = bool(d.get("isArchived"))
     d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
@@ -893,6 +933,10 @@ def get_rooms(
                 r.effort,
                 r.workdir,
                 r.parent_agent_id AS parentAgentId,
+                r.add_dirs AS addDirs,
+                COALESCE(r.status, 'idle') AS status,
+                r.active_job_id AS activeJobId,
+                r.run_updated_at AS runUpdatedAt,
                 (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
                 (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild
             FROM rooms r
@@ -954,6 +998,10 @@ def search_rooms(
                 r.effort,
                 r.workdir,
                 r.parent_agent_id AS parentAgentId,
+                r.add_dirs AS addDirs,
+                COALESCE(r.status, 'idle') AS status,
+                r.active_job_id AS activeJobId,
+                r.run_updated_at AS runUpdatedAt,
                 (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
                 (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild,
                 (
@@ -994,6 +1042,9 @@ _ROOM_SELECT_COLS = """
     r.workdir,
     r.parent_agent_id AS parentAgentId,
     r.add_dirs AS addDirs,
+    COALESCE(r.status, 'idle') AS status,
+    r.active_job_id AS activeJobId,
+    r.run_updated_at AS runUpdatedAt,
     (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
     (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild
 """
@@ -1022,6 +1073,71 @@ def get_room(room_id_or_session_id: str, db_path: str | None = None) -> dict | N
             (target, target),
         )
         return _row_to_room_dict(cur.fetchone())
+
+
+def update_room_status(
+    room_id: str,
+    status: str,
+    *,
+    active_job_id: str | None = None,
+    run_updated_at: float | None = None,
+    db_path: str | None = None,
+) -> bool:
+    """대화방의 실행 상태(idle, running, completed, failed) 및 관련 job ID를 원자적으로 갱신한다."""
+    rid = str(room_id or "").strip()
+    if not rid:
+        return False
+    clean_st = str(status).strip().lower() if status else "idle"
+    ts = run_updated_at if run_updated_at is not None else time.time()
+    clean_jid = str(active_job_id).strip() if (active_job_id and str(active_job_id).strip()) else None
+
+    with get_connection(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE rooms
+            SET status = ?,
+                active_job_id = ?,
+                run_updated_at = ?
+            WHERE id = ? OR session_id = ?;
+            """,
+            (clean_st, clean_jid, ts, rid, rid),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def cleanup_stale_running_rooms(
+    active_job_ids: set[str] | list[str],
+    db_path: str | None = None,
+) -> int:
+    """서버 기동 또는 복구 시, 활성 job_id가 없는 running 룸들을 failed 로 일괄 정리한다."""
+    valid_jids = {str(j).strip() for j in active_job_ids if j and str(j).strip()}
+    with get_connection(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, active_job_id FROM rooms WHERE status = 'running';")
+        rows = cur.fetchall()
+        stale_ids = []
+        for r in rows:
+            jid = r["active_job_id"]
+            if not jid or jid not in valid_jids:
+                stale_ids.append(r["id"])
+        if stale_ids:
+            now = time.time()
+            placeholders = ",".join("?" for _ in stale_ids)
+            cur.execute(
+                f"""
+                UPDATE rooms
+                SET status = 'failed',
+                    active_job_id = NULL,
+                    run_updated_at = ?
+                WHERE id IN ({placeholders});
+                """,
+                [now, *stale_ids],
+            )
+            conn.commit()
+            return len(stale_ids)
+        return 0
 
 
 def archive_room(

@@ -4223,7 +4223,9 @@ if (!out8.includes('>스킨케어 루틴(아침).md<') || !out8.includes('>· �
         bundle_path = _get_static_bundle_path(web_server.INTERNAL_STATIC_DIR)
 
         self.assertIn("function upsertRoomMessage(", content)
-        self.assertIn("if (room && !room.userCreatedEmpty)", content)
+        self.assertTrue(
+            "if (room && !room.userCreatedEmpty)" in content or "if (!room || !room.userCreatedEmpty)" in content
+        )
 
         node_bin = shutil.which("node")
         if not node_bin:

@@ -376,6 +376,12 @@ async def execute_chat_turn(
     _room_live_feeds[room_key] = "생각하는 중…"
     _room_live_snapshots[room_key] = live_snapshot
 
+    if current_chat_db and hasattr(current_chat_db, "update_room_status"):
+        try:
+            current_chat_db.update_room_status(room_key, "running", active_job_id=job_id, run_updated_at=start_timestamp)
+        except Exception as st_err:
+            logger.debug("[turn_execution] 방(%s) running 상태 DB 갱신 경고: %s", room_key, st_err)
+
     if task_id:
         master_tasks.update_task(
             task_id,
@@ -1021,6 +1027,12 @@ async def execute_chat_turn(
     if delegated_subagents:
         result_payload["delegatedRooms"] = delegated_subagents
     _room_live_snapshots.pop(room_key, None)
+    if current_chat_db and hasattr(current_chat_db, "update_room_status"):
+        try:
+            final_turn_st = "failed" if is_turn_error else "completed"
+            current_chat_db.update_room_status(room_key, final_turn_st, active_job_id=None, run_updated_at=completed_at)
+        except Exception:
+            pass
     await current_broadcast(result_payload)
     build_status_fn = _get_mod_attr("build_status_payload", None)
     if build_status_fn:

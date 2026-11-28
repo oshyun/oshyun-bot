@@ -35,7 +35,7 @@ class TestTurnAccordionContainer(unittest.TestCase):
     def test_index_html_has_updated_cache_burst_versions(self):
         index_html = (self.static_dir / "index.html").read_text(encoding="utf-8")
         self.assertIn('/css/chat.css?v=25', index_html)
-        self.assertIn('/js/messages.js?v=27', index_html)
+        self.assertIn('/js/messages.js?v=28', index_html)
         self.assertIn('/js/core.js?v=26', index_html)
 
 if __name__ == "__main__":

@@ -753,6 +753,13 @@ async def _watch_and_finish_web_job(
 
         poke_master_supervisor()
 
+        if current_chat_db and hasattr(current_chat_db, "update_room_status"):
+            try:
+                final_watch_st = "completed" if is_success else "failed"
+                current_chat_db.update_room_status(room_id, final_watch_st, active_job_id=None, run_updated_at=time.time())
+            except Exception:
+                pass
+
         try:
             await current_broadcast({
                 "type": "result",

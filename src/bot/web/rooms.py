@@ -346,6 +346,9 @@ def _load_chat_rooms_index() -> list[dict]:
             "model": None,
             "effort": None,
             "workdir": None,
+            "status": "idle",
+            "activeJobId": None,
+            "runUpdatedAt": None,
         }
 
         agent_cfg = agent_configs.get_agent_config(canonical_id) if canonical_id in all_orch_ids_set else None
@@ -375,6 +378,12 @@ def _load_chat_rooms_index() -> list[dict]:
                 merged["effort"] = r["effort"]
             if r.get("workdir") and not merged.get("workdir"):
                 merged["workdir"] = str(r["workdir"]).strip()
+            if r.get("status") and (merged["status"] == "idle" or r.get("status") == "running"):
+                merged["status"] = r["status"]
+            if r.get("activeJobId") and not merged.get("activeJobId"):
+                merged["activeJobId"] = r["activeJobId"]
+            if r.get("runUpdatedAt") and (not merged.get("runUpdatedAt") or r["runUpdatedAt"] > merged["runUpdatedAt"]):
+                merged["runUpdatedAt"] = r["runUpdatedAt"]
             rtitle = str(r.get("title") or "").strip()
             if rtitle and rtitle not in ("새 대화", "대화방"):
                 if not merged["title"] or merged["title"] in ("새 대화", "대화방") or canonical_id in all_orch_ids_set:

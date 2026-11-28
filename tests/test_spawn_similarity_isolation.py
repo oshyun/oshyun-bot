@@ -18,10 +18,15 @@ class TestSpawnSimilarityIsolation(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="test_spawn_isolation_")
         self.db_path = os.path.join(self.test_dir, "test_chat.db")
+        self.state_dir = os.path.join(self.test_dir, "state")
+        os.makedirs(self.state_dir, exist_ok=True)
+        self.patch_chat_db_file = patch("bot.core.paths.CHAT_DB_FILE", self.db_path)
+        self.patch_chat_db_file.start()
         chat_db.init_db(self.db_path)
         self.custom_agent_id = "__custom_ebb5f245__"
 
     def tearDown(self):
+        self.patch_chat_db_file.stop()
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_permanent_and_custom_agents_excluded_from_spawn_similarity(self):
@@ -153,6 +158,13 @@ class TestSpawnSimilarityIsolation(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(data.get("reused", False))
             self.assertNotEqual(data.get("roomId"), self.custom_agent_id)
             self.assertTrue(str(data.get("roomId", "")).startswith("room-"))
+
+            # 테스트 격리: 생성된 임시 하위 방 정리
+            created_rid = data.get("roomId")
+            if created_rid:
+                with chat_db.get_connection() as conn:
+                    conn.execute("DELETE FROM rooms WHERE id = ?;", (created_rid,))
+                    conn.commit()
 
 
 if __name__ == "__main__":

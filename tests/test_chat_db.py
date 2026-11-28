@@ -495,6 +495,44 @@ class TestSessionContinuityAndSync(unittest.TestCase):
         self.assertEqual([r["id"] for r in res_kr], ["room-a"])
         self.assertIn("돈까스", res_kr[0]["matchSnippet"])
 
+    def test_room_status_lifecycle_and_cleanup(self):
+        """대화방의 실행 상태(idle -> running -> completed/failed) 전이와 좀비 클린업을 검증한다."""
+        chat_db.get_or_create_room("room-status-1", title="상태 테스트", db_path=self.db_path)
+        r = chat_db.get_room("room-status-1", db_path=self.db_path)
+        self.assertEqual(r["status"], "idle")
+        self.assertIsNone(r["activeJobId"])
+
+        # 1. 턴 시작 -> running
+        ok = chat_db.update_room_status("room-status-1", "running", active_job_id="job-101", db_path=self.db_path)
+        self.assertTrue(ok)
+        r = chat_db.get_room("room-status-1", db_path=self.db_path)
+        self.assertEqual(r["status"], "running")
+        self.assertEqual(r["activeJobId"], "job-101")
+        self.assertIsNotNone(r["runUpdatedAt"])
+
+        # 2. 턴 완료 -> completed
+        chat_db.update_room_status("room-status-1", "completed", active_job_id=None, db_path=self.db_path)
+        r = chat_db.get_room("room-status-1", db_path=self.db_path)
+        self.assertEqual(r["status"], "completed")
+        self.assertIsNone(r["activeJobId"])
+
+        # 3. 좀비 클린업: running 상태로 남아있는 고아 방들 정리
+        chat_db.get_or_create_room("room-zombie-1", title="좀비1", db_path=self.db_path)
+        chat_db.get_or_create_room("room-zombie-2", title="좀비2", db_path=self.db_path)
+        chat_db.update_room_status("room-zombie-1", "running", active_job_id="dead-job-1", db_path=self.db_path)
+        chat_db.update_room_status("room-zombie-2", "running", active_job_id="live-job-2", db_path=self.db_path)
+
+        cleaned = chat_db.cleanup_stale_running_rooms(active_job_ids={"live-job-2"}, db_path=self.db_path)
+        self.assertEqual(cleaned, 1)
+
+        r1 = chat_db.get_room("room-zombie-1", db_path=self.db_path)
+        self.assertEqual(r1["status"], "failed")
+        self.assertIsNone(r1["activeJobId"])
+
+        r2 = chat_db.get_room("room-zombie-2", db_path=self.db_path)
+        self.assertEqual(r2["status"], "running")
+        self.assertEqual(r2["activeJobId"], "live-job-2")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -609,6 +609,28 @@ async function loadChatRoomsFromServer(autoSelectFirst = false, _forceServerSync
         applyActiveRunsSnapshot(data.activeRuns, true);
       }
 
+      // DB SSOT 기반 룸 상태 수렴 (Reconciliation):
+      // 서버에서 status !== 'running' (completed, failed, idle)로 확정된 방은 클라이언트의 고착된 isRunning을 즉시 해제
+      if (Array.isArray(data.rooms)) {
+        data.rooms.forEach(rm => {
+          if (rm && rm.id) {
+            const rStatus = String(rm.status || '').toLowerCase();
+            const live = roomLiveStates[rm.id];
+            if (live && live.isRunning && rStatus && rStatus !== 'running') {
+              live.isRunning = false;
+              live.feed = '';
+              live.steps = [];
+              live.streamText = '';
+              live.startedAt = 0;
+              live.queueCount = 0;
+            } else if (rStatus === 'running' && live && !live.isRunning) {
+              live.isRunning = true;
+              if (rm.activeJobId) live.jobId = rm.activeJobId;
+            }
+          }
+        });
+      }
+
       renderRoomList();
       updateSessionBar({ skipMasterUi: true });
       syncMasterModeUi({ loadData: true });
@@ -1756,19 +1778,31 @@ function initUsagePolling() {
   }, USAGE_POLL_INTERVAL_MS);
 
   // 안드로이드 PWA(standalone) 및 모바일 브라우저 라이프사이클 대응:
+  let _lastLifecycleSync = 0;
+  const triggerLifecycleSync = () => {
+    fetchAgyUsage(false);
+    const now = Date.now();
+    if (now - _lastLifecycleSync > 3000) {
+      _lastLifecycleSync = now;
+      if (typeof syncRoomsWithServer === 'function') {
+        syncRoomsWithServer().catch(() => {});
+      }
+    }
+  };
+
   // 1) 탭/앱 전환 및 화면 켜짐 (visibilitychange)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-      fetchAgyUsage(false);
+      triggerLifecycleSync();
     }
   });
 
   // 2) PWA 백그라운드 복귀 및 창 포커스 복원 (focus, pageshow)
   window.addEventListener('focus', () => {
-    fetchAgyUsage(false);
+    triggerLifecycleSync();
   });
   window.addEventListener('pageshow', () => {
-    fetchAgyUsage(false);
+    triggerLifecycleSync();
   });
 }
 

@@ -433,6 +433,7 @@ def _find_similar_orchestrator_room(
     rooms: list[dict] | None = None,
     parent_agent_id: str | None = None,
     exclude_orchestrator_rooms: bool = True,
+    require_messages: bool = True,
 ) -> tuple[dict | None, float]:
     """기존 활성 채팅방 중 질문/주제가 가장 유사한 방과 유사도 점수를 반환한다.
 
@@ -474,12 +475,16 @@ def _find_similar_orchestrator_room(
             continue
 
         # 대화 메시지가 0건인 빈 방(껍데기/취소 잔여물)은 맥락이 없으므로 '기존 맥락 이어하기' 재사용 후보에서 제외
-        msg_count = r.get("messageCount")
-        if msg_count is not None and int(msg_count) <= 0:
-            continue
-        if Array_or_list_msgs := r.get("messages"):
-            if len(Array_or_list_msgs) == 0 and msg_count is None:
-                continue
+        # 단, room_summaries(완료 요약본)가 명시적으로 등록되어 있는 방은 실질적 작업 맥락이 있으므로 배제하지 않는다.
+        if require_messages:
+            has_explicit_summary = bool(room_summaries_map.get(rid))
+            if not has_explicit_summary:
+                msg_count = r.get("messageCount")
+                if msg_count is not None and int(msg_count) <= 0:
+                    continue
+                if Array_or_list_msgs := r.get("messages"):
+                    if len(Array_or_list_msgs) == 0 and msg_count is None:
+                        continue
 
         # parent_agent_id 격리:
         # 1. 특정 부모 에이전트(예: __expert_coding__, __expert_vault__)가 명시된 경우
@@ -551,7 +556,12 @@ def _resolve_orchestrator_target_room(target: str) -> dict | None:
         return db_room
     # 5. 유사 주제 채팅방 탐색 폴백
     similar_room, _ = _find_similar_orchestrator_room(
-        clean, "", include_running=True, rooms=rooms, exclude_orchestrator_rooms=False
+        clean,
+        "",
+        include_running=True,
+        rooms=rooms,
+        exclude_orchestrator_rooms=False,
+        require_messages=False,
     )
     return similar_room
 
