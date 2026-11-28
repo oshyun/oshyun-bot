@@ -454,13 +454,48 @@ function resolveChatRoomStatus(room, roomIdOrDisplay = '') {
     }
   }
 
-  // 1. 실시간 실행 중 여부 확인 (최우선)
+  // 0. Fail-safe: 현재 대화방 타임라인 내에 해당 하위 작업의 바이패스 보고 메시지가 이미 도착해 있는지 확인
+  // 바이패스 완료/오류 메시지가 존재한다는 것은 해당 하위 작업이 이미 끝났음을 나타내는 절대적 증거이다.
+  const curRoom = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
+  if (curRoom && Array.isArray(curRoom.messages) && (roomId || roomIdOrDisplay)) {
+    const checkTargetId = roomId;
+    const checkTargetTitle = String(roomIdOrDisplay || (room && room.title) || '').trim().toLowerCase();
+    const bypassMsg = curRoom.messages.find(m => {
+      if (!m) return false;
+      if (checkTargetId && m.bypassedFromRoomId === checkTargetId) return true;
+      if (Array.isArray(m.steps)) {
+        if (checkTargetId && m.steps.some(s => s && (s.roomId === checkTargetId || s.bypassedFromRoomId === checkTargetId))) return true;
+        if (checkTargetTitle && checkTargetTitle.length >= 2 && m.steps.some(s => s && s.title && String(s.title).trim().toLowerCase() === checkTargetTitle)) return true;
+      }
+      if (checkTargetTitle && checkTargetTitle.length >= 2 && m.subagentTitle && String(m.subagentTitle).trim().toLowerCase() === checkTargetTitle) return true;
+      return false;
+    });
+    if (bypassMsg && !bypassMsg.isSlotPlaceholder && String(bypassMsg.text || '').trim()) {
+      if (checkTargetId && typeof roomLiveStates !== 'undefined' && roomLiveStates && roomLiveStates[checkTargetId]) {
+        roomLiveStates[checkTargetId].isRunning = false;
+        roomLiveStates[checkTargetId].feed = '';
+      }
+      const isErr = Boolean(bypassMsg.isError || (typeof bypassMsg.text === 'string' && (bypassMsg.text.startsWith('⚠️') || bypassMsg.text.startsWith('🛑'))));
+      return isErr ? 'failed' : 'done';
+    }
+  }
+
+  // 1. 실시간 실행 중 여부 확인
   if (roomId) {
     const live = (typeof roomLiveStates !== 'undefined' && roomLiveStates) ? roomLiveStates[roomId] : null;
-    if (live && live.isRunning) return 'running';
-    if (typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns) && serverStatus.activeRuns.some(r => r && (r.roomId === roomId || r.id === roomId))) {
-      return 'running';
+    const hasServerActive = Boolean(typeof serverStatus !== 'undefined' && serverStatus && Array.isArray(serverStatus.activeRuns));
+    const isActiveInServer = hasServerActive && serverStatus.activeRuns.some(r => r && (r.roomId === roomId || r.id === roomId));
+
+    if (live && live.isRunning) {
+      if (hasServerActive && !isActiveInServer) {
+        // 서버의 활성 실행 목록(activeRuns)에 없는 고착된 클라이언트 상태 자동 치유
+        live.isRunning = false;
+        live.feed = '';
+      } else {
+        return 'running';
+      }
     }
+    if (isActiveInServer) return 'running';
   }
 
   // 2. masterTasks 확인 (하위 작업인 경우)
@@ -469,7 +504,7 @@ function resolveChatRoomStatus(room, roomIdOrDisplay = '') {
     if (task) {
       const tStatus = String(task.status || '').toLowerCase();
       if (tStatus === 'running' || tStatus === 'in_progress' || tStatus === 'processing') return 'running';
-      if (tStatus === 'failed' || tStatus === 'error' || tStatus === 'stalled') return 'failed';
+      if (tStatus === 'failed' || tStatus === 'error' || tStatus === 'stalled' || tStatus === 'cancelled') return 'failed';
       if (tStatus === 'done' || tStatus === 'completed' || tStatus === 'success') return 'done';
     }
   }
@@ -478,7 +513,7 @@ function resolveChatRoomStatus(room, roomIdOrDisplay = '') {
   if (room) {
     const rStatus = String(room.status || room.task_status || '').toLowerCase();
     if (rStatus === 'running') return 'running';
-    if (rStatus === 'failed' || rStatus === 'error') return 'failed';
+    if (rStatus === 'failed' || rStatus === 'error' || rStatus === 'cancelled') return 'failed';
     if (rStatus === 'done' || rStatus === 'completed' || rStatus === 'success') return 'done';
 
     // 만약 하위 세션/채팅(isSubtaskOrChildRoom)이라면: 실행 중이 아니면 기본적으로 완료
@@ -496,13 +531,16 @@ function resolveChatRoomStatus(room, roomIdOrDisplay = '') {
   return '';
 }
 
-function updateInlineChatChipsStatus(targetRoomId, explicitStatus = null) {
-  if (!targetRoomId) return;
-  const chips = document.querySelectorAll(`.md-link-chip[data-room-id="${targetRoomId}"]`);
+function updateInlineChatChipsStatus(targetRoomId, explicitStatus = null, targetTitle = '') {
+  if (!targetRoomId && !targetTitle) return;
+  const selectors = [];
+  if (targetRoomId) selectors.push(`.md-link-chip[data-room-id="${targetRoomId}"]`);
+  if (targetTitle) selectors.push(`.md-link-chip[data-title="${targetTitle}"]`);
+  const chips = document.querySelectorAll(selectors.join(','));
   if (!chips || chips.length === 0) return;
 
   let nextStatus = explicitStatus;
-  if (!nextStatus) {
+  if (!nextStatus && targetRoomId) {
     const r = typeof getRoomById === 'function' ? getRoomById(targetRoomId) : null;
     nextStatus = resolveChatRoomStatus(r, targetRoomId);
   }
@@ -513,21 +551,38 @@ function updateInlineChatChipsStatus(targetRoomId, explicitStatus = null) {
     } else {
       chip.removeAttribute('data-status');
     }
+    // title 속성 툴팁도 상태에 맞게 동기화
+    const curTitle = chip.getAttribute('title') || '';
+    if (curTitle) {
+      let updatedTitle = curTitle.replace(/ · 상태: (?:실행 중|완료|실패)/g, '');
+      if (nextStatus === 'running') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 실행 중$1');
+      else if (nextStatus === 'done') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 완료$1');
+      else if (nextStatus === 'failed') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 실패$1');
+      chip.setAttribute('title', updatedTitle);
+    }
   });
 }
 
 function updateAllInlineChatChips() {
-  const chips = document.querySelectorAll('.md-link-chip[data-room-id]');
+  const chips = document.querySelectorAll('.md-link-chip[data-room-id], .md-link-chip[data-title]');
   if (!chips || chips.length === 0) return;
   chips.forEach(chip => {
     const rId = chip.getAttribute('data-room-id');
-    if (!rId) return;
-    const r = typeof getRoomById === 'function' ? getRoomById(rId) : null;
-    const st = resolveChatRoomStatus(r, rId);
+    const title = chip.getAttribute('data-title');
+    const r = (rId && typeof getRoomById === 'function') ? getRoomById(rId) : null;
+    const st = resolveChatRoomStatus(r, rId || title);
     if (st) {
       chip.setAttribute('data-status', st);
     } else {
       chip.removeAttribute('data-status');
+    }
+    const curTitle = chip.getAttribute('title') || '';
+    if (curTitle) {
+      let updatedTitle = curTitle.replace(/ · 상태: (?:실행 중|완료|실패)/g, '');
+      if (st === 'running') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 실행 중$1');
+      else if (st === 'done') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 완료$1');
+      else if (st === 'failed') updatedTitle = updatedTitle.replace(/(\s*\(클릭 시)/, ' · 상태: 실패$1');
+      chip.setAttribute('title', updatedTitle);
     }
   });
 }
@@ -588,8 +643,9 @@ function buildChatRoomChipHtml(room, explicitLabel = '') {
 
   const statusAttr = status ? ` data-status="${escapeHtml(status)}"` : '';
   const roomIdAttr = roomId ? ` data-room-id="${escapeHtml(roomId)}"` : '';
+  const titleAttrProp = display ? ` data-title="${escapeHtml(display)}"` : '';
 
-  return `<button type="button" class="md-link-chip ${roleClass}"${roomIdAttr}${statusAttr} onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}${statusHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+  return `<button type="button" class="md-link-chip ${roleClass}"${roomIdAttr}${titleAttrProp}${statusAttr} onclick="${clickHandler}" title="${escapeHtml(titleAttr)}">${iconSvg}<span class="md-link-label">${escapeHtml(display)}</span>${metaHtml}${statusHtml}<svg class="i ext-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
 }
 
 function ensureRoomLiveState(roomId) {
@@ -1186,15 +1242,26 @@ function handleWsEvent(data) {
         const fallbackStatus = data.type === 'result' ? (data.interrupted ? 'failed' : 'done') : (data.type === 'started' ? 'running' : null);
         updateInlineChatChipsStatus(data.roomId, fallbackStatus);
         if (data.bypassedFromRoomId) {
-          updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done');
+          if (data.type === 'result' && typeof roomLiveStates !== 'undefined' && roomLiveStates && roomLiveStates[data.bypassedFromRoomId]) {
+            roomLiveStates[data.bypassedFromRoomId].isRunning = false;
+            roomLiveStates[data.bypassedFromRoomId].feed = '';
+          }
+          updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done', data.subagentTitle || '');
         }
         if (Array.isArray(data.delegatedRooms)) {
           data.delegatedRooms.forEach(item => {
             if (item && item.roomId) {
               const st = (item.status === 'error' || item.status === 'failed') ? 'failed' : (item.status || 'done');
-              updateInlineChatChipsStatus(item.roomId, st);
+              if (st !== 'running' && typeof roomLiveStates !== 'undefined' && roomLiveStates && roomLiveStates[item.roomId]) {
+                roomLiveStates[item.roomId].isRunning = false;
+                roomLiveStates[item.roomId].feed = '';
+              }
+              updateInlineChatChipsStatus(item.roomId, st, item.title || '');
             }
           });
+        }
+        if (typeof updateAllInlineChatChips === 'function') {
+          updateAllInlineChatChips();
         }
       }
     }
@@ -1453,6 +1520,12 @@ function handleWsEvent(data) {
     if (typeof updateSubAgentChipsStatus === 'function') {
       updateSubAgentChipsStatus(targetRoom.id, 'error', '작업 취소됨', targetRoom.title);
     }
+    if (typeof updateInlineChatChipsStatus === 'function') {
+      updateInlineChatChipsStatus(targetRoom.id, 'failed', targetRoom.title);
+      if (typeof updateAllInlineChatChips === 'function') {
+        updateAllInlineChatChips();
+      }
+    }
     // 발주처 방의 사전 예약 슬롯(.msg-slot-placeholder) 및 우측 스레드 패널 취소 상태 즉시 반영
     if (targetRoom && targetRoom.id) {
       document.querySelectorAll(`.msg-slot-placeholder[data-child-room-id="${targetRoom.id}"]`).forEach(slotCard => {
@@ -1523,18 +1596,72 @@ function handleWsEvent(data) {
     }
 
     liveState.isRunning = remainingQueued > 0;
+
+    // 바이패스 하위 작업 룸의 실시간 상태 리셋 (스피너 고착 방지)
+    if (data.bypassedFromRoomId) {
+      if (typeof roomLiveStates !== 'undefined' && roomLiveStates && roomLiveStates[data.bypassedFromRoomId]) {
+        const bLive = roomLiveStates[data.bypassedFromRoomId];
+        bLive.isRunning = false;
+        bLive.feed = '';
+        bLive.steps = [];
+        bLive.streamText = '';
+        bLive.startedAt = 0;
+        bLive.queueCount = 0;
+      }
+      if (typeof latestMasterTasks !== 'undefined' && Array.isArray(latestMasterTasks)) {
+        latestMasterTasks.forEach(t => {
+          if (t && (t.roomId === data.bypassedFromRoomId || (data.taskId && t.id === data.taskId))) {
+            t.status = data.isSuccess === false ? 'failed' : 'done';
+            t.finishedAt = Date.now() / 1000;
+          }
+        });
+      }
+    }
+    if (Array.isArray(data.delegatedRooms)) {
+      data.delegatedRooms.forEach(item => {
+        if (item && item.roomId) {
+          const st = (item.status === 'error' || item.status === 'failed') ? 'failed' : (item.status || 'done');
+          if (st !== 'running' && typeof roomLiveStates !== 'undefined' && roomLiveStates && roomLiveStates[item.roomId]) {
+            const dLive = roomLiveStates[item.roomId];
+            dLive.isRunning = false;
+            dLive.feed = '';
+            dLive.steps = [];
+            dLive.streamText = '';
+            dLive.startedAt = 0;
+            dLive.queueCount = 0;
+          }
+          if (typeof latestMasterTasks !== 'undefined' && Array.isArray(latestMasterTasks)) {
+            latestMasterTasks.forEach(t => {
+              if (t && (t.roomId === item.roomId || (item.taskId && t.id === item.taskId))) {
+                t.status = st;
+              }
+            });
+          }
+        }
+      });
+    }
+
     if (typeof updateInlineChatChipsStatus === 'function') {
       updateInlineChatChipsStatus(targetRoom.id, remainingQueued > 0 ? 'running' : 'done');
       if (data.bypassedFromRoomId) {
-        updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done');
+        updateInlineChatChipsStatus(data.bypassedFromRoomId, data.isSuccess === false ? 'failed' : 'done', data.subagentTitle || '');
       }
       if (Array.isArray(data.delegatedRooms)) {
         data.delegatedRooms.forEach(item => {
           if (item && item.roomId) {
             const st = (item.status === 'error' || item.status === 'failed') ? 'failed' : (item.status || 'done');
-            updateInlineChatChipsStatus(item.roomId, st);
+            updateInlineChatChipsStatus(item.roomId, st, item.title || '');
           }
         });
+      }
+      if (typeof updateAllInlineChatChips === 'function') {
+        updateAllInlineChatChips();
+      }
+      if (Array.isArray(data.activeRuns) && typeof applyActiveRunsSnapshot === 'function') {
+        applyActiveRunsSnapshot(data.activeRuns, true);
+      }
+      if (typeof loadMasterTasksFromServer === 'function') {
+        loadMasterTasksFromServer();
       }
     }
     liveState.feed = remainingQueued > 0 ? '다음 대기열 질문 실행 준비 중…' : '';

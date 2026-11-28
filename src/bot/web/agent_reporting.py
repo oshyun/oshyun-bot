@@ -23,7 +23,17 @@ import bot.master.master_memory as master_memory
 import bot.master.master_tasks as master_tasks
 
 from bot.web.jobs import _is_task_rec_aborted
-from bot.web.runtime_state import CORE_ORCHESTRATOR_ROOM_ID, EXPERT_CODING_ROOM_ID, EXPERT_GENERAL_ROOM_ID, EXPERT_VAULT_ROOM_ID, _get_mod_attr, _is_orchestrator_room_id, broadcast_ws_json
+from bot.web.runtime_state import (
+    CORE_ORCHESTRATOR_ROOM_ID,
+    EXPERT_CODING_ROOM_ID,
+    EXPERT_GENERAL_ROOM_ID,
+    EXPERT_VAULT_ROOM_ID,
+    _get_mod_attr,
+    _is_orchestrator_room_id,
+    broadcast_ws_json,
+    build_active_runs_payload,
+    poke_master_supervisor,
+)
 
 
 
@@ -113,6 +123,7 @@ def cancel_slot_message_for_task(task_id: str, room_id: str, reason: str = "사�
         finishedAt=_now_done,
         error=reason[:400],
     )
+    poke_master_supervisor()
 
 
 async def _finalize_orchestrator_completion(
@@ -395,6 +406,8 @@ async def _notify_master_agent(
     try:
         current_broadcast = _get_mod_attr("broadcast_ws_json", broadcast_ws_json)
         if current_broadcast:
+            active_runs_fn = _get_mod_attr("build_active_runs_payload", build_active_runs_payload)
+            active_runs = active_runs_fn() if active_runs_fn else []
             await current_broadcast({
                 "type": "result",
                 "roomId": target_ui_room_id,
@@ -414,8 +427,10 @@ async def _notify_master_agent(
                 "silentNotification": True,
                 "delegatedRooms": delegated_rooms,
                 "isSuccess": is_success,
+                "activeRuns": active_runs,
                 "createdAt": time.time(),
             })
+            poke_master_supervisor()
     except Exception as exc:
         logger.error("[web_jobs] 대상 방(%s) 바이패스 웹소켓 브로드캐스트 실패: %s", target_ui_room_id, exc)
 
