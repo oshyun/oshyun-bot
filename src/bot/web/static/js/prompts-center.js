@@ -335,6 +335,10 @@
   }
 
   function showPromptToast(msg, type = 'info') {
+    if (typeof showToast === 'function') {
+      showToast(msg, { type });
+      return;
+    }
     const toast = document.createElement('div');
     toast.className = `toast-pill ${type}`;
     toast.style.position = 'fixed';

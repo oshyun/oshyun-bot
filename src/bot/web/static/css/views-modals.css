@@ -556,25 +556,25 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
-/* ═══ 토스트 (모던 클린 라이트 디자인 시스템) ═══ */
+/* ═══ 토스트 (모던 클린 디자인 시스템 & 시인성 최적화) ═══ */
 #toast {
   position: fixed; left: 50%; bottom: 96px; z-index: 3000;
   transform: translate(-50%, 14px) scale(0.97);
-  min-width: 300px;
+  min-width: 290px;
   max-width: min(92vw, 480px);
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--text);
-  padding: 10px 12px 10px 12px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  padding: 10px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(230, 230, 233, 0.82);
+  border: 1px solid var(--toast-border);
   font-size: calc(13px * var(--ui-scale, 1));
   font-weight: 500;
   line-height: 1.45;
-  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  box-shadow: var(--toast-shadow);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   opacity: 0; pointer-events: none;
-  transition: opacity .24s cubic-bezier(0.16, 1, 0.3, 1), transform .24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .2s ease;
+  transition: opacity .24s cubic-bezier(0.16, 1, 0.3, 1), transform .24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .2s ease, border-color .2s ease;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   box-sizing: border-box;
 }
@@ -588,13 +588,13 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   touch-action: manipulation;
 }
 #toast.clickable:hover {
-  box-shadow: 0 14px 36px -4px rgba(16, 185, 129, 0.14), 0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(16, 185, 129, 0.35);
-  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 14px 36px -4px rgba(16, 185, 129, 0.18), var(--toast-shadow);
+  border-color: var(--toast-border-hover);
   transform: translate(-50%, -2px) scale(1.005);
 }
 #toast.clickable:active {
   transform: translate(-50%, 0) scale(0.995);
-  box-shadow: 0 6px 18px -2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 18px -2px rgba(0, 0, 0, 0.14);
 }
 
 /* 상태별 아이콘 뱃지 박스 */
@@ -606,9 +606,9 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  border: 1px solid rgba(16, 185, 129, 0.22);
+  background: var(--toast-info-icon-bg);
+  color: var(--toast-info-icon-text);
+  border: 1px solid var(--toast-info-border);
   transition: background-color .15s ease, color .15s ease, border-color .15s ease;
 }
 .toast-icon-box svg {
@@ -618,34 +618,34 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 
 /* 상태별 스타일 분기 */
 #toast.toast-success .toast-icon-box {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  border-color: rgba(16, 185, 129, 0.28);
+  background: var(--toast-success-icon-bg);
+  color: var(--toast-success-icon-text);
+  border-color: var(--toast-success-icon-border);
 }
 #toast.toast-info .toast-icon-box {
-  background: rgba(59, 130, 246, 0.10);
-  color: #2563EB;
-  border-color: rgba(59, 130, 246, 0.24);
+  background: var(--toast-info-icon-bg);
+  color: var(--toast-info-icon-text);
+  border-color: var(--toast-info-border);
 }
 #toast.toast-warning .toast-icon-box {
-  background: var(--warning-soft);
-  color: var(--warning);
-  border-color: rgba(217, 119, 6, 0.24);
+  background: var(--toast-warning-icon-bg);
+  color: var(--toast-warning-icon-text);
+  border-color: var(--toast-warning-border);
 }
 #toast.toast-error .toast-icon-box {
-  background: var(--danger-soft);
-  color: var(--danger);
-  border-color: rgba(229, 72, 77, 0.24);
+  background: var(--toast-error-icon-bg);
+  color: var(--toast-error-icon-text);
+  border-color: var(--toast-error-border);
 }
 
 .toast-content {
   display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
 }
 .toast-message {
-  flex: 1; word-break: break-word; line-height: 1.42;
-  color: var(--text);
+  flex: 1; word-break: break-word; line-height: 1.45;
+  color: var(--toast-text);
   font-size: calc(13px * var(--ui-scale, 1));
-  font-weight: 500;
+  font-weight: 550;
   letter-spacing: -0.01em;
 }
 
@@ -660,9 +660,9 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   display: inline-flex; align-items: center; gap: 3px;
   font-size: 11.5px; font-weight: 600;
   padding: 4px 9px; border-radius: 9999px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  color: var(--text-2);
+  background: var(--toast-action-bg);
+  border: 1px solid var(--toast-action-border);
+  color: var(--toast-action-text);
   letter-spacing: -0.2px;
   white-space: nowrap;
   transition: all .15s ease;
@@ -675,7 +675,7 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 
 .toast-close-btn {
   background: transparent; border: none; outline: none;
-  color: var(--text-3);
+  color: var(--toast-text-muted);
   cursor: pointer;
   padding: 0;
   width: 24px;
@@ -690,8 +690,8 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
   height: 14px;
 }
 .toast-close-btn:hover {
-  color: var(--text);
-  background: var(--bg-hover);
+  color: var(--toast-text);
+  background: var(--toast-close-hover);
 }
 
 /* ═══ 홈 화면 바로가기 (PWA 딥링크) 모달 스타일 ═══ */

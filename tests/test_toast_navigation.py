@@ -12,6 +12,8 @@ class TestToastRoomClickNavigation(unittest.TestCase):
 
     def setUp(self):
         self.css_path = os.path.join(_STATIC_DIR, "css", "views-modals.css")
+        self.base_css_path = os.path.join(_STATIC_DIR, "css", "base.css")
+        self.responsive_css_path = os.path.join(_STATIC_DIR, "css", "responsive.css")
         self.sync_path = os.path.join(_STATIC_DIR, "js", "rooms-sync.js")
         self.ws_path = os.path.join(_STATIC_DIR, "js", "ws.js")
         self.memory_path = os.path.join(_STATIC_DIR, "js", "master-memory.js")
@@ -19,6 +21,10 @@ class TestToastRoomClickNavigation(unittest.TestCase):
 
         with open(self.css_path, "r", encoding="utf-8") as f:
             self.css = f.read()
+        with open(self.base_css_path, "r", encoding="utf-8") as f:
+            self.base_css = f.read()
+        with open(self.responsive_css_path, "r", encoding="utf-8") as f:
+            self.responsive_css = f.read()
         with open(self.sync_path, "r", encoding="utf-8") as f:
             self.sync_js = f.read()
         with open(self.ws_path, "r", encoding="utf-8") as f:
@@ -27,6 +33,33 @@ class TestToastRoomClickNavigation(unittest.TestCase):
             self.memory_js = f.read()
         with open(self.html_path, "r", encoding="utf-8") as f:
             self.html = f.read()
+
+    def test_css_toast_tokens_and_visibility(self):
+        """토스트 전용 디자인 토큰(라이트/다크) 및 시인성/대비 스타일 정의 검증."""
+        # base.css 라이트 모드 토큰
+        self.assertIn("--toast-bg:", self.base_css)
+        self.assertIn("--toast-border:", self.base_css)
+        self.assertIn("--toast-text:", self.base_css)
+        self.assertIn("--toast-shadow:", self.base_css)
+
+        # base.css 다크 모드 토큰
+        self.assertIn("@media (prefers-color-scheme: dark)", self.base_css)
+        dark_section = self.base_css.split("@media (prefers-color-scheme: dark)")[1]
+        self.assertIn("--toast-bg:", dark_section)
+        self.assertIn("--toast-text:", dark_section)
+        self.assertIn("--toast-border:", dark_section)
+        self.assertIn("--toast-shadow:", dark_section)
+
+        # views-modals.css에서 하드코딩된 밝은 배경 대신 토큰 사용 검증
+        self.assertNotIn("background: rgba(255, 255, 255, 0.88);", self.css)
+        self.assertIn("background: var(--toast-bg);", self.css)
+        self.assertIn("color: var(--toast-text);", self.css)
+        self.assertIn("border: 1px solid var(--toast-border);", self.css)
+        self.assertIn("box-shadow: var(--toast-shadow);", self.css)
+        self.assertIn(".toast-message", self.css)
+
+        # 모바일 Safe-area 및 반응형 폭 검증
+        self.assertIn("safe-area-inset-bottom", self.responsive_css)
 
     def test_css_toast_clickable_and_hover_styles(self):
         """토스트 표시 시 pointer-events 활성화 및 클릭 가능 토스트 호버 스타일 존재 검증."""
