@@ -64,6 +64,51 @@ def is_simple_greeting_fast_path(text: str) -> bool:
     return cleaned in greetings or cleaned_no_space in greetings
 
 
+def _build_reply_group_context(chat_db_mod, room_key: str, group_id: str) -> str:
+    """이어서 답장(Swipe-to-Reply) 대상 턴의 이전 발화 맥락을 프롬프트용 텍스트로 조립한다."""
+    if not chat_db_mod or not room_key or not group_id:
+        return ""
+    all_msgs = chat_db_mod.get_messages(room_key) or []
+    matched = [m for m in all_msgs if (m.get("groupId") or m.get("group_id")) == group_id]
+
+    # 레거시 턴 폴백 ID(turn_u_<msg_id>)인 경우 해당 유저 메시지와 직후 응답을 수집
+    if not matched and group_id.startswith("turn_u_"):
+        try:
+            target_id = int(group_id.split("turn_u_", 1)[1])
+            collecting = False
+            for m in all_msgs:
+                if m.get("id") == target_id:
+                    collecting = True
+                    matched.append(m)
+                elif collecting:
+                    if (m.get("role") or m.get("sender")) == "user":
+                        break
+                    matched.append(m)
+        except (ValueError, IndexError):
+            pass
+
+    if not matched:
+        return ""
+
+    lines: list[str] = []
+    for m in matched[-6:]:
+        role = str(m.get("role") or m.get("sender") or "assistant").strip()
+        text = str(m.get("text") or "").strip()
+        if not text:
+            continue
+        snippet = " ".join(text.split())[:600]
+        label = "사용자" if role == "user" else "어시스턴트"
+        lines.append(f"- {label}: {snippet}")
+
+    if not lines:
+        return ""
+    return (
+        "[이어서 답장하는 이전 대화 맥락]\n"
+        "사용자가 아래 특정 대화 턴을 지정하여 이어서 질문했습니다. 이 맥락을 기준으로 답변하세요:\n"
+        + "\n".join(lines)
+    )
+
+
 async def execute_chat_turn(
     user_text: str,
     is_voice_mode: bool,
@@ -252,6 +297,14 @@ async def execute_chat_turn(
 
     cur_room_rec = current_chat_db.get_room(room_key) if current_chat_db else None
     parent_agent_id = cur_room_rec.get("parentAgentId") if cur_room_rec else None
+
+    if client_group_id and not raw_prompt and current_chat_db:
+        try:
+            reply_ctx = _build_reply_group_context(current_chat_db, room_key, client_group_id)
+            if reply_ctx:
+                effective_prompt = f"{reply_ctx}\n\n[현재 후속 질문]\n{effective_prompt}"
+        except Exception as rc_err:
+            logger.debug("[turn_execution] 이어서 답장 맥락 주입 생략: %s", rc_err)
 
     if is_orchestrator and not raw_prompt:
         try:

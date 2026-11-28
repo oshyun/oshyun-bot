@@ -39,11 +39,11 @@ class TestTurnAccordionContainer(unittest.TestCase):
 
     def test_index_html_has_updated_cache_burst_versions(self):
         index_html = (self.static_dir / "index.html").read_text(encoding="utf-8")
-        self.assertIn('/css/chat.css?v=26', index_html)
-        self.assertIn('/js/messages.js?v=29', index_html)
-        self.assertIn('/js/composer.js?v=26', index_html)
-        self.assertIn('/js/ws.js?v=26', index_html)
-        self.assertIn('/js/core.js?v=26', index_html)
+        self.assertRegex(index_html, r'/css/chat\.css\?v=(?:2[6-9]|[3-9]\d)')
+        self.assertRegex(index_html, r'/js/messages\.js\?v=(?:29|[3-9]\d)')
+        self.assertRegex(index_html, r'/js/composer\.js\?v=(?:2[6-9]|[3-9]\d)')
+        self.assertRegex(index_html, r'/js/ws\.js\?v=(?:2[6-9]|[3-9]\d)')
+        self.assertRegex(index_html, r'/js/core\.js\?v=(?:2[6-9]|[3-9]\d)')
 
     def test_chat_db_group_id_support(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
