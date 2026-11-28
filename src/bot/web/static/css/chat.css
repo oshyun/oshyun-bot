@@ -446,7 +446,7 @@
 }
 .msg-card-details {
   margin-top: 6px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  border-top: 1px dashed var(--border);
   padding-top: 6px;
 }
 .msg-card-details summary {
@@ -460,18 +460,83 @@
 .msg-card-details summary:hover {
   color: var(--text);
 }
-.msg-card-details pre {
+.msg-card-details pre,
+.msg-error-diag {
   margin-top: 6px;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
   font-size: calc(11px * var(--ui-scale, 1));
-  font-family: monospace;
+  font-family: var(--mono);
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 200px;
   overflow-y: auto;
   color: var(--text-2);
+}
+.msg-error-card.is-compact {
+  padding: 0;
+  background: transparent;
+  border: none;
+  margin-top: 4px;
+}
+.msg-error-details {
+  display: inline-block;
+  max-width: 100%;
+}
+.msg-error-details[open] {
+  display: block;
+}
+.msg-error-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--danger-soft);
+  border: 1px solid rgba(229, 72, 77, 0.25);
+  color: var(--danger);
+  font-size: calc(12px * var(--ui-scale, 1));
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.msg-error-summary::-webkit-details-marker { display: none; }
+.msg-error-summary:hover {
+  border-color: var(--danger);
+}
+.msg-error-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+.msg-error-cat {
+  font-weight: 500;
+  opacity: 0.85;
+}
+.msg-error-chev {
+  display: inline-flex;
+  align-items: center;
+  transition: transform .15s ease;
+}
+.msg-error-chev svg.i {
+  width: 12px;
+  height: 12px;
+}
+.msg-error-details[open] .msg-error-chev {
+  transform: rotate(180deg);
+}
+.msg-error-body {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid rgba(229, 72, 77, 0.22);
 }
 @keyframes chip-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }

@@ -1451,22 +1451,25 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
         if (lastStep.detail) stepDiag += `\n상세: ${String(lastStep.detail).slice(0, 300)}`;
       }
 
+      errCard.className = 'msg-error-card is-compact';
       errCard.innerHTML = `
-        <div class="msg-card-head">
-          <span class="card-icon">⚠️</span>
-          <span>작업 오류 및 중단 안내</span>
-          <span class="card-badge">${escapeHtml(errCategory)}</span>
-        </div>
-        <div class="msg-card-desc">${displayBody ? formatMarkdown(displayBody) : '작업 실행 중 예외가 발생하거나 비정상적으로 중단되었습니다.'}</div>
-        <details class="msg-card-details">
-          <summary>🔍 상세 원인 및 시스템 진단 보기</summary>
-          <pre>${escapeHtml([
-            `• 원인 분류: ${errCategory}`,
-            m.session_id || m.sessionId ? `• 세션 ID: ${m.session_id || m.sessionId}` : '',
-            m.model ? `• 사용 모델: ${m.model}` : '',
-            stepDiag ? `• ${stepDiag}` : '',
-            `• 조치 안내: 네트워크/로그 확인 후 '다시 질문하기' 버튼을 누르거나 ➕ 새 대화로 시작해 보세요.`
-          ].filter(Boolean).join('\n'))}</pre>
+        <details class="msg-error-details">
+          <summary class="msg-error-summary">
+            <span class="msg-error-dot"></span>
+            <span class="msg-error-label">실패</span>
+            <span class="msg-error-cat">${escapeHtml(errCategory)}</span>
+            <span class="msg-error-chev">${ICONS.chevDown || '▾'}</span>
+          </summary>
+          <div class="msg-error-body">
+            <div class="msg-card-desc">${displayBody ? formatMarkdown(displayBody) : '작업 실행 중 예외가 발생하거나 비정상적으로 중단되었습니다.'}</div>
+            <pre class="msg-error-diag">${escapeHtml([
+              `• 원인 분류: ${errCategory}`,
+              m.session_id || m.sessionId ? `• 세션 ID: ${m.session_id || m.sessionId}` : '',
+              m.model ? `• 사용 모델: ${m.model}` : '',
+              stepDiag ? `• ${stepDiag}` : '',
+              `• 조치 안내: 네트워크/로그 확인 후 '다시 질문하기' 버튼을 누르거나 ➕ 새 대화로 시작해 보세요.`
+            ].filter(Boolean).join('\n'))}</pre>
+          </div>
         </details>
       `;
       row.appendChild(errCard);

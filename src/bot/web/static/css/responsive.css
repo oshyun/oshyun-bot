@@ -21,7 +21,7 @@
   .topbar { padding: 0 6px; padding-top: env(safe-area-inset-top); height: calc(52px + env(safe-area-inset-top)); gap: 6px; }
   .topbar-title { justify-content: flex-start; font-size: calc(14.5px * var(--ui-scale, 1)); min-width: 0; flex-shrink: 0; }
   .topbar-title-btn { margin-left: 0; max-width: 100%; min-width: 0; padding: 4px 6px; }
-  .topbar-title-btn span.t { max-width: 16ch; }
+  .topbar-title-btn span.t { max-width: 24ch; }
   .mobile-only { display: inline-flex !important; }
   .desktop-only { display: none !important; }
   .thread { padding: 16px 12px 24px; gap: 18px; }
@@ -321,9 +321,10 @@ body.is-pinching-font {
     display: inline-flex;
     align-items: center;
     gap: 3.5px;
-    padding: 2.5px 6px;
+    height: 28px;
+    padding: 0 9px;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: 999px;
     background: var(--bg-subtle);
     border: 1px solid var(--border);
   }
@@ -348,14 +349,16 @@ body.is-pinching-font {
     padding: 4px;
   }
   .topbar-title-btn span.t {
-    max-width: 8ch;
+    max-width: 10.5ch;
   }
   .topbar-actions {
     gap: 4px;
   }
   .topbar-usage-badge {
     gap: 2.5px;
-    padding: 2px 5px;
+    height: 28px;
+    padding: 0 7px;
+    border-radius: 999px;
     font-size: calc(9.5px * var(--ui-scale, 1));
   }
   .topbar-usage-badge .quota-pill { gap: 2px; }

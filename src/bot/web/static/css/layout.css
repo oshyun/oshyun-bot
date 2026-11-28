@@ -1076,7 +1076,7 @@
 .topbar-title-btn:hover { background: var(--bg-hover); }
 .topbar-title-btn span.t {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 16ch;
+  max-width: 28ch;
 }
 .topbar-title-btn .edit-hint { width: 13px; height: 13px; color: var(--text-3); opacity: 0; transition: opacity .14s; flex-shrink: 0; }
 .topbar-title-btn:hover .edit-hint { opacity: 1; }
@@ -1581,11 +1581,7 @@
   color: var(--accent);
 }
 .pill-spark {
-  width: 13px;
-  height: 13px;
-  stroke-width: 2.2;
-  color: var(--accent);
-  flex-shrink: 0;
+  display: none;
 }
 .pill-model-name {
   overflow: hidden;
