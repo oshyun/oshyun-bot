@@ -130,28 +130,28 @@ const reportMsg = {{
 }};
 const rowReport = sandbox.buildMessageRowDom(reportMsg, 0);
 assert.strictEqual(rowReport.getAttribute('data-child-room-id'), 'room-child-vault');
-assert.ok(rowReport.classList.contains('is-child-navigable'));
+assert.ok(!rowReport.classList.contains('is-child-navigable'), '본문 전체 클릭 하이재킹 비활성화');
 
-// 클릭 인터랙션 테스트 (정상 클릭)
+// handleSafeChildRoomNavigation 가드 테스트 (정상 호출)
 navigatedTo = null;
 selectionText = '';
-rowReport.listeners['click'][0]({{
+sandbox.handleSafeChildRoomNavigation({{
   target: rowReport,
   preventDefault: () => {{}},
   stopPropagation: () => {{}},
   metaKey: false, ctrlKey: false, shiftKey: false
-}});
-assert.strictEqual(navigatedTo, 'room-child-vault', '말풍선 클릭 시 대상 채팅방으로 selectRoom 호출');
+}}, 'room-child-vault');
+assert.strictEqual(navigatedTo, 'room-child-vault', '안전 네비게이션 호출 시 대상 채팅방으로 selectRoom 호출');
 
 // 텍스트 드래그(선택) 중인 경우 방 이동 방지
 navigatedTo = null;
 selectionText = '드래그된 텍스트 복사 시도';
-rowReport.listeners['click'][0]({{
+sandbox.handleSafeChildRoomNavigation({{
   target: rowReport,
   preventDefault: () => {{}},
   stopPropagation: () => {{}},
   metaKey: false, ctrlKey: false, shiftKey: false
-}});
+}}, 'room-child-vault');
 assert.strictEqual(navigatedTo, null, '텍스트 드래그 중에는 selectRoom이 호출되지 않아야 함');
 
 // 내부 버튼/링크 클릭 시 방 이동 방지 (자체 이벤트 우선)
@@ -159,13 +159,13 @@ navigatedTo = null;
 selectionText = '';
 const fakeBtn = new FakeElement('button');
 fakeBtn._mockClosest = (sel) => sel.includes('button') ? fakeBtn : null;
-rowReport.listeners['click'][0]({{
+sandbox.handleSafeChildRoomNavigation({{
   target: fakeBtn,
   preventDefault: () => {{}},
   stopPropagation: () => {{}},
   metaKey: false, ctrlKey: false, shiftKey: false
-}});
-assert.strictEqual(navigatedTo, null, '내부 버튼 클릭 시에는 전체 말풍선 네비게이션이 동작하지 않아야 함');
+}}, 'room-child-vault');
+assert.strictEqual(navigatedTo, null, '내부 버튼 클릭 시에는 네비게이션이 동작하지 않아야 함');
 
 // 2. 바이패스된 어시스턴트 메시지 테스트
 const bypassMsg = {{
@@ -177,16 +177,7 @@ const bypassMsg = {{
 }};
 const rowBypass = sandbox.buildMessageRowDom(bypassMsg, 1);
 assert.strictEqual(rowBypass.getAttribute('data-child-room-id'), 'room-child-code');
-assert.ok(rowBypass.classList.contains('is-child-navigable'));
-
-navigatedTo = null;
-rowBypass.listeners['click'][0]({{
-  target: rowBypass,
-  preventDefault: () => {{}},
-  stopPropagation: () => {{}},
-  metaKey: false, ctrlKey: false, shiftKey: false
-}});
-assert.strictEqual(navigatedTo, 'room-child-code', '바이패스 메시지 클릭 시 해당 하위 채팅방으로 이동');
+assert.ok(!rowBypass.classList.contains('is-child-navigable'));
 
 // 3. 현재 방이 이미 해당 하위 방인 경우 이동 제외 테스트
 sandbox.currentRoomId = 'room-child-vault';

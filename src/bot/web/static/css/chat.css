@@ -72,6 +72,55 @@
   display: none;
 }
 .msg.user .msg-actions { margin-left: 0; margin-right: -4px; justify-content: flex-end; }
+.msg.assistant:not(.sub-agent) > .md {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  padding: 10px 14px;
+}
+
+.reply-context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: var(--accent-text);
+  font-size: calc(12.5px * var(--ui-scale, 1));
+}
+.reply-context-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.reply-context-icon {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.reply-context-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.reply-context-close {
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+.msg.is-swiping-reply {
+  will-change: transform;
+}
+
 .msg.assistant { align-items: stretch; }
 .assistant-head {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;

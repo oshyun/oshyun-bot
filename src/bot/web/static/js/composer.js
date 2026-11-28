@@ -425,7 +425,11 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
   const targetRoomId = room ? room.id : 'room-default';
   const targetSessionId = room ? (room.sessionId || null) : null;
   const isNew = Boolean(!room || room.isNewSession || !targetSessionId);
-  const targetGroupId = isNew ? null : (room ? (room.activeGroupId || null) : null);
+  const replyCtx = (typeof window !== 'undefined' && window._replyContext) ? window._replyContext : null;
+  const targetGroupId = (!isNew && replyCtx && replyCtx.groupId) ? replyCtx.groupId : null;
+  if (typeof clearReplyContext === 'function') {
+    clearReplyContext();
+  }
   if (isNew && room) {
     room.activeGroupId = null;
   }
@@ -461,6 +465,28 @@ async function sendUserMessage(textOverride, isVoiceTurn = false, options = {}) 
   if (!skipFocus) {
     focusChatInput();
   }
+}
+
+function setReplyContext(groupId, previewText = '', turnId = '') {
+  const gid = String(groupId || '').trim();
+  if (!gid) return;
+  const cleanPreview = String(previewText || '').replace(/\s+/g, ' ').trim();
+  const shortPreview = cleanPreview.length > 36 ? `${cleanPreview.slice(0, 36)}…` : (cleanPreview || '이전 대화');
+  window._replyContext = { groupId: gid, previewText: shortPreview, turnId: String(turnId || '') };
+  const bar = document.getElementById('reply-context-bar');
+  const txt = document.getElementById('reply-context-text');
+  if (txt) txt.textContent = `"${shortPreview}" 에 이어서 답장`;
+  if (bar) bar.style.display = 'flex';
+  const input = document.getElementById('chat-input');
+  if (input && typeof input.focus === 'function' && !isTouchOrMobileDevice()) {
+    input.focus({ preventScroll: true });
+  }
+}
+
+function clearReplyContext() {
+  window._replyContext = null;
+  const bar = document.getElementById('reply-context-bar');
+  if (bar) bar.style.display = 'none';
 }
 
 function handleInputKeyDown(e) {

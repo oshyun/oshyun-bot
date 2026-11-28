@@ -324,7 +324,7 @@ class TestThreadBackendExecution(unittest.IsolatedAsyncioTestCase):
 
         # 바이패스 메시지 헤더 인라인 스레드 열기 버튼 확인
         self.assertIn("btn-open-thread-inline", messages_content)
-        self.assertIn("스레드 열기", messages_content)
+        self.assertIn("<span>스레드</span>", messages_content)
 
     def test_thread_panel_loading_freeze_prevention_and_safe_format(self):
         """rooms-ui.js 및 rooms-sync.js에서 로딩 고착 방지, safe formatTime, 마크다운 렌더링 및 예외 방어가 완전한지 검증."""

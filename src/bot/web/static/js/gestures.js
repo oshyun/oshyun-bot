@@ -59,6 +59,10 @@ function initMobileSwipeGestures() {
     // 2) 가로 이동이 세로 이동보다 1.3배 이상 지배적 (세로 스크롤 오작동 방지)
     // 3) 650ms 이내의 자연스러운 제스처
     if (Math.abs(dx) >= 45 && Math.abs(dx) > dy * 1.3 && dt < 650) {
+      if (window._swipeReplyClaimed) {
+        window._swipeReplyClaimed = false;
+        return;
+      }
       const sidebar = document.getElementById('room-sidebar');
       const isLeftOpen = sidebar ? sidebar.classList.contains('open') : false;
       const masterSidebar = document.getElementById('master-sidebar');
@@ -79,8 +83,11 @@ function initMobileSwipeGestures() {
         // 좌측 사이드바가 열려있을 때 왼쪽 스와이프: 닫기
         if (dx < 0) closeRoomDrawer();
       } else {
-        // 둘 다 닫혀있을 때
-        if (dx > 0) {
+        // 둘 다 닫혀있을 때:
+        // 메시지 말풍선 위에서의 오른쪽 스와이프는 '이어서 답장'이 담당하므로,
+        // 좌측 사이드바 열기는 화면 왼쪽 가장자리(<= 28px) 또는 말풍선 바깥 영역에서만 허용
+        const startedOnMsg = Boolean(e.target && e.target.closest && e.target.closest('.chat-turn-container[data-group-id] .msg'));
+        if (dx > 0 && (touchStartX <= 28 || !startedOnMsg)) {
           // 오른쪽 스와이프: 좌측 사이드바(대화방 목록 및 메뉴) 펼치기
           openRoomDrawer();
         } else if (dx < 0) {
@@ -93,7 +100,115 @@ function initMobileSwipeGestures() {
 
   window.addEventListener('touchcancel', () => {
     isEligible = false;
+    window._swipeReplyClaimed = false;
   }, { passive: true });
+
+  initSwipeToReplyGestures();
+}
+
+// ─── 말풍선 오른쪽 스와이프 → 이어서 답장 (전역 드로어/PTR 충돌 방지) ───
+function initSwipeToReplyGestures() {
+  if (window._swipeToReplyInitialized) return;
+  window._swipeToReplyInitialized = true;
+
+  let startX = 0;
+  let startY = 0;
+  let activeMsg = null;
+  let activeTurn = null;
+  let locked = false;
+  let cancelled = false;
+
+  const isAnyPanelOpen = () => {
+    return Boolean(
+      document.getElementById('room-sidebar')?.classList.contains('open') ||
+      document.getElementById('master-sidebar')?.classList.contains('open') ||
+      document.getElementById('thread-slide-panel')?.classList.contains('open') ||
+      document.getElementById('note-viewer-panel')?.classList.contains('open')
+    );
+  };
+
+  window.addEventListener('touchstart', (e) => {
+    if (!e.touches || e.touches.length !== 1 || isAnyPanelOpen()) return;
+    const x = e.touches[0].clientX;
+    // 왼쪽 가장자리(<= 28px)는 사이드바 드로어 열기 전용으로 양보
+    if (x <= 28) return;
+
+    const target = e.target;
+    if (!target || !target.closest) return;
+    if (target.closest('textarea, input, select, pre, code, button, a, .topbar, #topbar')) return;
+
+    const msgEl = target.closest('.chat-turn-container[data-group-id] .msg');
+    if (!msgEl) return;
+    const turnEl = msgEl.closest('.chat-turn-container[data-group-id]');
+    if (!turnEl || !turnEl.getAttribute('data-group-id')) return;
+
+    startX = x;
+    startY = e.touches[0].clientY;
+    activeMsg = msgEl;
+    activeTurn = turnEl;
+    locked = false;
+    cancelled = false;
+    window._swipeReplyClaimed = false;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!activeMsg || cancelled || !e.touches || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    if (!locked) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) >= Math.abs(dx)) {
+        // 세로 스크롤/PTR 우선 양보
+        cancelled = true;
+        return;
+      }
+      if (dx < -10) {
+        // 왼쪽 스와이프(우측 메모리 패널) 양보
+        cancelled = true;
+        return;
+      }
+      if (dx > 14 && dx > Math.abs(dy) * 1.4) {
+        locked = true;
+        window._swipeReplyClaimed = true;
+        activeMsg.classList.add('is-swiping-reply');
+        activeMsg.style.transition = 'none';
+      }
+    }
+
+    if (locked && dx > 0) {
+      const shift = Math.min(dx * 0.42, 54);
+      activeMsg.style.transform = `translateX(${shift}px)`;
+    }
+  }, { passive: true });
+
+  const finishSwipeReply = (e) => {
+    if (!activeMsg) return;
+    const msgEl = activeMsg;
+    const turnEl = activeTurn;
+    const wasLocked = locked && !cancelled;
+    const endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : startX;
+    const dx = endX - startX;
+
+    activeMsg = null;
+    activeTurn = null;
+    locked = false;
+    cancelled = false;
+
+    msgEl.style.transition = 'transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)';
+    msgEl.style.transform = '';
+    setTimeout(() => msgEl.classList.remove('is-swiping-reply'), 190);
+
+    if (wasLocked && dx >= 52 && turnEl && typeof setReplyContext === 'function') {
+      const gid = turnEl.getAttribute('data-group-id');
+      const preview = turnEl.getAttribute('data-turn-preview') || '';
+      const turnId = turnEl.getAttribute('data-turn-id') || '';
+      setReplyContext(gid, preview, turnId);
+    }
+    setTimeout(() => { window._swipeReplyClaimed = false; }, 50);
+  };
+
+  window.addEventListener('touchend', finishSwipeReply, { passive: true });
+  window.addEventListener('touchcancel', finishSwipeReply, { passive: true });
 }
 
 // ─── 모바일 당겨서 새로고침 (Pull to Refresh - 상단 당김 & 하단 당김 지원) ───

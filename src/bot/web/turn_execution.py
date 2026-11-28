@@ -102,14 +102,8 @@ async def execute_chat_turn(
     elif client_group_id:
         active_group_id = client_group_id
         _room_group_ids[room_key] = active_group_id
-    elif (
-        room_key in _room_group_ids
-        and _room_group_ids[room_key]
-        and (last_turn_ts <= 0 or inactivity_gap <= 1200.0)
-    ):
-        # 20분 이내 연속 발화는 동일 대화 세트(group_id)로 묶어 유지
-        active_group_id = _room_group_ids[room_key]
     else:
+        # 명시적 이어서 답장(client_group_id)이 없으면 매 질문마다 독립된 새 턴 그룹으로 시작
         active_group_id = f"grp-{uuid.uuid4().hex[:12]}"
         _room_group_ids[room_key] = active_group_id
 

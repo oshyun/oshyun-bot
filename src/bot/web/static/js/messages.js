@@ -1544,12 +1544,28 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       <button class="icon-btn" onclick="copyMessageByIndex(${idx})" title="답변 복사">${ICONS.copy}</button>
       <button class="icon-btn" onclick="speakMessageByIndex(${idx})" title="음성으로 듣기">${ICONS.volume}</button>
       <button class="icon-btn" onclick="retryMessageByIndex(${idx})" title="다시 생성">${ICONS.refresh}</button>
+      <button class="icon-btn" onclick="replyToMessageByIndex(${idx})" title="이 대화에 이어서 답장" aria-label="이어서 답장"><svg class="i" viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>
       ${metaParts.length ? `<span class="msg-meta">${escapeHtml(metaParts.join(' · '))}</span>` : ''}
     `;
     row.appendChild(actions);
   }
 
   return row;
+}
+
+function replyToMessageByIndex(idx) {
+  const room = typeof getCurrentRoom === 'function' ? getCurrentRoom() : null;
+  if (!room || !Array.isArray(room.messages)) return;
+  const m = room.messages[idx];
+  if (!m) return;
+  const msgEl = document.querySelector(`.msg[data-msg-idx="${idx}"]`);
+  const turnEl = msgEl ? msgEl.closest('.chat-turn-container') : null;
+  const gid = (m.groupId || m.group_id) || (turnEl ? turnEl.getAttribute('data-group-id') : '');
+  const preview = (turnEl ? turnEl.getAttribute('data-turn-preview') : '') || String(m.text || '').trim();
+  const turnId = turnEl ? turnEl.getAttribute('data-turn-id') : '';
+  if (gid && typeof setReplyContext === 'function') {
+    setReplyContext(gid, preview, turnId);
+  }
 }
 
 // ─── 턴 아코디언 컨테이너 상태 관리 ───
@@ -1640,45 +1656,8 @@ function shouldStartNewTurnGroup(prevTurn, currentEntry, entryIdx) {
     return currGroupId !== prevTurn.groupId;
   }
 
-  // 2. 명시적 신규 세션 플래그
-  if (currM.newSession || currM.isNewSession) {
-    return true;
-  }
-
-  // 3. 정기 스케줄 실행 요청이나 시스템 이벤트는 별도 독립 턴 카드로 분리
-  const text = String(currM.text || '').trim();
-  if (text.startsWith('[정기 스케줄 실행 요청]') || text.startsWith('[System Event]')) {
-    return true;
-  }
-
-  // 4. 이전 턴의 첫 질문이 정기 스케줄 요청이었던 경우, 이후 사용자 질문은 새 카드로 시작
-  const prevFirstUserText = prevTurn.userEntry && prevTurn.userEntry.m ? String(prevTurn.userEntry.m.text || '').trim() : '';
-  if (prevFirstUserText.startsWith('[정기 스케줄 실행 요청]')) {
-    return true;
-  }
-
-  // 5. 세션 ID 불일치 검증
-  const prevSessionId = prevTurn.sessionId;
-  const currSessionId = currM.sessionId || currM.session_id;
-  if (prevSessionId && currSessionId && prevSessionId !== currSessionId) {
-    return true;
-  }
-
-  // 6. 유휴 시간(Inactivity Window) 검증
-  // 직전 턴의 마지막 메시지 생성 시각과 현재 유저 메시지 시각 사이의 간격이 15분(900초)을 초과하면 새 주제로 분리
-  const prevTimeMs = typeof parseTimestampMs === 'function'
-    ? parseTimestampMs(prevTurn.lastCreatedAt || prevTurn.createdAt)
-    : (prevTurn.lastCreatedAt || prevTurn.createdAt);
-  const currTimeMs = typeof parseTimestampMs === 'function'
-    ? parseTimestampMs(currM.createdAt)
-    : (currM.createdAt || Date.now());
-  const INACTIVITY_WINDOW_MS = 15 * 60 * 1000;
-  if (prevTimeMs && currTimeMs && (currTimeMs - prevTimeMs) > INACTIVITY_WINDOW_MS) {
-    return true;
-  }
-
-  // 위 분리 조건에 해당하지 않는 모든 사용자 질문은 동일 연속 대화 세트(후속 질문)로 간주하여 누적 병합
-  return false;
+  // 명시적 groupId가 일치하지 않으면 기본적으로 1질문 = 1턴 카드로 분리
+  return true;
 }
 
 function groupEntriesIntoTurns(activeEntries) {
@@ -2059,12 +2038,16 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     turnContainer.className = 'chat-turn-container' + (isCollapsed ? ' is-collapsed' : '');
     turnContainer.id = `turn-${turnId}`;
     turnContainer.setAttribute('data-turn-id', turnId);
+    if (turn.groupId) {
+      turnContainer.setAttribute('data-group-id', turn.groupId);
+    }
 
     // 1. 헤더 요약 텍스트
     const userMsgText = turn.userEntry && turn.userEntry.m ? String(turn.userEntry.m.text || '').trim() : '';
     const userPreview = userMsgText
       ? (userMsgText.length > 45 ? userMsgText.slice(0, 45) + '…' : userMsgText)
       : (turnIdx === 0 ? '시작 대화' : `대화 #${turnIdx + 1}`);
+    turnContainer.setAttribute('data-turn-preview', userPreview);
 
     // 연속 질문 수 뱃지
     const queryCount = turn.userEntries ? turn.userEntries.length : (turn.userEntry ? 1 : 0);

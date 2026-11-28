@@ -527,6 +527,13 @@
                 <div class="composer-status-left" id="composer-status-content"></div>
                 <button type="button" class="btn sm ghost" id="composer-status-action" onclick="onComposerStatusAction()">중지</button>
               </div>
+              <div id="reply-context-bar" class="reply-context-bar" style="display:none;">
+                <div class="reply-context-left">
+                  <span class="reply-context-icon">↩</span>
+                  <span class="reply-context-text" id="reply-context-text"></span>
+                </div>
+                <button type="button" class="icon-btn reply-context-close" onclick="clearReplyContext()" title="이어서 답장 취소" aria-label="이어서 답장 취소">×</button>
+              </div>
               <div id="composer-attachments" class="composer-attachments"></div>
               <div class="composer">
                 <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="handleFileSelect(event)">
