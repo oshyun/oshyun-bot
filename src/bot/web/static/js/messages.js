@@ -443,6 +443,14 @@ function handleSafeChildRoomNavigation(ev, targetRoomId) {
   ev.preventDefault();
   ev.stopPropagation();
 
+  // 하위 작업 카드는 마스터/상위 방 컨텍스트를 유지할 수 있도록 우선 우측 스레드 패널(openThreadPanel)에서 열람
+  if (typeof openThreadPanel === 'function') {
+    const subRoom = (typeof getRoomById === 'function') ? getRoomById(targetRoomId) : null;
+    const subTitle = (subRoom && subRoom.title) || '';
+    openThreadPanel(null, targetRoomId, subTitle);
+    return;
+  }
+
   if (typeof selectRoom === 'function') {
     selectRoom(targetRoomId);
   }
@@ -1367,8 +1375,8 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
     if (childRoomId) {
       const subRoom = getRoomById(childRoomId);
       const subRoomTitle = (subRoom && subRoom.title) || (targetThreadTitle || childRoomId);
-      head.setAttribute('title', `클릭 시 [${subRoomTitle}] 채팅방으로 이동`);
-      childBadgeHtml = `<button type="button" class="child-room-badge" onclick="event.stopPropagation(); selectRoom('${escapeHtml(childRoomId)}');" title="클릭 시 [${escapeHtml(subRoomTitle)}] 채팅방으로 이동"><span class="child-room-badge-text">${escapeHtml(subRoomTitle)}</span><span class="child-nav-hint">↗</span></button>`;
+      head.setAttribute('title', `클릭 시 [${subRoomTitle}] 작업 스레드 열기`);
+      childBadgeHtml = `<button type="button" class="child-room-badge" onclick="event.stopPropagation(); (typeof openThreadPanel === 'function' ? openThreadPanel(null, '${escapeHtml(childRoomId)}', '${escapeHtml(subRoomTitle)}') : selectRoom('${escapeHtml(childRoomId)}'));" title="클릭 시 [${escapeHtml(subRoomTitle)}] 작업 스레드 열기"><span class="child-room-badge-text">${escapeHtml(subRoomTitle)}</span><span class="child-nav-hint">↗</span></button>`;
     }
 
     let slotStatusPillHtml = '';
@@ -1486,6 +1494,7 @@ function buildMessageRowDom(m, idx, qOrder = 0) {
       slotCard.className = 'msg-slot-placeholder' + (childRoomId ? ' is-child-clickable' : '');
       if (childRoomId) {
         slotCard.setAttribute('data-child-room-id', childRoomId);
+        slotCard.addEventListener('click', (ev) => handleSafeChildRoomNavigation(ev, childRoomId));
       }
       slotCard.innerHTML = `
         <div class="slot-placeholder-top">
@@ -1780,6 +1789,12 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
   let room = getCurrentRoom();
   if (!container) return;
   if (!room) {
+    if (currentRoomId && /^room-[a-zA-Z0-9_\-]+$/.test(currentRoomId)) {
+      if (!container.querySelector('.chat-skeleton-thread')) {
+        container.innerHTML = renderMessagesSkeleton();
+      }
+      return;
+    }
     if (typeof isInitialRoomsLoading !== 'undefined' && isInitialRoomsLoading) {
       if (!container.querySelector('.chat-skeleton-thread')) {
         container.innerHTML = renderMessagesSkeleton();

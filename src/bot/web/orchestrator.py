@@ -473,6 +473,14 @@ def _find_similar_orchestrator_room(
         if r.get("isArchived"):
             continue
 
+        # 대화 메시지가 0건인 빈 방(껍데기/취소 잔여물)은 맥락이 없으므로 '기존 맥락 이어하기' 재사용 후보에서 제외
+        msg_count = r.get("messageCount")
+        if msg_count is not None and int(msg_count) <= 0:
+            continue
+        if Array_or_list_msgs := r.get("messages"):
+            if len(Array_or_list_msgs) == 0 and msg_count is None:
+                continue
+
         # parent_agent_id 격리:
         # 1. 특정 부모 에이전트(예: __expert_coding__, __expert_vault__)가 명시된 경우
         #    동일한 부모 산하의 하위 방만 매칭 (다른 부모 산하 방과의 혼선 방지)
@@ -912,6 +920,22 @@ async def handle_orchestrator_dispatch(request: web.Request) -> web.Response:
             matched_similarity = round(sim_score, 3)
             rsum = master_tasks.get_room_summary(room_id)
             matched_summary = str((rsum or {}).get("summary") or matched_room.get("preview") or "").strip()
+            user_msg_id = _append_room_message(
+                room_id,
+                {
+                    "type": "user",
+                    "role": "user",
+                    "text": effective_message,
+                    "channel": "orchestrator",
+                    "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+            )
+            _update_room_metadata(
+                room_id,
+                title=room_title,
+                preview=message[:60],
+                delta_msgs=1,
+            )
             logger.info(
                 "[orchestrator] 유사 채팅방 재사용: 요청='%s' -> 기존 방='%s' (통합제목='%s', roomId=%s, score=%.2f)",
                 raw_title or room_title,

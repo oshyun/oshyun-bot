@@ -900,8 +900,8 @@ async function selectRoom(roomId, options = {}) {
   updateSendButtonState();
 
   const room = getRoomById(roomId);
-  if (room && !room.userCreatedEmpty) {
-    await loadChatHistoryFromServer(room.id, room.sessionId);
+  if (!room || !room.userCreatedEmpty) {
+    await loadChatHistoryFromServer(roomId, room ? room.sessionId : null);
   }
 
   const liveState = ensureRoomLiveState(roomId);
