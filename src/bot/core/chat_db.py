@@ -116,7 +116,8 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
                 model TEXT DEFAULT NULL,
                 effort TEXT DEFAULT NULL,
                 workdir TEXT DEFAULT NULL,
-                parent_agent_id TEXT DEFAULT NULL
+                parent_agent_id TEXT DEFAULT NULL,
+                add_dirs TEXT DEFAULT NULL
             );
         """)
         conn.execute("""
@@ -184,6 +185,13 @@ def init_db(db_path: str | None = None, migrate_legacy: bool = True) -> None:
         # rooms 테이블 parent_agent_id 컬럼 누락 시 하위 호환 추가
         try:
             conn.execute("ALTER TABLE rooms ADD COLUMN parent_agent_id TEXT DEFAULT NULL;")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        # rooms 테이블 add_dirs 컬럼 누락 시 하위 호환 추가
+        try:
+            conn.execute("ALTER TABLE rooms ADD COLUMN add_dirs TEXT DEFAULT NULL;")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -445,6 +453,7 @@ def get_or_create_room(
     effort: str | None = None,
     workdir: str | None = None,
     parent_agent_id: str | None = None,
+    add_dirs: list[str] | str | None = None,
     db_path: str | None = None,
 ) -> dict:
     """방 ID 또는 세션 ID로 대화방을 조회하고, 없으면 생성하여 반환한다."""
@@ -455,6 +464,14 @@ def get_or_create_room(
     clean_effort = str(effort).strip() if effort else None
     clean_workdir = str(workdir).strip() if workdir else None
     clean_parent = str(parent_agent_id).strip() if parent_agent_id else None
+    clean_add_dirs = None
+    if add_dirs is not None:
+        if isinstance(add_dirs, (list, tuple)):
+            cl = [str(d).strip() for d in add_dirs if str(d).strip()]
+            clean_add_dirs = json.dumps(cl, ensure_ascii=False) if cl else None
+        elif isinstance(add_dirs, str):
+            cl = [d.strip() for d in add_dirs.splitlines() if d.strip() and not d.strip().startswith("#")]
+            clean_add_dirs = json.dumps(cl, ensure_ascii=False) if cl else None
 
     with get_connection(db_path) as conn:
         cur = conn.cursor()
@@ -484,6 +501,9 @@ def get_or_create_room(
             if clean_parent is not None:
                 updates.append("parent_agent_id = ?")
                 params.append(clean_parent)
+            if clean_add_dirs is not None:
+                updates.append("add_dirs = ?")
+                params.append(clean_add_dirs)
             if updates:
                 params.append(row["id"])
                 conn.execute(f"UPDATE rooms SET {', '.join(updates)} WHERE id = ?;", params)
@@ -495,10 +515,10 @@ def get_or_create_room(
         init_title = title or "새 대화"
         conn.execute(
             """
-            INSERT INTO rooms (id, session_id, title, preview, created_at, updated_at, last_channel, is_hidden, is_archived, model, effort, workdir, parent_agent_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?);
+            INSERT INTO rooms (id, session_id, title, preview, created_at, updated_at, last_channel, is_hidden, is_archived, model, effort, workdir, parent_agent_id, add_dirs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?);
             """,
-            (clean_rid, clean_sid, init_title, "", now, now, channel, clean_model, clean_effort, clean_workdir, clean_parent),
+            (clean_rid, clean_sid, init_title, "", now, now, channel, clean_model, clean_effort, clean_workdir, clean_parent, clean_add_dirs),
         )
         conn.commit()
         cur.execute("SELECT * FROM rooms WHERE id = ?;", (clean_rid,))
@@ -517,6 +537,7 @@ def get_or_create_room(
             "effort": clean_effort,
             "workdir": clean_workdir,
             "parent_agent_id": clean_parent,
+            "add_dirs": clean_add_dirs,
         }
 
 
@@ -533,6 +554,7 @@ def update_room(
     effort: Any = _UNSET,
     workdir: Any = _UNSET,
     parent_agent_id: Any = _UNSET,
+    add_dirs: Any = _UNSET,
     is_archived: bool | None = None,
     updated_at: float | None = None,
     force_title: bool = True,
@@ -589,6 +611,18 @@ def update_room(
             clean_p = str(parent_agent_id).strip() if (parent_agent_id and str(parent_agent_id).strip()) else None
             updates.append("parent_agent_id = ?")
             params.append(clean_p)
+        if add_dirs is not _UNSET:
+            updates.append("add_dirs = ?")
+            if add_dirs is None:
+                params.append(None)
+            elif isinstance(add_dirs, (list, tuple)):
+                clean_list = [str(d).strip() for d in add_dirs if str(d).strip()]
+                params.append(json.dumps(clean_list, ensure_ascii=False) if clean_list else None)
+            elif isinstance(add_dirs, str):
+                parsed = [d.strip() for d in add_dirs.splitlines() if d.strip() and not d.strip().startswith("#")]
+                params.append(json.dumps(parsed, ensure_ascii=False) if parsed else None)
+            else:
+                params.append(None)
         if is_archived is not None:
             updates.append("is_archived = ?")
             params.append(1 if is_archived else 0)
@@ -759,17 +793,29 @@ def update_message(
     return True
 
 
+def _normalize_room_dict_payload(d: dict) -> dict:
+    d["isNewSession"] = not bool(d.get("sessionId"))
+    d["isArchived"] = bool(d.get("isArchived"))
+    d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
+    if d["isOrchestratorChild"] and not d.get("parentAgentId"):
+        d["parentAgentId"] = "__core__"
+    raw_ad = d.get("addDirs")
+    if isinstance(raw_ad, str) and raw_ad.strip():
+        try:
+            d["addDirs"] = json.loads(raw_ad)
+        except Exception:
+            d["addDirs"] = [p.strip() for p in raw_ad.splitlines() if p.strip()]
+    elif not isinstance(raw_ad, list):
+        d["addDirs"] = None
+    return d
+
+
 def _normalize_room_rows(rows: list[sqlite3.Row], limit: int) -> list[dict]:
     """SQLite rooms 조회 행을 정규화하고 빈 방 및 sessionId/id 중복을 제거한다."""
     result = []
     seen_keys = set()
     for row in rows:
-        d = dict(row)
-        d["isNewSession"] = not bool(d.get("sessionId"))
-        d["isArchived"] = bool(d.get("isArchived"))
-        d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
-        if d["isOrchestratorChild"] and not d.get("parentAgentId"):
-            d["parentAgentId"] = "__core__"
+        d = _normalize_room_dict_payload(dict(row))
         sid = (d.get("sessionId") or "").strip()
         rid = (d.get("id") or "").strip()
 
@@ -947,6 +993,7 @@ _ROOM_SELECT_COLS = """
     r.effort,
     r.workdir,
     r.parent_agent_id AS parentAgentId,
+    r.add_dirs AS addDirs,
     (SELECT COUNT(*) FROM messages m WHERE m.room_id = r.id) AS messageCount,
     (r.parent_agent_id IS NOT NULL OR EXISTS(SELECT 1 FROM messages m WHERE m.room_id = r.id AND m.channel = 'orchestrator')) AS isOrchestratorChild
 """
@@ -955,13 +1002,7 @@ _ROOM_SELECT_COLS = """
 def _row_to_room_dict(row: sqlite3.Row | None) -> dict | None:
     if not row:
         return None
-    d = dict(row)
-    d["isNewSession"] = not bool(d.get("sessionId"))
-    d["isArchived"] = bool(d.get("isArchived"))
-    d["isOrchestratorChild"] = bool(d.get("isOrchestratorChild"))
-    if d["isOrchestratorChild"] and not d.get("parentAgentId"):
-        d["parentAgentId"] = "__core__"
-    return d
+    return _normalize_room_dict_payload(dict(row))
 
 
 def get_room(room_id_or_session_id: str, db_path: str | None = None) -> dict | None:

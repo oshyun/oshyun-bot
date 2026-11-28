@@ -142,15 +142,22 @@ async def execute_chat_turn(
     if room_workdir and not is_orchestrator:
         target_workdir = room_workdir
 
+    room_add_dirs = (room_db.get("addDirs") if room_db else None)
+
     if is_orchestrator and agent_cfg:
         agent_def_model = agent_cfg.get("model")
         agent_def_effort = agent_cfg.get("effort")
+        agent_def_add_dirs = agent_cfg.get("addDirs")
     elif parent_cfg:
         agent_def_model = parent_cfg.get("childModel") or parent_cfg.get("model")
         agent_def_effort = parent_cfg.get("childEffort") or parent_cfg.get("effort")
+        agent_def_add_dirs = parent_cfg.get("addDirs")
     else:
         agent_def_model = None
         agent_def_effort = None
+        agent_def_add_dirs = None
+
+    active_add_dirs = room_add_dirs if room_add_dirs is not None else agent_def_add_dirs
 
     fallback_model = room_model or agent_def_model or get_model()
     fallback_effort = (
@@ -414,6 +421,8 @@ async def execute_chat_turn(
         "model": active_model,
         "effort": active_effort,
     }
+    if active_add_dirs is not None:
+        spawn_kwargs["add_dirs"] = active_add_dirs
     if slash_commands:
         spawn_kwargs["slash_commands"] = True
     if use_orchestrator:

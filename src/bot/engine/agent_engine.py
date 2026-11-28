@@ -47,6 +47,7 @@ def _build_invocation(
     web: bool = False,
     extra_env: dict[str, str] | None = None,
     agent_id: str | None = None,
+    add_dirs: list[str] | None = None,
 ) -> dict:
     """엔진(claude / agy) 호출의 명령행·환경변수·정규화된 workdir 를 담은 dict 를 만든다."""
     workdir = os.path.realpath(workdir)
@@ -80,6 +81,7 @@ def _build_invocation(
         web=web,
         extra_env=extra_env,
         agent_id=agent_id,
+        add_dirs=add_dirs,
     )
 
 
@@ -181,6 +183,7 @@ def spawn_agent(
     web: bool = False,
     extra_env: dict[str, str] | None = None,
     agent_id: str | None = None,
+    add_dirs: list[str] | None = None,
 ) -> subprocess.Popen:
     """에이전트를 **분리된 세션(setsid)** 으로 띄우고 stream-json 을 out_file 에 기록한다."""
     effective_prompt = _inject_quota_alert_for_agy(
@@ -207,6 +210,7 @@ def spawn_agent(
         web=web,
         extra_env=extra_env,
         agent_id=agent_id,
+        add_dirs=add_dirs,
     )
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
     out_handle = open(out_file, "wb")
@@ -395,6 +399,8 @@ async def run_agent(
     expert_vault: bool = False,
     expert_coding: bool = False,
     web: bool = False,
+    agent_id: str | None = None,
+    add_dirs: list[str] | None = None,
 ) -> dict:
     """엔진 1회 동기식 실행(PIPE 기반)."""
     effective_prompt = _inject_quota_alert_for_agy(
@@ -403,6 +409,7 @@ async def run_agent(
         orchestrator=orchestrator,
         expert_vault=expert_vault,
         expert_coding=expert_coding,
+        agent_id=agent_id,
     )
     invocation = _build_invocation(
         effective_prompt,
@@ -418,6 +425,8 @@ async def run_agent(
         expert_vault=expert_vault,
         expert_coding=expert_coding,
         web=web,
+        agent_id=agent_id,
+        add_dirs=add_dirs,
     )
 
     proc = await asyncio.create_subprocess_exec(

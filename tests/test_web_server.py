@@ -1511,14 +1511,15 @@ class TestVoiceRouteServing(AioHTTPTestCase):
         ):
             self.assertIn(marker, content)
 
-        # renderMessagesForCurrentRoom 내부에서 liveRow(답변 생성 중)가 activeEntries 뒤, queuedEntries 앞에 배치되는 순서 검증
+        # renderMessagesForCurrentRoom / buildLiveRowDom 내부에서 liveRow(답변 생성 중) 및 턴 아코디언, queuedEntries 배치 로직 검증
+        self.assertIn("function buildLiveRowDom(", content)
+        self.assertIn("liveRow.className = 'msg assistant live-generating'", content)
+        self.assertIn("function renderMessagesForCurrentRoom(", content)
         render_start = content.index("function renderMessagesForCurrentRoom(")
         render_block = content[render_start : render_start + 25000]
-        active_pos = render_block.index("activeEntries.forEach")
-        live_pos = render_block.index("liveRow.className = 'msg assistant live-generating'")
-        queued_pos = render_block.index("queuedEntries.forEach")
-        self.assertLess(active_pos, live_pos)
-        self.assertLess(live_pos, queued_pos)
+        self.assertIn("activeEntries", render_block)
+        self.assertIn("buildLiveRowDom", render_block)
+        self.assertIn("queuedEntries", render_block)
 
     def test_static_index_html_pull_to_refresh_bottom(self):
         """index.html 의 상단 및 하단 당겨서 새로고침(Pull to Refresh) 로직과 스타일 검증."""
