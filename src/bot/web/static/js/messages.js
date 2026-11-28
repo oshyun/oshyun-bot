@@ -2128,6 +2128,11 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     _lastScrollTop = container.scrollTop;
     updateScrollBottomButton();
   }
+
+  // 4. 화면에 렌더링된 모든 인라인 대화방/하위작업 칩 상태를 최신 SSOT 로 동기화
+  if (typeof updateAllInlineChatChips === 'function') {
+    updateAllInlineChatChips();
+  }
 }
 
 function cancelQueuedMessageByIndex(idx) {
