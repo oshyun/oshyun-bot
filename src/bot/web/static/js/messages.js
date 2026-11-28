@@ -1560,9 +1560,9 @@ function replyToMessageByIndex(idx) {
   if (!m) return;
   const msgEl = document.querySelector(`.msg[data-msg-idx="${idx}"]`);
   const turnEl = msgEl ? msgEl.closest('.chat-turn-container') : null;
-  const gid = (m.groupId || m.group_id) || (turnEl ? turnEl.getAttribute('data-group-id') : '');
-  const preview = (turnEl ? turnEl.getAttribute('data-turn-preview') : '') || String(m.text || '').trim();
   const turnId = turnEl ? turnEl.getAttribute('data-turn-id') : '';
+  const gid = (m.groupId || m.group_id) || (turnEl ? turnEl.getAttribute('data-group-id') : '') || turnId;
+  const preview = (turnEl ? turnEl.getAttribute('data-turn-preview') : '') || String(m.text || '').trim();
   if (gid && typeof setReplyContext === 'function') {
     setReplyContext(gid, preview, turnId);
   }
@@ -2038,9 +2038,7 @@ function renderMessagesForCurrentRoom(forceScroll = false) {
     turnContainer.className = 'chat-turn-container' + (isCollapsed ? ' is-collapsed' : '');
     turnContainer.id = `turn-${turnId}`;
     turnContainer.setAttribute('data-turn-id', turnId);
-    if (turn.groupId) {
-      turnContainer.setAttribute('data-group-id', turn.groupId);
-    }
+    turnContainer.setAttribute('data-group-id', turn.groupId || turnId);
 
     // 1. 헤더 요약 텍스트
     const userMsgText = turn.userEntry && turn.userEntry.m ? String(turn.userEntry.m.text || '').trim() : '';
